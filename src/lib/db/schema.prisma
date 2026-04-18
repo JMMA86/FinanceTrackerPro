@@ -1,5 +1,6 @@
 // FinanceTrackerPro - Banking-Grade Schema
-// Follow rules in CLAUDE.md sections 1-14
+// Follows CLAUDE.md Financial Integrity Rules (Sections 1-14)
+// Implements Double-Entry Bookkeeping for transfers
 
 generator client {
   provider = "prisma-client-js"
@@ -10,11 +11,413 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// TODO: Define models following banking-grade rules:
-// - Idempotency: idempotencyKey (UUID) on mutations
-// - Multi-currency: amountCents + currency (ISO 4217)
-// - Conversion tracking: originalAmountCents, originalCurrency, exchangeRate
-// - Soft deletes: isActive, deletedAt
-// - Audit: createdBy, lastModifiedBy, createdAt, updatedAt
-// - Security: ipAddress, userAgent on critical operations
-// - Reconciliation: Account.lastReconciled
+// ============================================================================
+// ENUMS - ISO Standards & Business Domain
+// ============================================================================
+
+enum Currency {
+  USD // US Dollar
+  EUR // Euro
+  GBP // British Pound
+  COP // Colombian Peso
+  MXN // Mexican Peso
+}
+
+enum Language {
+  EN // English
+  ES // Spanish
+  FR // French
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum AccountType {
+  SAVINGS       // Cuenta de Ahorros
+  INVESTMENT    // Cuenta de Inversión
+  CREDIT_CARD   // Tarjeta de Crédito
+  POCKET        // Bolsillo (sub-account)
+}
+
+enum TransactionType {
+  INCOME        // Ingreso
+  EXPENSE       // Gasto
+  TRANSFER_OUT  // Transferencia saliente (partida doble)
+  TRANSFER_IN   // Transferencia entrante (partida doble)
+  INVESTMENT    // Inversión
+  LOAN_PAYMENT  // Pago de préstamo
+  CREDIT_PAYMENT // Pago de tarjeta
+}
+
+enum FixedExpenseFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum VariableExpenseCategory {
+  GROCERIES       // Mercado
+  TRANSPORTATION  // Transporte
+  UTILITIES       // Servicios públicos
+  ENTERTAINMENT   // Entretenimiento
+  HEALTHCARE      // Salud
+  EDUCATION       // Educación
+  SHOPPING        // Compras
+  DINING          // Restaurantes
+  OTHER           // Otros
+}
+
+enum LoanType {
+  PERSONAL   // Préstamo personal
+  MORTGAGE   // Hipoteca
+  AUTO       // Vehículo
+  STUDENT    // Estudiantil
+  BUSINESS   // Negocio
+}
+
+// ============================================================================
+// USER & SECURITY
+// ============================================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String?  // Null if using only biometric auth
+
+  // User Configuration
+  baseSalaryCents Int?         // Salario mensual en centavos
+  baseCurrency    Currency     @default(COP)
+  language        Language     @default(ES)
+  theme           Theme        @default(SYSTEM)
+
+  // Relations
+  accounts          Account[]
+  transactions      Transaction[]
+  fixedExpenses     FixedExpense[]
+  loans             Loan[]
+  biometricCredentials BiometricCredential[]
+
+  // Audit fields
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  lastLoginAt       DateTime?
+
+  @@index([email])
+  @@index([isActive])
+}
+
+// WebAuthn Biometric Credentials
+model BiometricCredential {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  credentialId      String   @unique // WebAuthn credential ID
+  publicKey         String   // COSE public key
+  counter           Int      @default(0) // Signature counter (replay attack prevention)
+  transports        String[] // USB, NFC, BLE, INTERNAL
+
+  deviceName        String?  // User-friendly name
+  lastUsedAt        DateTime?
+
+  // Audit
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([credentialId])
+  @@index([isActive])
+}
+
+// ============================================================================
+// ACCOUNTS & POCKETS (Self-referencing for hierarchy)
+// ============================================================================
+
+model Account {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name              String
+  type              AccountType
+  currency          Currency    @default(COP)
+
+  // CACHE - Reconcile from transaction history (Rule 13)
+  // For POCKET type: independent balance (sum only its own transactions)
+  balanceCents      Int         @default(0)
+  lastReconciled    DateTime?   // Last reconciliation timestamp
+
+  // Interest rate for savings/investment accounts (E.A. - Efectiva Anual)
+  interestRateEA    Decimal?    @db.Decimal(20, 8) // High precision
+
+  // Credit Card specific
+  creditLimitCents  Int?        // Límite de crédito
+  cutoffDay         Int?        // Día de corte (1-31)
+  paymentDueDay     Int?        // Día de pago (1-31)
+
+  // Self-referencing for Pockets (bolsillos)
+  // POCKET has independent balance, not included in parent reconciliation
+  parentAccountId   String?
+  parentAccount     Account?    @relation("AccountPockets", fields: [parentAccountId], references: [id], onDelete: Restrict)
+  pockets           Account[]   @relation("AccountPockets")
+
+  // Relations
+  transactions      Transaction[]
+
+  // Audit fields (Rule 4)
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
+  createdBy         String?
+  lastModifiedBy    String?
+
+  @@index([userId])
+  @@index([type])
+  @@index([isActive])
+  @@index([parentAccountId])
+}
+
+// ============================================================================
+// TRANSACTIONS (Core - Source of Truth)
+// DOUBLE-ENTRY: Transfers create TWO transactions linked by transferId
+// ============================================================================
+
+model Transaction {
+  id                  String            @id @default(cuid())
+  idempotencyKey      String            @unique // UUID v4 - Network safety (Rule 12)
+
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  accountId           String
+  account             Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  type                TransactionType
+  description         String?
+  date                DateTime          @default(now())
+
+  // Money storage in cents - Final currency (Rule 1)
+  amountCents         Int
+  currency            Currency
+
+  // Currency conversion tracking (Rule 11)
+  originalAmountCents Int?              // Amount before conversion
+  originalCurrency    Currency?         // Source currency
+  exchangeRate        Decimal?          @db.Decimal(20, 8) // High precision rate
+
+  // DOUBLE-ENTRY BOOKKEEPING
+  // For transfers: Both transactions share same transferId
+  // One is TRANSFER_OUT (negative), other is TRANSFER_IN (positive)
+  transferId          String?           // Links paired transfer transactions
+  transferToAccountId String?           // Target account (for TRANSFER_OUT)
+  transferFromAccountId String?         // Source account (for TRANSFER_IN)
+
+  // Variable expense categorization
+  categoryId          String?
+  category            VariableExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Fixed expense payment link
+  fixedExpensePaymentId String?         @unique
+  fixedExpensePayment   FixedExpensePayment? @relation(fields: [fixedExpensePaymentId], references: [id], onDelete: SetNull)
+
+  // Loan installment payment link
+  loanInstallmentId   String?           @unique
+  loanInstallment     LoanInstallment?  @relation(fields: [loanInstallmentId], references: [id], onDelete: SetNull)
+
+  // Extended audit (Rule 14)
+  ipAddress           String?
+  userAgent           String?
+
+  // Standard audit (Rule 4)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+  createdBy           String?
+  lastModifiedBy      String?
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([type])
+  @@index([date])
+  @@index([isActive])
+  @@index([idempotencyKey])
+  @@index([categoryId])
+  @@index([transferId]) // Query paired transactions
+}
+
+// ============================================================================
+// FIXED EXPENSES (Recurring expenses)
+// ============================================================================
+
+model FixedExpense {
+  id              String                  @id @default(cuid())
+  userId          String
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name            String                  // e.g., "Arriendo", "Netflix"
+  amountCents     Int                     // Expected amount
+  currency        Currency                @default(COP)
+  frequency       FixedExpenseFrequency
+  dayOfPayment    Int?                    // Day of month (1-31) or week (1-7)
+
+  startDate       DateTime
+  endDate         DateTime?               // Null = indefinite
+
+  // Relations
+  payments        FixedExpensePayment[]
+
+  // Audit (Rule 4)
+  isActive        Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([frequency])
+}
+
+// Payment history for fixed expenses (avoid checkbox overwrite)
+model FixedExpensePayment {
+  id              String        @id @default(cuid())
+  fixedExpenseId  String
+  fixedExpense    FixedExpense  @relation(fields: [fixedExpenseId], references: [id], onDelete: Cascade)
+
+  dueDate         DateTime      // Expected payment date
+  paidDate        DateTime?     // Actual payment date (null = unpaid)
+
+  expectedAmountCents Int
+  paidAmountCents     Int?
+  currency            Currency
+
+  // Link to actual transaction
+  transaction     Transaction?
+
+  // Audit (Rule 4)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+
+  @@index([fixedExpenseId])
+  @@index([dueDate])
+  @@index([isActive])
+}
+
+// ============================================================================
+// VARIABLE EXPENSE CATEGORIES
+// ============================================================================
+
+model VariableExpenseCategory {
+  id              String                    @id @default(cuid())
+  name            String                    // User-defined or predefined
+  category        VariableExpenseCategory   @default(OTHER)
+  color           String?                   // Hex color for UI
+  icon            String?                   // Icon identifier
+
+  // Relations
+  transactions    Transaction[]
+
+  // Audit (Rule 4)
+  isActive        Boolean                   @default(true)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([isActive])
+}
+
+// ============================================================================
+// LOANS & AMORTIZATION
+// ============================================================================
+
+model Loan {
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                String            // e.g., "Préstamo Bancolombia"
+  type                LoanType
+
+  // Loan details
+  principalCents      Int               // Monto original del préstamo
+  currency            Currency          @default(COP)
+  interestRateEA      Decimal           @db.Decimal(20, 8) // High precision E.A.
+  termMonths          Int               // Plazo en meses
+
+  // Dates
+  startDate           DateTime
+  firstPaymentDate    DateTime
+
+  // Current state (computed from installments)
+  balanceCents        Int               @default(0) // CACHE - remaining balance
+  lastReconciled      DateTime?
+
+  // Relations
+  installments        LoanInstallment[]
+
+  // Audit (Rule 4)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+  createdBy           String?
+  lastModifiedBy      String?
+
+  @@index([userId])
+  @@index([type])
+  @@index([isActive])
+}
+
+// Amortization table (Tabla de amortización)
+model LoanInstallment {
+  id                  String       @id @default(cuid())
+  loanId              String
+  loan                Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  installmentNumber   Int          // 1, 2, 3, ...
+  dueDate             DateTime
+
+  // Calculated amounts (at loan creation) - High precision
+  principalCents      Int          // Capital
+  interestCents       Int          // Intereses
+  totalCents          Int          // Total cuota
+  balanceCents        Int          // Saldo restante después de esta cuota
+  currency            Currency
+
+  // Payment tracking
+  paidDate            DateTime?    // Fecha de pago real
+  paidAmountCents     Int?         // Monto pagado
+
+  // Link to actual transaction
+  transaction         Transaction?
+
+  // Audit (Rule 4)
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  deletedAt           DateTime?
+  createdBy           String?
+  lastModifiedBy      String?
+
+  @@unique([loanId, installmentNumber])
+  @@index([loanId])
+  @@index([dueDate])
+  @@index([isActive])
+}

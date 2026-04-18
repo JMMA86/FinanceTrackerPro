@@ -161,6 +161,71 @@ src/
     └── unit/
 ```
 
+## Database Architecture
+
+See [DATABASE.md](DATABASE.md) for complete entity relationship diagram, reconciliation logic, query examples, and architecture details.
+
+### Double-Entry Bookkeeping
+
+**Transfer Logic**: Transfers implemented using double-entry accounting principles.
+
+When transferring money between accounts:
+
+1. **Transaction 1** (Source Account):
+   - Type: `TRANSFER_OUT`
+   - Amount: Negative (debit)
+   - Account: Source
+
+2. **Transaction 2** (Destination Account):
+   - Type: `TRANSFER_IN`
+   - Amount: Positive (credit)
+   - Account: Destination
+
+Both transactions share same `transferId` (UUID) for audit trail. This ensures:
+
+- ✅ Balance integrity (sum always zero across paired transactions)
+- ✅ Audit trail (both entries linked)
+- ✅ Reconciliation accuracy (each account has complete history)
+- ✅ Rollback safety (delete both or neither)
+
+**Example**:
+
+```typescript
+// Transfer $100 from Savings to Investment
+const transferId = crypto.randomUUID();
+
+// Debit source (TRANSFER_OUT)
+await prisma.transaction.create({
+  data: {
+    accountId: savingsId,
+    type: 'TRANSFER_OUT',
+    amountCents: -10000, // Negative
+    transferId,
+    transferToAccountId: investmentId,
+  },
+});
+
+// Credit destination (TRANSFER_IN)
+await prisma.transaction.create({
+  data: {
+    accountId: investmentId,
+    type: 'TRANSFER_IN',
+    amountCents: 10000, // Positive
+    transferId,
+    transferFromAccountId: savingsId,
+  },
+});
+```
+
+### Precision & Rounding
+
+All monetary calculations use:
+
+- **Storage**: Integer cents (no floats)
+- **Calculations**: Decimal.js with Banker's rounding
+- **Exchange rates**: `Decimal(20, 8)` precision
+- **Interest rates**: `Decimal(20, 8)` for compound interest accuracy
+
 ## Architecture Rules
 
 See `CLAUDE.md` for complete financial integrity rules.

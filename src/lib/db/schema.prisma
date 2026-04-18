@@ -1,0 +1,20 @@
+// FinanceTrackerPro - Banking-Grade Schema
+// Follow rules in CLAUDE.md sections 1-14
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// TODO: Define models following banking-grade rules:
+// - Idempotency: idempotencyKey (UUID) on mutations
+// - Multi-currency: amountCents + currency (ISO 4217)
+// - Conversion tracking: originalAmountCents, originalCurrency, exchangeRate
+// - Soft deletes: isActive, deletedAt
+// - Audit: createdBy, lastModifiedBy, createdAt, updatedAt
+// - Security: ipAddress, userAgent on critical operations
+// - Reconciliation: Account.lastReconciled

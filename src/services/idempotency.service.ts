@@ -5,20 +5,26 @@
  * CRITICAL: ALL transaction/transfer mutations MUST use idempotency keys
  * Keys: UUID v4 generated client-side
  * Lifetime: 24 hours for active records, forever for completed operations
+ *
+ * REFACTORED: Uses Repository Pattern with DI
  */
 
 import 'server-only';
-import { prisma } from '@/lib/db';
+import type { ITransactionRepository } from '@/lib/repositories/interfaces/ITransactionRepository';
 
 /**
  * Check if idempotency key was already processed
  * @param key UUID v4 idempotency key
+ * @param transactionRepo Transaction repository (DI)
  * @returns Object with exists flag and existing record if found
  */
-export async function checkIdempotencyKey(key: string): Promise<{
+export async function checkIdempotencyKey(
+  key: string,
+  transactionRepo: ITransactionRepository
+): Promise<{
   exists: boolean;
   record: unknown | null;
-  type: 'transaction' | 'transfer' | null;
+  type: 'transaction' | null;
 }> {
   // Validate key format (UUID v4)
   if (!validateIdempotencyKey(key)) {
@@ -26,9 +32,7 @@ export async function checkIdempotencyKey(key: string): Promise<{
   }
 
   // Check transactions
-  const transaction = await prisma.transaction.findUnique({
-    where: { idempotencyKey: key },
-  });
+  const transaction = await transactionRepo.findByIdempotencyKey(key);
 
   if (transaction) {
     return {
@@ -61,19 +65,21 @@ export function validateIdempotencyKey(key: string): boolean {
  * Used for preventing race conditions in concurrent requests
  *
  * @param key UUID v4 idempotency key
- * @param operationType Type of operation ('transaction' | 'transfer')
+ * @param operationType Type of operation ('transaction')
+ * @param transactionRepo Transaction repository (DI)
  * @returns Existing record if already processed, null if first time
  */
 export async function checkAndLockIdempotency(
   key: string,
-  operationType: 'transaction' | 'transfer'
+  operationType: 'transaction',
+  transactionRepo: ITransactionRepository
 ): Promise<unknown | null> {
   if (!validateIdempotencyKey(key)) {
     throw new Error('Invalid idempotency key format - must be UUID v4');
   }
 
   // Check existing records
-  const existing = await checkIdempotencyKey(key);
+  const existing = await checkIdempotencyKey(key, transactionRepo);
 
   if (existing.exists) {
     // Already processed - return existing record (idempotent response)
@@ -83,31 +89,6 @@ export async function checkAndLockIdempotency(
   // First time - proceed with operation
   // The actual record creation happens in the calling action
   return null;
-}
-
-/**
- * Clean up expired idempotency keys (soft-deleted records older than 24h)
- * Run as scheduled job (e.g., daily cron)
- *
- * NOTE: Active records keep keys forever for audit trail
- */
-export async function cleanupExpiredIdempotencyKeys(): Promise<{
-  deletedCount: number;
-}> {
-  const cutoffDate = new Date();
-  cutoffDate.setHours(cutoffDate.getHours() - 24);
-
-  // Only clean soft-deleted records older than 24h
-  const result = await prisma.transaction.deleteMany({
-    where: {
-      isActive: false,
-      deletedAt: { lte: cutoffDate },
-    },
-  });
-
-  return {
-    deletedCount: result.count,
-  };
 }
 
 /**
@@ -127,13 +108,15 @@ export function generateIdempotencyKey(): string {
  *
  * @param key Idempotency key
  * @param operation Async operation to execute
+ * @param transactionRepo Transaction repository (DI)
  * @returns Operation result
  */
 export async function withIdempotency<T>(
   key: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  transactionRepo: ITransactionRepository
 ): Promise<{ result: T; wasIdempotent: boolean }> {
-  const existing = await checkAndLockIdempotency(key, 'transaction');
+  const existing = await checkAndLockIdempotency(key, 'transaction', transactionRepo);
 
   if (existing) {
     // Already processed - return cached result

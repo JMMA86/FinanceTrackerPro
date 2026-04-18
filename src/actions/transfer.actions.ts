@@ -7,6 +7,8 @@
  * - Rule 12: Idempotency (UUID v4 keys)
  * - Rule 13: Source of Truth (verify balance from history)
  * - Rule 14: Extended audit (IP, user agent)
+ *
+ * REFACTORED: Uses Repository Pattern with DI
  */
 
 'use server';
@@ -19,6 +21,7 @@ import { addCents, subtractCents } from '@/lib/money';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { checkAndLockIdempotency } from '@/services/idempotency.service';
 import { TransferSchema, type TransferInput } from '@/lib/validations/finance';
+import { getAccountRepository, getTransactionRepository } from '@/lib/repositories';
 
 /**
  * Transfer result type
@@ -44,8 +47,16 @@ export async function transferBetweenAccounts(input: unknown): Promise<TransferR
     // 1. SERVER-SIDE VALIDATION (Rule 5)
     const validated = TransferSchema.parse(input);
 
+    // Get repositories (DI)
+    const transactionRepo = getTransactionRepository();
+    const accountRepo = getAccountRepository();
+
     // 2. IDEMPOTENCY CHECK (Rule 12)
-    const existingTransfer = await checkAndLockIdempotency(validated.idempotencyKey, 'transaction');
+    const existingTransfer = await checkAndLockIdempotency(
+      validated.idempotencyKey,
+      'transaction',
+      transactionRepo
+    );
 
     if (existingTransfer) {
       // Already processed - return idempotent response
@@ -91,11 +102,23 @@ export async function transferBetweenAccounts(input: unknown): Promise<TransferR
         ] = await Promise.all([
           tx.account.findUnique({
             where: { id: validated.fromAccountId },
-            select: { id: true, userId: true, balanceCents: true, currency: true, isActive: true },
+            select: {
+              id: true,
+              userId: true,
+              balanceCents: true,
+              currency: true,
+              isActive: true,
+            },
           }),
           tx.account.findUnique({
             where: { id: validated.toAccountId },
-            select: { id: true, userId: true, balanceCents: true, currency: true, isActive: true },
+            select: {
+              id: true,
+              userId: true,
+              balanceCents: true,
+              currency: true,
+              isActive: true,
+            },
           }),
         ]);
 
@@ -134,8 +157,8 @@ export async function transferBetweenAccounts(input: unknown): Promise<TransferR
         }
 
         // 4.2. VERIFY SUFFICIENT BALANCE (Rule 13 - Source of Truth)
-        // Get true balance from transaction history, not cached balance
-        const trueBalance: number = await getTrueBalance(validated.fromAccountId);
+        // Get true balance from transaction history using repository
+        const trueBalance: number = await getTrueBalance(validated.fromAccountId, transactionRepo);
 
         if (trueBalance < validated.amountCents) {
           throw new Error(
@@ -265,13 +288,8 @@ export async function getTransferDetails(transferId: string): Promise<{
   error?: string;
 }> {
   try {
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        transferId,
-        isActive: true,
-      },
-      orderBy: { amountCents: 'asc' }, // Debit (negative) first
-    });
+    const transactionRepo = getTransactionRepository();
+    const transactions = await transactionRepo.findPairedTransfers(transferId);
 
     if (transactions.length !== 2) {
       return {

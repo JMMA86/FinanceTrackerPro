@@ -31,8 +31,8 @@ export class PrismaAccountRepository implements IAccountRepository {
           },
         },
       },
-      select: { id: true } as any, // Cast needed for select typing
-    }) as Promise<Account[]>;
+      select: { id: true },
+    });
   }
 
   async updateBalance(id: string, balanceCents: number, lastModifiedBy: string): Promise<Account> {

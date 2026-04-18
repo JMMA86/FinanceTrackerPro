@@ -27,8 +27,8 @@ export class PrismaTransactionRepository implements ITransactionRepository {
       select: {
         amountCents: true,
         type: true,
-      } as any,
-    }) as Promise<Transaction[]>;
+      },
+    });
   }
 
   async findPairedTransfers(transferId: string): Promise<Transaction[]> {

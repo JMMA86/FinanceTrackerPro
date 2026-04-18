@@ -140,7 +140,7 @@ export function formatMoney(cents: number, currency: string, locale: string = 'e
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  } catch (error) {
+  } catch (_error) {
     // Fallback for invalid locale/currency
     return `${currency} ${amount.toFixed(2)}`;
   }

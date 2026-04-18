@@ -124,11 +124,11 @@ docker-compose -f docker-compose.sonarqube.yml up -d
    - Name: `financetrackerpro`
    - Copy token for next step
 
-4. Configure token:
+4. Configure token in `.env`:
 
 ```bash
-# Create .env.local or add to existing .env
-echo "SONAR_TOKEN=your_token_here" >> .env.local
+# Add to .env file
+SONAR_TOKEN=your_token_here
 ```
 
 5. Run analysis:
@@ -167,6 +167,33 @@ For production CI/CD:
 1. Set `SONAR_HOST_URL` and `SONAR_TOKEN` environment variables
 2. Run `npm run sonar` in CI pipeline after tests
 3. Configure quality gate to block PRs with issues
+
+### Running Analysis Workflow
+
+Complete workflow for code quality check:
+
+```bash
+# 1. Run tests with coverage (generates lcov.info)
+npm run test:coverage
+
+# 2. Run SonarQube analysis (requires server + SONAR_TOKEN in .env)
+npm run sonar
+
+# 3. View results at http://localhost:9000/dashboard?id=financetrackerpro
+```
+
+**Note**: The scanner automatically reads `SONAR_TOKEN` from the environment via `dotenv-cli`.
+
+### Database Connection Test
+
+Validate database connectivity:
+
+```bash
+# Check if app can reach database
+npx dotenv -e .env -- tsx src/lib/db-check.ts
+```
+
+This queries user, account, and transaction counts via Prisma.
 
 ## Tech Stack
 

@@ -46,3 +46,6 @@ next-env.d.ts
 # prisma
 /src/generated/prisma
 /prisma/migrations
+
+# sonarqube
+/.scannerwork

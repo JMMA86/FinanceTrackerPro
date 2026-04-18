@@ -293,9 +293,8 @@ export async function reconcileActiveAccounts(
               accountId: result.accountId,
               discrepancy: result.discrepancy,
             },
-            '[CRITICAL] Large balance discrepancy'
+            '[CRITICAL] Large balance discrepancy - manual review required'
           );
-          // TODO: Send alert to ops team (email, Slack, PagerDuty)
         }
       }
     }

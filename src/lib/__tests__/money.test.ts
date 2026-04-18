@@ -211,6 +211,12 @@ describe('money.ts - Currency Operations', () => {
       const result = formatMoney(105000, 'COP');
       expect(result).toContain('1.050');
     });
+
+    it('should fallback on invalid currency', () => {
+      // Force catch block by using invalid currency with invalid locale
+      const result = formatMoney(105000, 'INVALID', 'xx-XX');
+      expect(result).toBe('INVALID 1050.00');
+    });
   });
 
   describe('parseMoney', () => {

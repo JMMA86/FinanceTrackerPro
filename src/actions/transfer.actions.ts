@@ -15,7 +15,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Transaction } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
 import { log } from '@/lib/logger';
@@ -31,7 +31,6 @@ import {
   CurrencyMismatchError,
   InactiveAccountError,
 } from '@/lib/errors/api-errors';
-import type { Transaction } from '@prisma/client';
 
 /**
  * Transfer result type

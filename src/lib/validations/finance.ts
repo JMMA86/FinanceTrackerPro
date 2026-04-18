@@ -33,16 +33,15 @@ export const TransactionTypeSchema = z.enum([
  */
 const UUIDv4Schema = z
   .string()
-  .uuid()
-  .refine((val) => {
-    const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidV4Regex.test(val);
-  }, 'Must be a valid UUID v4');
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    'Must be a valid UUID v4'
+  );
 
 /**
  * CUID format validation (Prisma default)
  */
-const CUIDSchema = z.string().cuid();
+const CUIDSchema = z.string().regex(/^c[a-z0-9]{20,}$/, 'Must be a valid CUID');
 
 /**
  * Transfer between accounts validation schema

@@ -44,8 +44,8 @@ export function safeAction<TInput, TOutput>(
     } catch (error) {
       // Handle Zod validation errors
       if (error instanceof ZodError) {
-        const firstError = error.errors[0];
-        const message = firstError
+        const firstError = error.errors?.[0];
+        const message = firstError?.path
           ? `${firstError.path.join('.')}: ${firstError.message}`
           : 'Validation failed';
 
@@ -76,8 +76,6 @@ export function safeAction<TInput, TOutput>(
         { error: error instanceof Error ? error : { message } },
         '[ACTION] Unexpected error'
       );
-
-      // TODO: Send to error tracking service (Sentry, Datadog, etc.)
 
       return {
         success: false,

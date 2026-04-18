@@ -23,7 +23,7 @@ export async function checkIdempotencyKey(
   transactionRepo: ITransactionRepository
 ): Promise<{
   exists: boolean;
-  record: unknown | null;
+  record: unknown;
   type: 'transaction' | null;
 }> {
   // Validate key format (UUID v4)
@@ -73,7 +73,7 @@ export async function checkAndLockIdempotency(
   key: string,
   operationType: 'transaction',
   transactionRepo: ITransactionRepository
-): Promise<unknown | null> {
+): Promise<unknown> {
   if (!validateIdempotencyKey(key)) {
     throw new Error('Invalid idempotency key format - must be UUID v4');
   }

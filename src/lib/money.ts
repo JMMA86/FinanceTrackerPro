@@ -8,6 +8,7 @@
  */
 
 import { Decimal } from 'decimal.js';
+import { log } from './logger';
 
 // Configure Decimal.js globally
 Decimal.set({
@@ -140,8 +141,9 @@ export function formatMoney(cents: number, currency: string, locale: string = 'e
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  } catch (_error) {
+  } catch (error) {
     // Fallback for invalid locale/currency
+    log.error({ error, locale, currency }, 'Failed to format money, using fallback');
     return `${currency} ${amount.toFixed(2)}`;
   }
 }
@@ -153,11 +155,11 @@ export function formatMoney(cents: number, currency: string, locale: string = 'e
  */
 export function parseMoney(moneyString: string): number | null {
   // Remove currency symbols, spaces, and thousand separators
-  const cleaned = moneyString.replace(/[^\d.,-]/g, '').replace(/,/g, '');
+  const cleaned = moneyString.replaceAll(/[^\d.,-]/g, '').replaceAll(',', '');
 
-  const parsed = parseFloat(cleaned);
+  const parsed = Number.parseFloat(cleaned);
 
-  if (isNaN(parsed)) {
+  if (Number.isNaN(parsed)) {
     return null;
   }
 

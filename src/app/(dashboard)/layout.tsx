@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'Banking-grade financial management system',
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div className="min-h-screen bg-app">
       {/* Desktop: Sidebar Left */}

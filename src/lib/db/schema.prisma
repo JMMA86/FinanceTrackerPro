@@ -8,7 +8,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================================================
@@ -24,9 +23,9 @@ enum Currency {
 }
 
 enum Language {
-  EN // English
-  ES // Spanish
-  FR // French
+  SPANISH  // Español
+  ENGLISH  // English
+  GERMAN   // Deutsch
 }
 
 enum Theme {
@@ -94,7 +93,7 @@ model User {
   // User Configuration
   baseSalaryCents Int?         // Salario mensual en centavos
   baseCurrency    Currency     @default(COP)
-  language        Language     @default(ES)
+  language        Language     @default(SPANISH)
   theme           Theme        @default(SYSTEM)
 
   // Relations
@@ -225,7 +224,7 @@ model Transaction {
 
   // Variable expense categorization
   categoryId          String?
-  category            VariableExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category            Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   // Fixed expense payment link
   fixedExpensePaymentId String?         @unique
@@ -324,10 +323,10 @@ model FixedExpensePayment {
 // VARIABLE EXPENSE CATEGORIES
 // ============================================================================
 
-model VariableExpenseCategory {
+model Category {
   id              String                    @id @default(cuid())
   name            String                    // User-defined or predefined
-  category        VariableExpenseCategory   @default(OTHER)
+  type            VariableExpenseCategory   @default(OTHER)
   color           String?                   // Hex color for UI
   icon            String?                   // Icon identifier
 
@@ -341,6 +340,7 @@ model VariableExpenseCategory {
   deletedAt       DateTime?
 
   @@index([isActive])
+  @@index([type])
 }
 
 // ============================================================================

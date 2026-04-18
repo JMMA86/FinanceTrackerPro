@@ -11,6 +11,7 @@
 
 import { ZodError } from 'zod';
 import { AppError } from '@/lib/errors/api-errors';
+import { log } from '@/lib/logger';
 
 /**
  * Standard action response format
@@ -48,7 +49,7 @@ export function safeAction<TInput, TOutput>(
           ? `${firstError.path.join('.')}: ${firstError.message}`
           : 'Validation failed';
 
-        console.error('[ACTION] Validation error:', message, error.errors);
+        log.error({ message, errors: error.errors }, '[ACTION] Validation error');
 
         return {
           success: false,
@@ -59,7 +60,7 @@ export function safeAction<TInput, TOutput>(
 
       // Handle custom AppError instances
       if (error instanceof AppError) {
-        console.error(`[ACTION] ${error.code}:`, error.message);
+        log.error({ code: error.code, message: error.message }, '[ACTION] AppError');
 
         return {
           success: false,
@@ -71,7 +72,10 @@ export function safeAction<TInput, TOutput>(
       // Handle unexpected errors
       const message = error instanceof Error ? error.message : 'An unexpected error occurred';
 
-      console.error('[ACTION] Unexpected error:', error);
+      log.error(
+        { error: error instanceof Error ? error : { message } },
+        '[ACTION] Unexpected error'
+      );
 
       // TODO: Send to error tracking service (Sentry, Datadog, etc.)
 

@@ -11,6 +11,7 @@
 
 import 'server-only';
 import { addCents, subtractCents } from '@/lib/money';
+import { log } from '@/lib/logger';
 import type { IAccountRepository } from '@/lib/repositories/interfaces/IAccountRepository';
 import type { ITransactionRepository } from '@/lib/repositories/interfaces/ITransactionRepository';
 
@@ -85,14 +86,16 @@ export async function reconcileAccount(
     await accountRepo.updateReconciliation(accountId, new Date());
 
     // Log critical discrepancy (should trigger alert)
-    console.error('[RECONCILIATION] Balance discrepancy detected', {
-      accountId,
-      accountType: account.type,
-      cached: cachedBalance,
-      computed: trueBalance,
-      diff: discrepancy,
-      timestamp: new Date().toISOString(),
-    });
+    log.error(
+      {
+        accountId,
+        accountType: account.type,
+        cached: cachedBalance,
+        computed: trueBalance,
+        diff: discrepancy,
+      },
+      '[RECONCILIATION] Balance discrepancy detected'
+    );
 
     return {
       success: true,
@@ -285,10 +288,13 @@ export async function reconcileActiveAccounts(
         // Alert if discrepancy > $10
         if (Math.abs(result.discrepancy) > 1000) {
           criticalAlerts++;
-          console.error('[CRITICAL] Large balance discrepancy', {
-            accountId: result.accountId,
-            discrepancy: result.discrepancy,
-          });
+          log.error(
+            {
+              accountId: result.accountId,
+              discrepancy: result.discrepancy,
+            },
+            '[CRITICAL] Large balance discrepancy'
+          );
           // TODO: Send alert to ops team (email, Slack, PagerDuty)
         }
       }

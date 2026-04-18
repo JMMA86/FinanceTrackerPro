@@ -87,6 +87,7 @@ Open [http://localhost:3000](http://localhost:3000)
 - `npm run lint` - ESLint with auto-fix
 - `npm run format` - Prettier format all files
 - `npm run format:check` - Check formatting
+- `npm run sonar` - Run SonarQube analysis
 
 ### Git Hooks
 
@@ -94,6 +95,78 @@ Pre-commit hook (Husky + lint-staged):
 
 - ESLint on staged `.js`, `.jsx`, `.ts`, `.tsx`
 - Prettier on all staged files
+
+## SonarQube Setup
+
+SonarQube provides static code analysis for code quality, security vulnerabilities, and technical debt detection.
+
+### Local Setup
+
+1. **Windows users**: Set vm.max_map_count in WSL2 (required for Elasticsearch):
+
+```bash
+wsl -d docker-desktop sysctl -w vm.max_map_count=262144
+```
+
+2. Start SonarQube server (Docker Compose):
+
+```bash
+docker-compose -f docker-compose.sonarqube.yml up -d
+```
+
+2. Access SonarQube UI:
+   - URL: http://localhost:9000
+   - Default credentials: `admin` / `admin`
+   - Change password on first login
+
+3. Generate authentication token:
+   - Go to: User menu → My Account → Security → Generate Tokens
+   - Name: `financetrackerpro`
+   - Copy token for next step
+
+4. Configure token:
+
+```bash
+# Create .env.local or add to existing .env
+echo "SONAR_TOKEN=your_token_here" >> .env.local
+```
+
+5. Run analysis:
+
+```bash
+# Generate coverage report first
+npm run test:coverage
+
+# Run SonarQube scan
+npm run sonar
+```
+
+6. View results:
+   - Open http://localhost:9000
+   - Navigate to `financetrackerpro` project
+
+### Configuration
+
+- **Project config**: `sonar-project.properties`
+- **Docker setup**: `docker-compose.sonarqube.yml`
+- **Coverage path**: `coverage/lcov.info`
+
+### Quality Gates
+
+Default quality gate enforces:
+
+- 80% minimum coverage
+- 0 security vulnerabilities
+- 0 bugs
+- Maintainability rating A
+
+### CI/CD Integration
+
+For production CI/CD:
+
+1. Set `SONAR_HOST_URL` and `SONAR_TOKEN` environment variables
+2. Run `npm run sonar` in CI pipeline after tests
+3. Configure quality gate to block PRs with issues
 
 ## Tech Stack
 
@@ -127,6 +200,8 @@ Pre-commit hook (Husky + lint-staged):
 - **Linting**: ESLint + TypeScript ESLint
 - **Formatting**: Prettier
 - **Git Hooks**: Husky + lint-staged
+- **Static Analysis**: SonarQube (code quality, security, coverage)
+- **Logging**: Pino (structured JSON in production)
 
 ## Project Structure
 

@@ -18,6 +18,7 @@ import { headers } from 'next/headers';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
+import { log } from '@/lib/logger';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { checkAndLockIdempotency } from '@/services/idempotency.service';
 import { TransferSchema, type TransferInput } from '@/lib/validations/finance';
@@ -272,11 +273,14 @@ async function getTransferDetailsInternal(transferId: string): Promise<{
 
   // Verify double-entry integrity
   if (debitTransaction.amountCents + creditTransaction.amountCents !== 0) {
-    console.error('[TRANSFER] Double-entry integrity violation', {
-      transferId,
-      debit: debitTransaction.amountCents,
-      credit: creditTransaction.amountCents,
-    });
+    log.error(
+      {
+        transferId,
+        debit: debitTransaction.amountCents,
+        credit: creditTransaction.amountCents,
+      },
+      '[TRANSFER] Double-entry integrity violation'
+    );
   }
 
   return {

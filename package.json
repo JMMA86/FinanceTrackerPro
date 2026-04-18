@@ -17,12 +17,13 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "tsx src/db/seed/accounts.seed.ts",
+    "db:seed": "tsx prisma/seed.ts",
     "prepare": "husky"
   },
   "dependencies": {
     "@prisma/client": "^7.7.0",
     "decimal.js": "^10.6.0",
+    "lucide-react": "^1.8.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -48,7 +49,7 @@
     "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
-    "prisma": "^7.7.0",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",

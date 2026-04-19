@@ -1,5 +1,5 @@
 /**
- * Middleware for route protection
+ * Proxy for route protection
  * Handles authentication checks and redirects
  */
 
@@ -20,7 +20,7 @@ const PROTECTED_ROUTES = [
   '/settings',
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Get session token from cookie

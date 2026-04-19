@@ -1,12 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { navigationItems } from '@/config/navigation';
+import { logoutAction } from '@/actions/auth.actions';
+import { useState } from 'react';
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logoutAction();
+    router.push('/login');
+  }
 
   return (
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 md:z-50">
@@ -73,14 +83,17 @@ export function DashboardSidebar() {
           }}
         >
           <button
+            onClick={handleLogout}
+            disabled={loggingOut}
             className="
               flex items-center gap-3 w-full px-4 py-3 text-sm font-medium
               text-red-400 hover:text-red-300 hover:bg-red-500/10
               rounded-xl transition-all duration-200
+              disabled:opacity-50 disabled:cursor-not-allowed
             "
           >
             <LogOut className="w-5 h-5" />
-            <span>Cerrar Sesión</span>
+            <span>{loggingOut ? 'Cerrando sesión...' : 'Cerrar Sesión'}</span>
           </button>
         </div>
       </div>

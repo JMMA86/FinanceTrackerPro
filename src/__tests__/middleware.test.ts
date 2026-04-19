@@ -1,12 +1,12 @@
 /**
- * Middleware Test Suite
+ * Proxy Test Suite
  * Tests route protection and authentication redirects
  * @vitest-environment node
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { middleware } from '../middleware';
+import { proxy } from '../proxy';
 import type { SessionData } from '@/lib/auth/session';
 
 // Mock session verification
@@ -40,7 +40,7 @@ describe('Middleware', () => {
       vi.mocked(verifySession).mockResolvedValue(null);
       mockRequest = createRequest('/login');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).not.toBe(307); // Not redirecting
     });
@@ -49,7 +49,7 @@ describe('Middleware', () => {
       vi.mocked(verifySession).mockResolvedValue(null);
       mockRequest = createRequest('/register');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).not.toBe(307);
     });
@@ -62,7 +62,7 @@ describe('Middleware', () => {
       });
       mockRequest = createRequest('/login', 'valid-token');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).toBe(307); // Redirect
       expect(response.headers.get('location')).toContain('/dashboard');
@@ -76,7 +76,7 @@ describe('Middleware', () => {
       });
       mockRequest = createRequest('/register', 'valid-token');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).toBe(307);
       expect(response.headers.get('location')).toContain('/dashboard');
@@ -101,7 +101,7 @@ describe('Middleware', () => {
         vi.mocked(verifySession).mockResolvedValue(null);
         mockRequest = createRequest(route);
 
-        const response = await middleware(mockRequest);
+        const response = await proxy(mockRequest);
 
         expect(response.status).toBe(307);
         const location = response.headers.get('location');
@@ -117,7 +117,7 @@ describe('Middleware', () => {
         });
         mockRequest = createRequest(route, 'valid-token');
 
-        const response = await middleware(mockRequest);
+        const response = await proxy(mockRequest);
 
         expect(response.status).not.toBe(307);
       });
@@ -129,7 +129,7 @@ describe('Middleware', () => {
       vi.mocked(verifySession).mockResolvedValue(null);
       mockRequest = createRequest('/');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).not.toBe(307);
     });
@@ -142,7 +142,7 @@ describe('Middleware', () => {
       });
       mockRequest = createRequest('/', 'valid-token');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       expect(response.status).not.toBe(307);
     });
@@ -153,7 +153,7 @@ describe('Middleware', () => {
       vi.mocked(verifySession).mockResolvedValue(null);
       mockRequest = createRequest('/dashboard/analytics');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       const location = response.headers.get('location');
       expect(location).toContain('redirect=%2Fdashboard%2Fanalytics');
@@ -163,7 +163,7 @@ describe('Middleware', () => {
       vi.mocked(verifySession).mockResolvedValue(null);
       mockRequest = createRequest('/settings/profile/security');
 
-      const response = await middleware(mockRequest);
+      const response = await proxy(mockRequest);
 
       const location = response.headers.get('location');
       expect(location).toContain('redirect=%2Fsettings%2Fprofile%2Fsecurity');

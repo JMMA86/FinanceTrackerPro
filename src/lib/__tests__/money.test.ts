@@ -203,8 +203,8 @@ describe('money.ts - Currency Operations', () => {
 
     it('should handle invalid locale gracefully', () => {
       const result = formatMoney(105000, 'USD', 'invalid-locale');
-      // Intl.NumberFormat may still format with fallback locale
-      expect(result).toContain('1050');
+      // Intl.NumberFormat falls back to default locale formatting
+      expect(result).toMatch(/1[,.]?050/); // Matches 1050, 1,050, or 1.050
     });
 
     it('should use es-CO as default locale', () => {

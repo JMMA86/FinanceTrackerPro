@@ -6,10 +6,12 @@
 import { prisma } from '@/lib/db';
 import { PrismaAccountRepository } from './prisma/PrismaAccountRepository';
 import { PrismaTransactionRepository } from './prisma/PrismaTransactionRepository';
+import { PrismaUserRepository } from './prisma/PrismaUserRepository';
 
 // Singleton instances
 let accountRepository: PrismaAccountRepository;
 let transactionRepository: PrismaTransactionRepository;
+let userRepository: PrismaUserRepository;
 
 export function getAccountRepository(): PrismaAccountRepository {
   if (!accountRepository) {
@@ -23,6 +25,13 @@ export function getTransactionRepository(): PrismaTransactionRepository {
     transactionRepository = new PrismaTransactionRepository(prisma);
   }
   return transactionRepository;
+}
+
+export function getUserRepository(): PrismaUserRepository {
+  if (!userRepository) {
+    userRepository = new PrismaUserRepository();
+  }
+  return userRepository;
 }
 
 // Export interfaces for DI

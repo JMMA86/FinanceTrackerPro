@@ -1,0 +1,10 @@
+{
+  "title": "Configuración",
+  "language": {
+    "title": "Idioma",
+    "description": "Selecciona tu idioma preferido",
+    "current": "Idioma actual",
+    "change": "Cambiar idioma",
+    "changed": "Idioma cambiado exitosamente"
+  }
+}

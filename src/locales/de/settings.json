@@ -1,0 +1,10 @@
+{
+  "title": "Einstellungen",
+  "language": {
+    "title": "Sprache",
+    "description": "Wählen Sie Ihre bevorzugte Sprache",
+    "current": "Aktuelle Sprache",
+    "change": "Sprache ändern",
+    "changed": "Sprache erfolgreich geändert"
+  }
+}

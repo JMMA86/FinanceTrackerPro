@@ -1,0 +1,11 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome",
+  "overview": {
+    "title": "Overview",
+    "balance": "Balance",
+    "income": "Income",
+    "expenses": "Expenses",
+    "savings": "Savings"
+  }
+}

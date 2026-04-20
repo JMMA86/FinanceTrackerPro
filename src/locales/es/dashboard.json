@@ -1,0 +1,11 @@
+{
+  "title": "Panel de Control",
+  "welcome": "Bienvenido",
+  "overview": {
+    "title": "Resumen",
+    "balance": "Saldo",
+    "income": "Ingresos",
+    "expenses": "Gastos",
+    "savings": "Ahorros"
+  }
+}

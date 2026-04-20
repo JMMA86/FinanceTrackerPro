@@ -1,0 +1,26 @@
+{
+  "buttons": {
+    "next": "Next",
+    "previous": "Previous",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "submit": "Submit",
+    "reset": "Reset"
+  },
+  "language": {
+    "select": "Select language",
+    "spanish": "Español",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "navigation": {
+    "logout": "Sign Out",
+    "loggingOut": "Signing out..."
+  }
+}

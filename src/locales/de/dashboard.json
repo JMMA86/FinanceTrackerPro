@@ -1,0 +1,11 @@
+{
+  "title": "Dashboard",
+  "welcome": "Willkommen",
+  "overview": {
+    "title": "Übersicht",
+    "balance": "Saldo",
+    "income": "Einkommen",
+    "expenses": "Ausgaben",
+    "savings": "Ersparnisse"
+  }
+}

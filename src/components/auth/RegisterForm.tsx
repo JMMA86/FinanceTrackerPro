@@ -9,13 +9,6 @@ interface PasswordRequirement {
   test: (password: string) => boolean;
 }
 
-const PASSWORD_REQUIREMENTS: PasswordRequirement[] = [
-  { id: 'min-length', label: 'Al menos 8 caracteres', test: (p) => p.length >= 8 },
-  { id: 'uppercase', label: 'Una letra mayúscula', test: (p) => /[A-Z]/.test(p) },
-  { id: 'lowercase', label: 'Una letra minúscula', test: (p) => /[a-z]/.test(p) },
-  { id: 'number', label: 'Un número', test: (p) => /\d/.test(p) },
-];
-
 interface RegisterFormProps {
   loading: boolean;
   error: string;
@@ -24,6 +17,21 @@ interface RegisterFormProps {
   isMobile?: boolean;
   onSubmit: (event: React.BaseSyntheticEvent) => void;
   onFieldChange: (field: string, value: string) => void;
+  labels: {
+    name: string;
+    namePlaceholder: string;
+    email: string;
+    emailPlaceholder: string;
+    password: string;
+    passwordPlaceholder: string;
+    passwordRequirements: string;
+    passwordMinLength: string;
+    passwordUppercase: string;
+    passwordLowercase: string;
+    passwordNumber: string;
+    submit: string;
+    submitting: string;
+  };
 }
 
 export default function RegisterForm({
@@ -34,6 +42,7 @@ export default function RegisterForm({
   isMobile = false,
   onSubmit,
   onFieldChange,
+  labels,
 }: Readonly<RegisterFormProps>) {
   const suffix = isMobile ? '-mobile' : '-desktop';
   const inputBgClass = isMobile
@@ -46,6 +55,13 @@ export default function RegisterForm({
     ? 'bg-red-50/90 dark:bg-red-900/30'
     : 'bg-red-50 dark:bg-red-900/20';
 
+  const passwordRequirements: PasswordRequirement[] = [
+    { id: 'min-length', label: labels.passwordMinLength, test: (p) => p.length >= 8 },
+    { id: 'uppercase', label: labels.passwordUppercase, test: (p) => /[A-Z]/.test(p) },
+    { id: 'lowercase', label: labels.passwordLowercase, test: (p) => /[a-z]/.test(p) },
+    { id: 'number', label: labels.passwordNumber, test: (p) => /\d/.test(p) },
+  ];
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
@@ -53,7 +69,7 @@ export default function RegisterForm({
           htmlFor={`name${suffix}`}
           className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
         >
-          Nombre Completo
+          {labels.name}
         </label>
         <input
           type="text"
@@ -65,8 +81,8 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.name}
           onChange={(e) => onFieldChange('name', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:text-white transition-all disabled:opacity-50`}
-          placeholder="Ingresa tu nombre"
+          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          placeholder={labels.namePlaceholder}
         />
       </div>
 
@@ -75,7 +91,7 @@ export default function RegisterForm({
           htmlFor={`email${suffix}`}
           className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
         >
-          Correo Electrónico
+          {labels.email}
         </label>
         <input
           type="email"
@@ -85,8 +101,8 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.email}
           onChange={(e) => onFieldChange('email', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:text-white transition-all disabled:opacity-50`}
-          placeholder="Ingresa tu correo"
+          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          placeholder={labels.emailPlaceholder}
         />
       </div>
 
@@ -95,7 +111,7 @@ export default function RegisterForm({
           htmlFor={`password${suffix}`}
           className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
         >
-          Contraseña
+          {labels.password}
         </label>
         <input
           type="password"
@@ -106,17 +122,17 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.password}
           onChange={(e) => onFieldChange('password', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:text-white transition-all disabled:opacity-50`}
-          placeholder="Crea una contraseña segura"
+          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          placeholder={labels.passwordPlaceholder}
         />
 
         {formData.password && (
           <div className={`mt-3 p-3 ${checklistBgClass} rounded-lg border dark:border-gray-600`}>
             <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              La contraseña debe contener:
+              {labels.passwordRequirements}
             </p>
             <ul className="space-y-1.5">
-              {PASSWORD_REQUIREMENTS.map((req) => (
+              {passwordRequirements.map((req) => (
                 <li key={req.id} className="flex items-center text-xs">
                   {req.test(formData.password) ? (
                     <svg
@@ -183,7 +199,7 @@ export default function RegisterForm({
       <button
         type="submit"
         disabled={loading || !isFormValid}
-        className={`w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold ${isMobile ? 'py-3' : 'py-3.5'} px-4 rounded-xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
+        className={`w-full bg-gradient-to-br from-blue-800 to-blue-950 hover:from-blue-700 hover:to-blue-900 text-white font-semibold ${isMobile ? 'py-3' : 'py-3.5'} px-4 rounded-xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-6`}
       >
         {loading ? (
           <span className="flex items-center justify-center">
@@ -206,10 +222,10 @@ export default function RegisterForm({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Creando cuenta...
+            {labels.submitting}
           </span>
         ) : (
-          'Registrarse'
+          labels.submit
         )}
       </button>
     </form>

@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginAction, registerAction } from '@/actions/auth.actions';
 import { AnimatedBackground } from '@/components/auth/AnimatedBackground';
-import FloatingSymbols from '@/components/auth/FloatingSymbols';
+import MobileAuthForm from '@/components/auth/MobileAuthForm';
+import DesktopAuthPanel from '@/components/auth/DesktopAuthPanel';
 import RegisterForm from '@/components/auth/RegisterForm';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
@@ -53,7 +54,7 @@ export default function AuthClient({
     );
   }, [registerData]);
 
-  async function handleLoginSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleLoginSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError('');
@@ -69,7 +70,7 @@ export default function AuthClient({
     }
   }
 
-  async function handleRegisterSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleRegisterSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError('');
@@ -256,337 +257,27 @@ export default function AuthClient({
                 </div>
               </div>
 
-              {/* Layer 2: Single Dynamic Panel (z-20) */}
-              {/* Unified Panel - Slides from right to left, changes content */}
-              <div
-                className="absolute top-0 w-1/2 h-full overflow-hidden z-20 pointer-events-auto bg-gradient-to-br from-blue-800 to-blue-950"
-                style={{
-                  right: 0,
-                  transform: mode === 'register' ? 'translateX(-100%)' : 'translateX(0)',
-                  transition: 'transform 700ms cubic-bezier(0.4, 0.0, 0.2, 1)',
-                }}
-              >
-                <AnimatedBackground minimal />
-                <FloatingSymbols />
-                <div className="absolute inset-0 p-12 flex flex-col items-center justify-center text-white">
-                  <div className="relative z-10 text-center max-w-sm w-full">
-                    {/* Content wrapper for proper stacking */}
-                    <div className="relative h-80 mb-8">
-                      {/* Login mode content */}
-                      <div
-                        className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500"
-                        style={{
-                          opacity: mode === 'login' ? 1 : 0,
-                          pointerEvents: mode === 'login' ? 'auto' : 'none',
-                        }}
-                      >
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mb-6">
-                          <svg
-                            className="w-10 h-10 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                            />
-                          </svg>
-                        </div>
-                        <h2 className="text-4xl font-bold mb-4">
-                          {get(auth, 'register.newUserTitle')}
-                        </h2>
-                        <p className="text-gray-200 text-lg leading-relaxed">
-                          {get(auth, 'register.newUserDescription')}
-                        </p>
-                      </div>
-
-                      {/* Register mode content */}
-                      <div
-                        className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500"
-                        style={{
-                          opacity: mode === 'register' ? 1 : 0,
-                          pointerEvents: mode === 'register' ? 'auto' : 'none',
-                        }}
-                      >
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mb-6">
-                          <svg
-                            className="w-10 h-10 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                        </div>
-                        <h2 className="text-4xl font-bold mb-4">
-                          {get(auth, 'register.inviteTitle')}
-                        </h2>
-                        <p className="text-gray-200 text-lg leading-relaxed">
-                          {get(auth, 'register.inviteDescription')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                      className="inline-block w-full max-w-xs bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-8 rounded-xl transition-all duration-500 transform hover:scale-105 shadow-xl"
-                    >
-                      {mode === 'login'
-                        ? get(auth, 'register.newUserButton')
-                        : get(auth, 'register.inviteButton')}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Layer 2: Sliding Panel */}
+              <DesktopAuthPanel mode={mode} auth={auth} onSwitchMode={switchMode} />
             </div>
           </div>
 
-          {/* Mobile View - Containerless Glassmorphism */}
-          <div className="md:hidden w-full px-6 flex flex-col justify-center min-h-[calc(100vh-100px)]">
-            {/* Title with crossfade */}
-            <div className="mb-8 text-center relative">
-              <div className="relative h-20">
-                <h1
-                  className={`absolute inset-0 text-3xl font-bold text-white transition-opacity duration-300 ${
-                    mode === 'login' ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  {get(auth, 'login.title')}
-                </h1>
-                <h1
-                  className={`absolute inset-0 text-3xl font-bold text-white transition-opacity duration-300 ${
-                    mode === 'register' ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  {get(auth, 'register.title')}
-                </h1>
-              </div>
-              <div className="relative h-12 mt-2">
-                <p
-                  className={`absolute inset-0 text-gray-300 text-sm transition-opacity duration-300 ${
-                    mode === 'login' ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  {get(auth, 'login.subtitleDescDesktop')}
-                </p>
-                <p
-                  className={`absolute inset-0 text-gray-300 text-sm transition-opacity duration-300 ${
-                    mode === 'register' ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  {get(auth, 'register.subtitleDesktop')}
-                </p>
-              </div>
-            </div>
-
-            {/* Unified morphing form */}
-            <div className="space-y-4">
-              <form onSubmit={mode === 'login' ? handleLoginSubmit : handleRegisterSubmit}>
-                {/* Name field - morphs in for register */}
-                <div
-                  className="transition-all duration-300 overflow-hidden"
-                  style={{
-                    maxHeight: mode === 'register' ? '100px' : '0',
-                    opacity: mode === 'register' ? 1 : 0,
-                    marginBottom: mode === 'register' ? '16px' : '0',
-                  }}
-                >
-                  <label className="block text-sm font-semibold text-gray-200 mb-2">
-                    {get(auth, 'register.name')}
-                  </label>
-                  <input
-                    type="text"
-                    required={mode === 'register'}
-                    disabled={loading}
-                    value={registerData.name}
-                    onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-400 focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
-                    placeholder={get(auth, 'register.namePlaceholder')}
-                  />
-                </div>
-
-                {/* Email field */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-200 mb-2">
-                    {get(auth, 'login.email')}
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    disabled={loading}
-                    value={mode === 'login' ? loginData.email : registerData.email}
-                    onChange={(e) =>
-                      mode === 'login'
-                        ? setLoginData({ ...loginData, email: e.target.value })
-                        : setRegisterData({ ...registerData, email: e.target.value })
-                    }
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-400 focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
-                    placeholder={get(auth, 'login.emailPlaceholder')}
-                  />
-                </div>
-
-                {/* Password field */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-200 mb-2">
-                    {get(auth, 'login.password')}
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    minLength={mode === 'register' ? 8 : undefined}
-                    disabled={loading}
-                    value={mode === 'login' ? loginData.password : registerData.password}
-                    onChange={(e) =>
-                      mode === 'login'
-                        ? setLoginData({ ...loginData, password: e.target.value })
-                        : setRegisterData({ ...registerData, password: e.target.value })
-                    }
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-400 focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
-                    placeholder={get(auth, 'login.passwordPlaceholder')}
-                  />
-                </div>
-
-                {/* Password requirements - morphs in for register */}
-                {mode === 'register' && registerData.password && (
-                  <div
-                    className="mb-4 transition-all duration-300"
-                    style={{
-                      maxHeight: mode === 'register' && registerData.password ? '200px' : '0',
-                      opacity: mode === 'register' && registerData.password ? 1 : 0,
-                    }}
-                  >
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
-                      <p className="text-xs font-semibold text-gray-300 mb-2">
-                        {get(auth, 'register.passwordRequirements')}
-                      </p>
-                      <ul className="space-y-1.5">
-                        {[
-                          {
-                            id: 'min',
-                            test: registerData.password.length >= 8,
-                            label: get(auth, 'register.passwordMinLength'),
-                          },
-                          {
-                            id: 'upper',
-                            test: /[A-Z]/.test(registerData.password),
-                            label: get(auth, 'register.passwordUppercase'),
-                          },
-                          {
-                            id: 'lower',
-                            test: /[a-z]/.test(registerData.password),
-                            label: get(auth, 'register.passwordLowercase'),
-                          },
-                          {
-                            id: 'num',
-                            test: /\d/.test(registerData.password),
-                            label: get(auth, 'register.passwordNumber'),
-                          },
-                        ].map((req) => (
-                          <li key={req.id} className="flex items-center text-xs">
-                            <span
-                              className={`mr-2 ${req.test ? 'text-green-400' : 'text-gray-500'}`}
-                            >
-                              {req.test ? '✓' : '○'}
-                            </span>
-                            <span className={req.test ? 'text-green-300' : 'text-gray-400'}>
-                              {req.label}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                {/* Success message */}
-                {success && (
-                  <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-xl p-3 backdrop-blur-sm">
-                    <p className="text-sm text-green-300">{success}</p>
-                  </div>
-                )}
-
-                {/* Error message */}
-                {error && (
-                  <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-xl p-3 backdrop-blur-sm">
-                    <p className="text-sm text-red-300">{error}</p>
-                  </div>
-                )}
-
-                {/* Submit button with crossfade text */}
-                <button
-                  type="submit"
-                  disabled={loading || (mode === 'register' && !isRegisterValid)}
-                  className="w-full bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-semibold py-3.5 rounded-xl disabled:opacity-50 shadow-xl mt-6 transition-all relative overflow-hidden"
-                >
-                  <span
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-                      mode === 'login' && !loading ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  >
-                    {get(auth, 'login.submit')}
-                  </span>
-                  <span
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-                      mode === 'register' && !loading ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  >
-                    {get(auth, 'register.submit')}
-                  </span>
-                  <span
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-                      loading ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  >
-                    {mode === 'login'
-                      ? get(auth, 'login.submitting')
-                      : get(auth, 'register.submitting')}
-                  </span>
-                  <span className="opacity-0">
-                    {mode === 'login' ? get(auth, 'login.submit') : get(auth, 'register.submit')}
-                  </span>
-                </button>
-              </form>
-
-              {/* Toggle link with crossfade */}
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                  className="text-sm text-gray-300 hover:text-white transition-colors"
-                >
-                  <span className="relative inline-block">
-                    <span
-                      className={`transition-opacity duration-300 ${
-                        mode === 'login' ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      {get(auth, 'login.newUser')}{' '}
-                      <span className="font-semibold text-blue-400">
-                        {get(auth, 'register.title')}
-                      </span>
-                    </span>
-                    <span
-                      className={`absolute left-0 transition-opacity duration-300 ${
-                        mode === 'register' ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      {get(auth, 'register.hasAccount')}{' '}
-                      <span className="font-semibold text-blue-400">
-                        {get(auth, 'login.title')}
-                      </span>
-                    </span>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Mobile View */}
+          <MobileAuthForm
+            mode={mode}
+            loading={loading}
+            error={error}
+            success={success}
+            loginData={loginData}
+            registerData={registerData}
+            isRegisterValid={isRegisterValid}
+            auth={auth}
+            onLoginSubmit={handleLoginSubmit}
+            onRegisterSubmit={handleRegisterSubmit}
+            onLoginDataChange={setLoginData}
+            onRegisterDataChange={setRegisterData}
+            onSwitchMode={switchMode}
+          />
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ export default function SettingsClient({
     if (result.success) {
       setSuccess(get(settings, 'language.changed'));
       // Redirect to new locale
-      const currentPath = window.location.pathname.replace(`/${lang}`, '');
+      const currentPath = globalThis.location.pathname.replace(`/${lang}`, '');
       router.push(`/${newLocale}${currentPath}`);
     }
 

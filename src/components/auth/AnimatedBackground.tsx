@@ -9,7 +9,7 @@ interface AnimatedBackgroundProps {
   minimal?: boolean;
 }
 
-export function AnimatedBackground({ minimal = false }: AnimatedBackgroundProps) {
+export function AnimatedBackground({ minimal = false }: Readonly<AnimatedBackgroundProps>) {
   if (minimal) {
     return (
       <div className="absolute inset-0 overflow-hidden select-none">
@@ -59,74 +59,98 @@ export function AnimatedBackground({ minimal = false }: AnimatedBackgroundProps)
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-blue-900/20 rounded-full blur-3xl" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-indigo-900/15 rounded-full blur-3xl" />
 
-      {/* Financial symbols - elegant distribution */}
-      <div className="absolute inset-0 font-light">
-        {/* Layer 1 - Large symbols */}
-        <div className="absolute top-[8%] left-[12%] text-6xl animate-float-slower text-blue-400/12">
+      {/* Financial symbols - moving particles */}
+      <div className="absolute inset-0 font-light pointer-events-none">
+        {/* Horizontal drifting particles - evenly distributed via negative delays */}
+        <div
+          className="absolute top-[10%] left-[-8%] text-5xl text-blue-400/10 blur-[1px]"
+          style={{ animation: 'float 36s infinite ease-in-out', animationDelay: '0s' }}
+        >
           $
         </div>
-        <div className="absolute top-[15%] right-[8%] text-7xl animate-float-slow text-blue-300/10">
+        <div
+          className="absolute top-[18%] left-[-8%] text-5xl text-blue-300/10 blur-[1px]"
+          style={{ animation: 'float 37s infinite ease-in-out', animationDelay: '-2.5s' }}
+        >
           €
         </div>
-        <div className="absolute bottom-[25%] left-[10%] text-6xl animate-float-slower text-white/15">
+        <div
+          className="absolute top-[26%] left-[-8%] text-5xl text-white/12 blur-[1px]"
+          style={{ animation: 'float 35s infinite ease-in-out', animationDelay: '-5s' }}
+        >
           £
         </div>
-        <div className="absolute bottom-[15%] right-[15%] text-7xl animate-float-slow text-blue-400/12">
+        <div
+          className="absolute top-[34%] left-[-8%] text-5xl text-blue-400/11 blur-[1px]"
+          style={{ animation: 'float 38s infinite ease-in-out', animationDelay: '-7.5s' }}
+        >
           ¥
         </div>
-
-        {/* Layer 2 - Medium symbols */}
-        <div className="absolute top-[35%] left-[25%] text-4xl animate-float-slow text-blue-300/10">
+        <div
+          className="absolute top-[42%] left-[-8%] text-5xl text-blue-300/10 blur-[1px]"
+          style={{ animation: 'float 36s infinite ease-in-out', animationDelay: '-10s' }}
+        >
           ₿
         </div>
-        <div className="absolute top-[25%] right-[30%] text-5xl animate-float-slower text-white/12">
+        <div
+          className="absolute top-[50%] left-[-8%] text-5xl text-white/11 blur-[1px]"
+          style={{ animation: 'float 39s infinite ease-in-out', animationDelay: '-12.5s' }}
+        >
           %
         </div>
-        <div className="absolute bottom-[40%] left-[35%] text-4xl animate-float-slow text-blue-400/13">
+        <div
+          className="absolute top-[58%] left-[-8%] text-5xl text-blue-400/10 blur-[1px]"
+          style={{ animation: 'float 34s infinite ease-in-out', animationDelay: '-15s' }}
+        >
           ↑
         </div>
-        <div className="absolute bottom-[35%] right-[25%] text-5xl animate-float-slower text-blue-300/10">
+        <div
+          className="absolute top-[66%] left-[-8%] text-5xl text-blue-300/12 blur-[1px]"
+          style={{ animation: 'float 40s infinite ease-in-out', animationDelay: '-17.5s' }}
+        >
           ↓
         </div>
-        <div className="absolute top-[55%] right-[40%] text-4xl animate-float-slow text-white/10">
+        <div
+          className="absolute top-[74%] left-[-8%] text-5xl text-white/10 blur-[1px]"
+          style={{ animation: 'float 37s infinite ease-in-out', animationDelay: '-20s' }}
+        >
           ₹
         </div>
-
-        {/* Layer 3 - Small symbols */}
-        <div className="absolute top-[20%] left-[45%] text-3xl animate-float-slower text-white/8">
+        <div
+          className="absolute top-[82%] left-[-8%] text-5xl text-blue-400/11 blur-[1px]"
+          style={{ animation: 'float 38s infinite ease-in-out', animationDelay: '-22.5s' }}
+        >
+          ¢
+        </div>
+        <div
+          className="absolute top-[14%] left-[-8%] text-5xl text-blue-300/11 blur-[1px]"
+          style={{ animation: 'float 36s infinite ease-in-out', animationDelay: '-25s' }}
+        >
           $
         </div>
-        <div className="absolute top-[65%] left-[15%] text-3xl animate-float-slow text-blue-300/8">
+        <div
+          className="absolute top-[22%] left-[-8%] text-5xl text-white/10 blur-[1px]"
+          style={{ animation: 'float 35s infinite ease-in-out', animationDelay: '-27.5s' }}
+        >
           €
         </div>
-        <div className="absolute bottom-[50%] right-[10%] text-3xl animate-float-slower text-blue-400/8">
-          %
-        </div>
-        <div className="absolute top-[45%] right-[50%] text-3xl animate-float-slow text-white/8">
-          £
-        </div>
-        <div className="absolute bottom-[60%] left-[50%] text-3xl animate-float-slower text-blue-400/8">
-          ¥
-        </div>
-
-        {/* Layer 4 - Extra small symbols for richness */}
-        <div className="absolute top-[10%] left-[60%] text-2xl animate-float-slow text-white/5">
+        <div
+          className="absolute top-[30%] left-[-8%] text-5xl text-blue-400/12 blur-[1px]"
+          style={{ animation: 'float 39s infinite ease-in-out', animationDelay: '-30s' }}
+        >
           ₿
         </div>
-        <div className="absolute top-[70%] right-[45%] text-2xl animate-float-slower text-blue-400/6">
-          ↑
-        </div>
-        <div className="absolute bottom-[20%] left-[70%] text-2xl animate-float-slow text-blue-300/5">
-          $
-        </div>
-        <div className="absolute top-[40%] left-[5%] text-2xl animate-float-slower text-white/6">
+        <div
+          className="absolute top-[46%] left-[-8%] text-5xl text-blue-300/10 blur-[1px]"
+          style={{ animation: 'float 37s infinite ease-in-out', animationDelay: '-32.5s' }}
+        >
           %
         </div>
-        <div className="absolute bottom-[10%] right-[55%] text-2xl animate-float-slow text-blue-300/6">
-          €
-        </div>
-        <div className="absolute top-[80%] left-[40%] text-2xl animate-float-slower text-white/5">
-          ↓
+        <div
+          className="absolute top-[62%] left-[-8%] text-5xl text-white/11 blur-[1px]"
+          style={{ animation: 'float 38s infinite ease-in-out', animationDelay: '-35s' }}
+        >
+          ↑
         </div>
       </div>
     </div>

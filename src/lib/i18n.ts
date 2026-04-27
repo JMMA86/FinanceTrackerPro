@@ -66,7 +66,7 @@ export function getLocaleFromHeader(acceptLanguage: string | null): Locale {
       const [code, q] = lang.trim().split(';q=');
       return {
         code: code.split('-')[0], // Extract base language (es from es-ES)
-        quality: q ? parseFloat(q) : 1.0,
+        quality: q ? Number.parseFloat(q) : 1,
       };
     })
     .sort((a, b) => b.quality - a.quality);

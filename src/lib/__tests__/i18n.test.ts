@@ -91,7 +91,7 @@ describe('i18n Utilities', () => {
 
     it('returns false for unsupported locales', () => {
       expect(isValidLocale('fr')).toBe(false);
-      expect(isValidLocale('de')).toBe(false);
+      expect(isValidLocale('it')).toBe(false);
       expect(isValidLocale('')).toBe(false);
     });
   });
@@ -135,7 +135,7 @@ describe('i18n Utilities', () => {
     });
 
     it('returns default locale if no supported language found', () => {
-      const locale = getLocaleFromHeader('fr,de,it');
+      const locale = getLocaleFromHeader('fr,it,pt');
 
       expect(locale).toBe(DEFAULT_LOCALE);
     });
@@ -149,7 +149,8 @@ describe('i18n Utilities', () => {
     it('has expected supported locales', () => {
       expect(SUPPORTED_LOCALES).toContain('es');
       expect(SUPPORTED_LOCALES).toContain('en');
-      expect(SUPPORTED_LOCALES).toHaveLength(2);
+      expect(SUPPORTED_LOCALES).toContain('de');
+      expect(SUPPORTED_LOCALES).toHaveLength(3);
     });
   });
 });

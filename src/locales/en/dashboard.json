@@ -1,11 +1,18 @@
 {
   "title": "Dashboard",
-  "welcome": "Welcome",
-  "overview": {
-    "title": "Overview",
-    "balance": "Balance",
-    "income": "Income",
-    "expenses": "Expenses",
-    "savings": "Savings"
-  }
+  "totalBalance": "Total Balance",
+  "income": "Income",
+  "expenses": "Expenses",
+  "investments": "Investments",
+  "thisMonth": "This month",
+  "vsLastMonth": "vs last month",
+  "recentTransactions": "Recent Transactions",
+  "connectingDb": "Connecting to database...",
+  "inDevelopment": "In development...",
+  "accounts": "Accounts",
+  "transactions": "Transactions",
+  "savings": "Savings",
+  "fixedExpenses": "Fixed Expenses",
+  "variableExpenses": "Variable Expenses",
+  "loans": "Loans"
 }

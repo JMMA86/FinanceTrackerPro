@@ -21,6 +21,24 @@
   },
   "navigation": {
     "logout": "Sign Out",
-    "loggingOut": "Signing out..."
+    "loggingOut": "Signing out...",
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "accounts": "Accounts",
+    "savings": "Savings",
+    "investments": "Investments",
+    "fixedExpenses": "Fixed Expenses",
+    "variableExpenses": "Variable Expenses",
+    "loans": "Loans",
+    "settings": "Settings",
+    "dashboardDesc": "Financial overview",
+    "transactionsDesc": "Transaction history",
+    "accountsDesc": "Account management",
+    "savingsDesc": "Savings goals",
+    "investmentsDesc": "Investment portfolio",
+    "fixedExpensesDesc": "Recurring expenses",
+    "variableExpensesDesc": "Expenses by category",
+    "loansDesc": "Loan management",
+    "settingsDesc": "System preferences"
   }
 }

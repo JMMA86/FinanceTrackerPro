@@ -21,6 +21,24 @@
   },
   "navigation": {
     "logout": "Cerrar Sesión",
-    "loggingOut": "Cerrando sesión..."
+    "loggingOut": "Cerrando sesión...",
+    "dashboard": "Dashboard",
+    "transactions": "Transacciones",
+    "accounts": "Cuentas",
+    "savings": "Ahorros",
+    "investments": "Inversiones",
+    "fixedExpenses": "Gastos Fijos",
+    "variableExpenses": "Gastos Variables",
+    "loans": "Préstamos",
+    "settings": "Configuración",
+    "dashboardDesc": "Vista general de finanzas",
+    "transactionsDesc": "Historial de movimientos",
+    "accountsDesc": "Gestión de cuentas",
+    "savingsDesc": "Metas de ahorro",
+    "investmentsDesc": "Portfolio de inversiones",
+    "fixedExpensesDesc": "Gastos recurrentes",
+    "variableExpensesDesc": "Gastos por categoría",
+    "loansDesc": "Gestión de préstamos",
+    "settingsDesc": "Preferencias del sistema"
   }
 }

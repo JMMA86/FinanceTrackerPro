@@ -1,11 +1,18 @@
 {
-  "title": "Panel de Control",
-  "welcome": "Bienvenido",
-  "overview": {
-    "title": "Resumen",
-    "balance": "Saldo",
-    "income": "Ingresos",
-    "expenses": "Gastos",
-    "savings": "Ahorros"
-  }
+  "title": "Dashboard",
+  "totalBalance": "Balance Total",
+  "income": "Ingresos",
+  "expenses": "Gastos",
+  "investments": "Inversiones",
+  "thisMonth": "Este mes",
+  "vsLastMonth": "vs mes pasado",
+  "recentTransactions": "Transacciones Recientes",
+  "connectingDb": "Conectando con la base de datos...",
+  "inDevelopment": "En desarrollo...",
+  "accounts": "Cuentas",
+  "transactions": "Transacciones",
+  "savings": "Ahorros",
+  "fixedExpenses": "Gastos Fijos",
+  "variableExpenses": "Gastos Variables",
+  "loans": "Préstamos"
 }

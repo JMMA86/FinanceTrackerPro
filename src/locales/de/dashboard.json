@@ -1,11 +1,18 @@
 {
   "title": "Dashboard",
-  "welcome": "Willkommen",
-  "overview": {
-    "title": "Übersicht",
-    "balance": "Saldo",
-    "income": "Einkommen",
-    "expenses": "Ausgaben",
-    "savings": "Ersparnisse"
-  }
+  "totalBalance": "Gesamtguthaben",
+  "income": "Einkommen",
+  "expenses": "Ausgaben",
+  "investments": "Investitionen",
+  "thisMonth": "Diesen Monat",
+  "vsLastMonth": "vs letzter Monat",
+  "recentTransactions": "Letzte Transaktionen",
+  "connectingDb": "Verbindung zur Datenbank...",
+  "inDevelopment": "In Entwicklung...",
+  "accounts": "Konten",
+  "transactions": "Transaktionen",
+  "savings": "Ersparnisse",
+  "fixedExpenses": "Fixkosten",
+  "variableExpenses": "Variable Ausgaben",
+  "loans": "Darlehen"
 }

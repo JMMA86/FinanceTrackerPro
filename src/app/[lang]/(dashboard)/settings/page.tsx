@@ -26,6 +26,7 @@ export default async function SettingsPage({ params }: Readonly<SettingsPageProp
       languageLabels={{
         es: get(common, 'language.spanish'),
         en: get(common, 'language.english'),
+        de: get(common, 'language.german'),
       }}
     />
   );

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
+import { getLocaleFromCookie } from '@/lib/i18n-cookies';
 
-export default function HomePage() {
-  // Redirect root to dashboard (now in route group)
-  redirect('/dashboard');
+export default async function HomePage() {
+  const locale = await getLocaleFromCookie();
+  redirect(`/${locale}/dashboard`);
 }

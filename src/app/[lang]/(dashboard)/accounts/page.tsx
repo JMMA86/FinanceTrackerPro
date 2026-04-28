@@ -1,9 +1,19 @@
-export default function AccountsPage() {
+import { getDictionary, get } from '@/lib/i18n';
+import type { Locale } from '@/lib/i18n';
+
+interface AccountsPageProps {
+  params: Promise<{ lang: Locale }>;
+}
+
+export default async function AccountsPage({ params }: Readonly<AccountsPageProps>) {
+  const { lang } = await params;
+  const dashboard = await getDictionary(lang, 'dashboard');
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-theme-gradient">Cuentas</h1>
+      <h1 className="text-3xl font-bold text-theme-gradient">{get(dashboard, 'accounts')}</h1>
       <div className="app-shell rounded-2xl p-6">
-        <p className="text-gray-400">En desarrollo...</p>
+        <p className="text-gray-400">{get(dashboard, 'inDevelopment')}</p>
       </div>
     </div>
   );

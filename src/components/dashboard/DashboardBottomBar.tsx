@@ -3,8 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { mobileNavigationItems } from '@/config/navigation';
+import type { Locale } from '@/lib/i18n';
 
-export function DashboardBottomBar() {
+interface DashboardBottomBarProps {
+  lang: Locale;
+  navigationLabels: Record<string, string>;
+}
+
+export function DashboardBottomBar({ lang, navigationLabels }: Readonly<DashboardBottomBarProps>) {
   const pathname = usePathname();
 
   return (
@@ -23,17 +29,17 @@ export function DashboardBottomBar() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={`/${lang}${item.href}`}
               className={`
                 flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl
                 transition-all duration-200 min-w-[60px]
                 ${isActive ? 'text-theme-primary' : 'text-gray-400 hover:text-gray-300'}
               `}
-              title={item.description}
+              title={navigationLabels[item.descKey] || item.descKey}
             >
               <Icon className={`w-6 h-6 ${isActive ? 'scale-110' : ''} transition-transform`} />
               <span className="text-[10px] font-medium truncate max-w-full">
-                {item.name.split(' ')[0]}
+                {(navigationLabels[item.nameKey] || item.nameKey).split(' ')[0]}
               </span>
             </Link>
           );

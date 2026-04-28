@@ -12,75 +12,75 @@ import {
 } from 'lucide-react';
 
 export interface NavigationItem {
-  name: string;
+  nameKey: string; // i18n key for name
+  descKey: string; // i18n key for description
   href: string;
   icon: LucideIcon;
-  description: string;
   showInMobile?: boolean; // Show in bottom bar
 }
 
 export const navigationItems: NavigationItem[] = [
   {
-    name: 'Dashboard',
+    nameKey: 'dashboard',
+    descKey: 'dashboardDesc',
     href: '/dashboard',
     icon: LayoutDashboard,
-    description: 'Vista general de finanzas',
     showInMobile: true,
   },
   {
-    name: 'Transacciones',
+    nameKey: 'transactions',
+    descKey: 'transactionsDesc',
     href: '/transactions',
     icon: ArrowLeftRight,
-    description: 'Historial de movimientos',
     showInMobile: true,
   },
   {
-    name: 'Cuentas',
+    nameKey: 'accounts',
+    descKey: 'accountsDesc',
     href: '/accounts',
     icon: Wallet,
-    description: 'Gestión de cuentas',
     showInMobile: true,
   },
   {
-    name: 'Ahorros',
+    nameKey: 'savings',
+    descKey: 'savingsDesc',
     href: '/savings',
     icon: PiggyBank,
-    description: 'Metas de ahorro',
     showInMobile: true,
   },
   {
-    name: 'Inversiones',
+    nameKey: 'investments',
+    descKey: 'investmentsDesc',
     href: '/investments',
     icon: LineChart,
-    description: 'Portfolio de inversiones',
     showInMobile: false,
   },
   {
-    name: 'Gastos Fijos',
+    nameKey: 'fixedExpenses',
+    descKey: 'fixedExpensesDesc',
     href: '/fixed-expenses',
     icon: Home,
-    description: 'Gastos recurrentes',
     showInMobile: false,
   },
   {
-    name: 'Gastos Variables',
+    nameKey: 'variableExpenses',
+    descKey: 'variableExpensesDesc',
     href: '/variable-expenses',
     icon: ShoppingBasket,
-    description: 'Gastos por categoría',
     showInMobile: false,
   },
   {
-    name: 'Préstamos',
+    nameKey: 'loans',
+    descKey: 'loansDesc',
     href: '/loans',
     icon: HandCoins,
-    description: 'Gestión de préstamos',
     showInMobile: false,
   },
   {
-    name: 'Configuración',
+    nameKey: 'settings',
+    descKey: 'settingsDesc',
     href: '/settings',
     icon: Settings,
-    description: 'Preferencias del sistema',
     showInMobile: true,
   },
 ];

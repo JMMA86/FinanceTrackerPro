@@ -6,5 +6,11 @@
     "current": "Idioma actual",
     "change": "Cambiar idioma",
     "changed": "Idioma cambiado exitosamente"
+  },
+  "account": {
+    "title": "Cuenta",
+    "logout": "Cerrar Sesión",
+    "loggingOut": "Cerrando sesión...",
+    "logoutDescription": "Cierra tu sesión actual"
   }
 }

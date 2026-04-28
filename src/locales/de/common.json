@@ -21,6 +21,24 @@
   },
   "navigation": {
     "logout": "Abmelden",
-    "loggingOut": "Wird abgemeldet..."
+    "loggingOut": "Wird abgemeldet...",
+    "dashboard": "Dashboard",
+    "transactions": "Transaktionen",
+    "accounts": "Konten",
+    "savings": "Ersparnisse",
+    "investments": "Investitionen",
+    "fixedExpenses": "Fixkosten",
+    "variableExpenses": "Variable Ausgaben",
+    "loans": "Darlehen",
+    "settings": "Einstellungen",
+    "dashboardDesc": "Finanzübersicht",
+    "transactionsDesc": "Transaktionsverlauf",
+    "accountsDesc": "Kontoverwaltung",
+    "savingsDesc": "Sparziele",
+    "investmentsDesc": "Anlageportfolio",
+    "fixedExpensesDesc": "Wiederkehrende Ausgaben",
+    "variableExpensesDesc": "Ausgaben nach Kategorie",
+    "loansDesc": "Darlehensverwaltung",
+    "settingsDesc": "Systemeinstellungen"
   }
 }

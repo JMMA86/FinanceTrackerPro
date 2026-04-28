@@ -49,7 +49,7 @@ export function get(obj: Dictionary, path: string): string {
 /**
  * Validate if a locale is supported
  */
-export function isValidLocale(locale: string): locale is Locale {
+export function isValidLocale(locale: string | undefined): locale is Locale {
   return SUPPORTED_LOCALES.includes(locale as Locale);
 }
 

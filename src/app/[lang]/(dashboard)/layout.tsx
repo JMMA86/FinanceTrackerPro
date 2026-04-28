@@ -20,12 +20,14 @@ export default async function DashboardLayout({
 }: Readonly<DashboardLayoutProps>) {
   const { lang } = await params;
   const common = await getDictionary(lang, 'common');
+  const navigation = common.navigation as Record<string, string>;
 
   return (
     <div className="min-h-screen bg-app">
       {/* Desktop: Sidebar Left */}
       <DashboardSidebar
         lang={lang}
+        navigationLabels={navigation}
         logoutLabel={get(common, 'navigation.logout')}
         loggingOutLabel={get(common, 'navigation.loggingOut')}
       />
@@ -38,7 +40,7 @@ export default async function DashboardLayout({
       </main>
 
       {/* Mobile: Bottom Bar */}
-      <DashboardBottomBar lang={lang} />
+      <DashboardBottomBar lang={lang} navigationLabels={navigation} />
     </div>
   );
 }

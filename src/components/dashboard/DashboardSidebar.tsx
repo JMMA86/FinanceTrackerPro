@@ -6,16 +6,29 @@ import { LogOut } from 'lucide-react';
 import { navigationItems } from '@/config/navigation';
 import { logoutAction } from '@/actions/auth.actions';
 import { useState } from 'react';
+import type { Locale } from '@/lib/i18n';
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  lang: Locale;
+  navigationLabels: Record<string, string>;
+  logoutLabel: string;
+  loggingOutLabel: string;
+}
+
+export function DashboardSidebar({
+  lang,
+  navigationLabels,
+  logoutLabel,
+  loggingOutLabel,
+}: Readonly<DashboardSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
     setLoggingOut(true);
-    await logoutAction();
-    router.push('/login');
+    await logoutAction(lang);
+    router.push(`/${lang}/login`);
   }
 
   return (
@@ -56,7 +69,7 @@ export function DashboardSidebar() {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={`/${lang}${item.href}`}
                 className={`
                   flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl
                   transition-all duration-200
@@ -66,10 +79,10 @@ export function DashboardSidebar() {
                       : 'text-gray-300 hover:text-white hover:bg-white/5'
                   }
                 `}
-                title={item.description}
+                title={navigationLabels[item.descKey] || item.descKey}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <span>{item.name}</span>
+                <span>{navigationLabels[item.nameKey] || item.nameKey}</span>
               </Link>
             );
           })}
@@ -93,7 +106,7 @@ export function DashboardSidebar() {
             "
           >
             <LogOut className="w-5 h-5" />
-            <span>{loggingOut ? 'Cerrando sesión...' : 'Cerrar Sesión'}</span>
+            <span>{loggingOut ? loggingOutLabel : logoutLabel}</span>
           </button>
         </div>
       </div>

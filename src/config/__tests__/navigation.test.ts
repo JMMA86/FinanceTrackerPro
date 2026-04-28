@@ -13,21 +13,21 @@ describe('navigation.ts', () => {
     });
 
     it('should have Dashboard item', () => {
-      const dashboard = navigationItems.find((item) => item.name === 'Dashboard');
+      const dashboard = navigationItems.find((item) => item.nameKey === 'dashboard');
       expect(dashboard).toBeDefined();
       expect(dashboard?.href).toBe('/dashboard');
       expect(dashboard?.showInMobile).toBe(true);
     });
 
-    it('should have Transacciones item', () => {
-      const transactions = navigationItems.find((item) => item.name === 'Transacciones');
+    it('should have Transactions item', () => {
+      const transactions = navigationItems.find((item) => item.nameKey === 'transactions');
       expect(transactions).toBeDefined();
       expect(transactions?.href).toBe('/transactions');
       expect(transactions?.showInMobile).toBe(true);
     });
 
-    it('should have Cuentas item', () => {
-      const accounts = navigationItems.find((item) => item.name === 'Cuentas');
+    it('should have Accounts item', () => {
+      const accounts = navigationItems.find((item) => item.nameKey === 'accounts');
       expect(accounts).toBeDefined();
       expect(accounts?.href).toBe('/accounts');
       expect(accounts?.showInMobile).toBe(true);
@@ -41,11 +41,15 @@ describe('navigation.ts', () => {
       });
     });
 
-    it('should have items with descriptions', () => {
+    it('should have items with translation keys', () => {
       navigationItems.forEach((item) => {
-        expect(item.description).toBeDefined();
-        expect(typeof item.description).toBe('string');
-        expect(item.description.length).toBeGreaterThan(0);
+        expect(item.nameKey).toBeDefined();
+        expect(typeof item.nameKey).toBe('string');
+        expect(item.nameKey.length).toBeGreaterThan(0);
+
+        expect(item.descKey).toBeDefined();
+        expect(typeof item.descKey).toBe('string');
+        expect(item.descKey.length).toBeGreaterThan(0);
       });
     });
   });
@@ -62,17 +66,17 @@ describe('navigation.ts', () => {
     });
 
     it('should include Dashboard in mobile', () => {
-      const hasDashboard = mobileNavigationItems.some((item) => item.name === 'Dashboard');
+      const hasDashboard = mobileNavigationItems.some((item) => item.nameKey === 'dashboard');
       expect(hasDashboard).toBe(true);
     });
 
     it('should include Settings in mobile', () => {
-      const hasSettings = mobileNavigationItems.some((item) => item.name === 'Configuración');
+      const hasSettings = mobileNavigationItems.some((item) => item.nameKey === 'settings');
       expect(hasSettings).toBe(true);
     });
 
-    it('should not include Inversiones in mobile', () => {
-      const hasInvestments = mobileNavigationItems.some((item) => item.name === 'Inversiones');
+    it('should not include Investments in mobile', () => {
+      const hasInvestments = mobileNavigationItems.some((item) => item.nameKey === 'investments');
       expect(hasInvestments).toBe(false);
     });
   });

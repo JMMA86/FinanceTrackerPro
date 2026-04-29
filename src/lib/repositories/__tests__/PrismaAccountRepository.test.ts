@@ -130,13 +130,15 @@ describe('PrismaAccountRepository', () => {
   describe('findActiveWithRecentActivity', () => {
     it('should find accounts with transactions since date', async () => {
       const since = new Date('2024-01-01');
-      const mockAccounts = [
+      const mockAccounts: Array<Pick<Account, 'id'>> = [
         {
           id: 'account-1',
         },
       ];
 
-      vi.mocked(mockPrisma.account.findMany).mockResolvedValue(mockAccounts as Account[]);
+      vi.mocked(mockPrisma.account.findMany).mockResolvedValue(
+        mockAccounts as unknown as Account[]
+      );
 
       const result = await repository.findActiveWithRecentActivity(since);
 

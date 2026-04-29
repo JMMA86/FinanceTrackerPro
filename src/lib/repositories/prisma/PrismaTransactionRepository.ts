@@ -18,7 +18,9 @@ export class PrismaTransactionRepository implements ITransactionRepository {
     });
   }
 
-  async findManyByAccountId(accountId: string): Promise<Transaction[]> {
+  async findManyByAccountId(
+    accountId: string
+  ): Promise<Array<Pick<Transaction, 'amountCents' | 'type'>>> {
     return this.prisma.transaction.findMany({
       where: {
         accountId,

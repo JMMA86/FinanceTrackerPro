@@ -42,7 +42,7 @@ export default function SettingsClient({
 
   async function handleLogout() {
     setLoggingOut(true);
-    await logoutAction();
+    await logoutAction(undefined);
     router.push(`/${lang}/login`);
   }
 

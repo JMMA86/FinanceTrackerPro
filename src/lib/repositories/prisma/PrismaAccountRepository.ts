@@ -21,7 +21,7 @@ export class PrismaAccountRepository implements IAccountRepository {
     });
   }
 
-  async findActiveWithRecentActivity(since: Date): Promise<Account[]> {
+  async findActiveWithRecentActivity(since: Date): Promise<Array<Pick<Account, 'id'>>> {
     return this.prisma.account.findMany({
       where: {
         isActive: true,

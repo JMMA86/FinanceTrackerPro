@@ -263,7 +263,7 @@ describe('Auth Actions', () => {
       const { logoutAction } = await import('../auth.actions');
       const { deleteSession } = await import('@/lib/auth/session');
 
-      const result = await logoutAction();
+      const result = await logoutAction(undefined);
 
       expect(result.success).toBe(true);
       expect(deleteSession).toHaveBeenCalled();

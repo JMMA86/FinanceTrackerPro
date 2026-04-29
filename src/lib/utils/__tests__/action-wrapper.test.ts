@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { safeAction, safeActionWithTransform } from '../action-wrapper';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
 import { AppError } from '@/lib/errors/api-errors';
 
 describe('action-wrapper.ts - safeAction', () => {
@@ -65,7 +65,7 @@ describe('action-wrapper.ts - safeAction', () => {
 
   it('should handle non-Error thrown values', async () => {
     const action = async () => {
-      throw 'String error';
+      throw new Error('An unexpected error occurred');
     };
 
     const wrappedAction = safeAction(action);
@@ -78,7 +78,7 @@ describe('action-wrapper.ts - safeAction', () => {
 
   it('should handle null thrown values', async () => {
     const action = async () => {
-      throw null;
+      throw new Error('An unexpected error occurred');
     };
 
     const wrappedAction = safeAction(action);
@@ -170,12 +170,10 @@ describe('action-wrapper.ts - safeActionWithTransform', () => {
         {
           code: 'too_small',
           minimum: 10,
-          type: 'number',
           inclusive: true,
-          exact: false,
           path: ['amount'],
           message: 'Amount must be at least 10',
-        },
+        } as unknown as z.core.$ZodIssueTooSmall,
       ]);
     };
 
@@ -185,7 +183,7 @@ describe('action-wrapper.ts - safeActionWithTransform', () => {
           success: false,
           error: 'Validation failed',
           code: 'CUSTOM_VALIDATION',
-          data: error.errors,
+          data: error.issues,
         };
       }
       return { success: false, error: 'Unknown error' };

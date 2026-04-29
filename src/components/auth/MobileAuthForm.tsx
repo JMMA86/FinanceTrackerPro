@@ -4,7 +4,7 @@ import { get } from '@/lib/i18n';
 import MobileFormInputs from './MobileFormInputs';
 import PasswordRequirements from './PasswordRequirements';
 
-type FormSubmitEvent = (event: React.BaseSyntheticEvent) => void;
+type FormSubmitEvent = (event: React.SyntheticEvent<HTMLFormElement>) => void;
 
 interface MobileAuthFormProps {
   mode: 'login' | 'register';

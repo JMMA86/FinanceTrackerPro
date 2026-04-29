@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { PrismaAccountRepository } from './prisma/PrismaAccountRepository';
 import { PrismaTransactionRepository } from './prisma/PrismaTransactionRepository';
 import { PrismaUserRepository } from './prisma/PrismaUserRepository';
+import type { ITransactionRepository } from './interfaces/ITransactionRepository';
 
 // Singleton instances
 let accountRepository: PrismaAccountRepository;
@@ -20,7 +21,7 @@ export function getAccountRepository(): PrismaAccountRepository {
   return accountRepository;
 }
 
-export function getTransactionRepository(): PrismaTransactionRepository {
+export function getTransactionRepository(): ITransactionRepository {
   if (!transactionRepository) {
     transactionRepository = new PrismaTransactionRepository(prisma);
   }

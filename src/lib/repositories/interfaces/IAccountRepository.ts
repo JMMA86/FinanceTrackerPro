@@ -14,7 +14,7 @@ export interface IAccountRepository {
   /**
    * Find accounts with recent activity (for reconciliation)
    */
-  findActiveWithRecentActivity(since: Date): Promise<Account[]>;
+  findActiveWithRecentActivity(since: Date): Promise<Array<Pick<Account, 'id'>>>;
 
   /**
    * Update account balance (cached value)

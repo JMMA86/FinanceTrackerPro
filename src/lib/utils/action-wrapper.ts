@@ -44,12 +44,12 @@ export function safeAction<TInput, TOutput>(
     } catch (error) {
       // Handle Zod validation errors
       if (error instanceof ZodError) {
-        const firstError = error.errors?.[0];
+        const firstError = error.issues?.[0];
         const message = firstError?.path
           ? `${firstError.path.join('.')}: ${firstError.message}`
           : 'Validation failed';
 
-        log.error({ message, errors: error.errors }, '[ACTION] Validation error');
+        log.error({ message, issues: error.issues }, '[ACTION] Validation error');
 
         return {
           success: false,

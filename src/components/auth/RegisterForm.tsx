@@ -15,7 +15,7 @@ interface RegisterFormProps {
   formData: { name: string; email: string; password: string };
   isFormValid: boolean;
   isMobile?: boolean;
-  onSubmit: (event: React.BaseSyntheticEvent) => void;
+  onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
   onFieldChange: (field: string, value: string) => void;
   labels: {
     name: string;

@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { transferBetweenAccounts, getTransferDetails, reverseTransfer } from '../transfer.actions';
-import type { Transaction, Currency } from '@prisma/client';
+import type { Prisma, Transaction, Currency } from '@prisma/client';
 
 // Mock all dependencies
 vi.mock('@/lib/db', () => ({
@@ -60,6 +60,9 @@ vi.mock('@/lib/repositories', () => ({
 const VALID_USER_ID = 'clh1234567890abcdefghij';
 const VALID_FROM_ACCOUNT = 'clh1234567890abcdefghik';
 const VALID_TO_ACCOUNT = 'clh1234567890abcdefghil';
+
+const asTransactionClient = (tx: object): Prisma.TransactionClient =>
+  tx as Prisma.TransactionClient;
 
 describe('transfer.actions.ts - transferBetweenAccounts', () => {
   beforeEach(() => {
@@ -168,7 +171,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
 
     // Mock $transaction to throw error during execution
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         // Create mock transaction client
         const mockTx = {
           account: {
@@ -183,7 +186,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
         };
 
         // Execute callback with mock tx - will throw inside transaction
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -265,7 +268,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
 
     // Mock successful transaction
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -279,7 +282,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -308,7 +311,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     const { prisma } = await import('@/lib/db');
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -319,7 +322,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -351,7 +354,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi.fn().mockResolvedValueOnce(mockFromAccount).mockResolvedValueOnce(null), // toAccount not found
@@ -359,7 +362,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -399,7 +402,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -410,7 +413,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -450,7 +453,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -461,7 +464,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -501,7 +504,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -512,7 +515,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -552,7 +555,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -563,7 +566,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -603,7 +606,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -614,7 +617,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -654,7 +657,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     };
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -665,7 +668,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -709,7 +712,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
     vi.mocked(getTrueBalance).mockResolvedValueOnce(5000);
 
     vi.mocked(prisma.$transaction).mockImplementationOnce(
-      async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
+      async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
         const mockTx = {
           account: {
             findUnique: vi
@@ -720,7 +723,7 @@ describe('transfer.actions.ts - transferBetweenAccounts', () => {
           transaction: { create: vi.fn() },
         };
 
-        return callback(mockTx);
+        return callback(asTransactionClient(mockTx));
       }
     );
 
@@ -813,6 +816,8 @@ describe('transfer.actions.ts - getTransferDetails', () => {
         transferToAccountId: 'account-to',
         transferFromAccountId: 'account-from',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: '192.168.1.1',
         userAgent: 'test',
         isActive: true,
@@ -839,6 +844,8 @@ describe('transfer.actions.ts - getTransferDetails', () => {
         transferToAccountId: 'account-to',
         transferFromAccountId: 'account-from',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: '192.168.1.1',
         userAgent: 'test',
         isActive: true,
@@ -888,6 +895,8 @@ describe('transfer.actions.ts - getTransferDetails', () => {
         transferToAccountId: 'account-to',
         transferFromAccountId: 'account-from',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -914,6 +923,8 @@ describe('transfer.actions.ts - getTransferDetails', () => {
         transferToAccountId: 'account-to',
         transferFromAccountId: 'account-from',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,

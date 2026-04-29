@@ -15,7 +15,7 @@ export interface ITransactionRepository {
   /**
    * Find all active transactions for an account
    */
-  findManyByAccountId(accountId: string): Promise<Transaction[]>;
+  findManyByAccountId(accountId: string): Promise<Array<Pick<Transaction, 'amountCents' | 'type'>>>;
 
   /**
    * Find paired transactions by transferId

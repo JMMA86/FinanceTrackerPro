@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { DashboardBottomBar } from '@/components/dashboard/DashboardBottomBar';
-import { getDictionary, get } from '@/lib/i18n';
-import type { Locale } from '@/lib/i18n';
+import { DEFAULT_LOCALE, getDictionary, get, isValidLocale } from '@/lib/i18n';
 
 export const metadata: Metadata = {
   title: 'Dashboard | FinanceTrackerPro',
@@ -11,14 +10,15 @@ export const metadata: Metadata = {
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  params: Promise<{ lang: Locale }>;
+  params: Promise<{ lang: string }>;
 }
 
 export default async function DashboardLayout({
   children,
   params,
 }: Readonly<DashboardLayoutProps>) {
-  const { lang } = await params;
+  const { lang: langParam } = await params;
+  const lang = isValidLocale(langParam) ? langParam : DEFAULT_LOCALE;
   const common = await getDictionary(lang, 'common');
   const navigation = common.navigation as Record<string, string>;
 

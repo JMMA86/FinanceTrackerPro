@@ -48,6 +48,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: null,
         transferFromAccountId: null,
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -96,6 +98,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: null,
         transferFromAccountId: null,
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -119,7 +123,7 @@ describe('PrismaTransactionRepository', () => {
 
   describe('findManyByAccountId', () => {
     it('should find all active transactions for account', async () => {
-      const mockTransactions = [
+      const mockTransactions: Array<Pick<Transaction, 'amountCents' | 'type'>> = [
         {
           amountCents: 100000,
           type: 'INCOME' as TransactionType,
@@ -131,7 +135,7 @@ describe('PrismaTransactionRepository', () => {
       ];
 
       vi.mocked(mockPrisma.transaction.findMany).mockResolvedValue(
-        mockTransactions as Transaction[]
+        mockTransactions as unknown as Transaction[]
       );
 
       const result = await repository.findManyByAccountId('account-1');
@@ -167,6 +171,8 @@ describe('PrismaTransactionRepository', () => {
           transferToAccountId: 'account-2',
           transferFromAccountId: 'account-1',
           categoryId: null,
+          fixedExpensePaymentId: null,
+          loanInstallmentId: null,
           ipAddress: null,
           userAgent: null,
           isActive: true,
@@ -193,6 +199,8 @@ describe('PrismaTransactionRepository', () => {
           transferToAccountId: 'account-2',
           transferFromAccountId: 'account-1',
           categoryId: null,
+          fixedExpensePaymentId: null,
+          loanInstallmentId: null,
           ipAddress: null,
           userAgent: null,
           isActive: true,
@@ -237,6 +245,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: null,
         transferFromAccountId: null,
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
         isActive: true,
@@ -284,6 +294,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: null,
         transferFromAccountId: null,
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -333,6 +345,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: 'account-2',
         transferFromAccountId: 'account-1',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -360,6 +374,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: 'account-2',
         transferFromAccountId: 'account-1',
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: true,
@@ -426,6 +442,8 @@ describe('PrismaTransactionRepository', () => {
         transferToAccountId: null,
         transferFromAccountId: null,
         categoryId: null,
+        fixedExpensePaymentId: null,
+        loanInstallmentId: null,
         ipAddress: null,
         userAgent: null,
         isActive: false,

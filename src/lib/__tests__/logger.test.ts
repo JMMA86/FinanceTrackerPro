@@ -1,96 +1,151 @@
-/**
- * Logger Test Suite
- * Tests Pino structured logging utility
- */
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { log, logger } from '../logger';
 
 describe('logger.ts', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  describe('log.fatal', () => {
-    it('should log fatal with string', () => {
+  describe('when logging fatal messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'fatal');
+
+      // When
       log.fatal('Fatal error');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Fatal error');
     });
 
-    it('should log fatal with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'fatal');
+
+      // When
       log.fatal({ error: 'critical' }, 'Fatal error occurred');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ error: 'critical' }, 'Fatal error occurred');
     });
   });
 
-  describe('log.error', () => {
-    it('should log error with string', () => {
+  describe('when logging error messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'error');
+
+      // When
       log.error('Error message');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Error message');
     });
 
-    it('should log error with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'error');
+
+      // When
       log.error({ code: 500 }, 'Internal error');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ code: 500 }, 'Internal error');
     });
   });
 
-  describe('log.warn', () => {
-    it('should log warn with string', () => {
+  describe('when logging warn messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'warn');
+
+      // When
       log.warn('Warning message');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Warning message');
     });
 
-    it('should log warn with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'warn');
+
+      // When
       log.warn({ status: 'deprecated' }, 'Feature deprecated');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ status: 'deprecated' }, 'Feature deprecated');
     });
   });
 
-  describe('log.info', () => {
-    it('should log info with string', () => {
+  describe('when logging info messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'info');
+
+      // When
       log.info('Info message');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Info message');
     });
 
-    it('should log info with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'info');
+
+      // When
       log.info({ count: 10 }, 'Records processed');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ count: 10 }, 'Records processed');
     });
   });
 
-  describe('log.debug', () => {
-    it('should log debug with string', () => {
+  describe('when logging debug messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'debug');
+
+      // When
       log.debug('Debug message');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Debug message');
     });
 
-    it('should log debug with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'debug');
+
+      // When
       log.debug({ variable: 'value' }, 'Debug info');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ variable: 'value' }, 'Debug info');
     });
   });
 
-  describe('log.trace', () => {
-    it('should log trace with string', () => {
+  describe('when logging trace messages', () => {
+    it('should call logger with string message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'trace');
+
+      // When
       log.trace('Trace message');
+
+      // Then
       expect(spy).toHaveBeenCalledWith('Trace message');
     });
 
-    it('should log trace with object and message', () => {
+    it('should call logger with object and message', () => {
+      // Given
       const spy = vi.spyOn(logger, 'trace');
+
+      // When
       log.trace({ step: 1 }, 'Trace step');
+
+      // Then
       expect(spy).toHaveBeenCalledWith({ step: 1 }, 'Trace step');
     });
   });

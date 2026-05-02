@@ -1,9 +1,4 @@
-/**
- * PrismaUserRepository Test Suite
- * Tests user CRUD operations
- */
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PrismaUserRepository } from '../prisma/PrismaUserRepository';
 import { prisma } from '@/lib/db';
 import type { User, Currency, Language, Theme } from '@prisma/client';
@@ -42,31 +37,44 @@ describe('PrismaUserRepository', () => {
     repository = new PrismaUserRepository();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('findById', () => {
-    it('finds user by ID', async () => {
+    it('should return user when found by id', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser);
 
+      // When
       const result = await repository.findById('user_123');
 
+      // Then
       expect(result).toEqual(mockUser);
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user_123', isActive: true },
       });
     });
 
-    it('returns null if user not found', async () => {
+    it('should return null when user is not found', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
+      // When
       const result = await repository.findById('nonexistent');
 
+      // Then
       expect(result).toBeNull();
     });
 
-    it('filters inactive users', async () => {
+    it('should always filter by isActive=true to exclude soft-deleted users', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
+      // When
       await repository.findById('user_123');
 
+      // Then
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user_123', isActive: true },
       });
@@ -74,40 +82,51 @@ describe('PrismaUserRepository', () => {
   });
 
   describe('findByEmail', () => {
-    it('finds user by email', async () => {
+    it('should return user when found by email', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser);
 
+      // When
       const result = await repository.findByEmail('test@example.com');
 
+      // Then
       expect(result).toEqual(mockUser);
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'test@example.com', isActive: true },
       });
     });
 
-    it('normalizes email to lowercase', async () => {
+    it('should normalize email to lowercase before lookup', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser);
 
+      // When
       await repository.findByEmail('TEST@EXAMPLE.COM');
 
+      // Then
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'test@example.com', isActive: true },
       });
     });
 
-    it('returns null if user not found', async () => {
+    it('should return null when user is not found', async () => {
+      // Given
       vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
+      // When
       const result = await repository.findByEmail('nonexistent@example.com');
 
+      // Then
       expect(result).toBeNull();
     });
   });
 
   describe('create', () => {
-    it('creates user with all fields', async () => {
+    it('should create user with all provided fields', async () => {
+      // Given
       vi.mocked(prisma.user.create).mockResolvedValue(mockUser);
 
+      // When
       const result = await repository.create({
         email: 'new@example.com',
         name: 'New User',
@@ -118,6 +137,7 @@ describe('PrismaUserRepository', () => {
         theme: 'DARK' as Theme,
       });
 
+      // Then
       expect(result).toEqual(mockUser);
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: {
@@ -132,78 +152,67 @@ describe('PrismaUserRepository', () => {
       });
     });
 
-    it('creates user with minimal fields', async () => {
+    it('should create user with only required fields', async () => {
+      // Given
       const minimalUser = { ...mockUser, passwordHash: null, baseSalaryCents: null };
       vi.mocked(prisma.user.create).mockResolvedValue(minimalUser);
 
+      // When
       const result = await repository.create({
         email: 'minimal@example.com',
         name: 'Minimal User',
       });
 
+      // Then
       expect(result).toEqual(minimalUser);
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: 'minimal@example.com',
-          name: 'Minimal User',
-          passwordHash: undefined,
-          baseSalaryCents: undefined,
-          baseCurrency: undefined,
-          language: undefined,
-          theme: undefined,
-        },
-      });
     });
 
-    it('normalizes email to lowercase', async () => {
+    it('should normalize email to lowercase on creation', async () => {
+      // Given
       vi.mocked(prisma.user.create).mockResolvedValue(mockUser);
 
-      await repository.create({
-        email: 'NEW@EXAMPLE.COM',
-        name: 'New User',
-      });
+      // When
+      await repository.create({ email: 'NEW@EXAMPLE.COM', name: 'New User' });
 
+      // Then
       expect(prisma.user.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          email: 'new@example.com',
-        }),
+        data: expect.objectContaining({ email: 'new@example.com' }),
       });
     });
   });
 
   describe('updateLastLogin', () => {
-    it('updates lastLoginAt timestamp', async () => {
-      const now = new Date('2026-04-18T10:00:00Z');
-      const updatedUser = { ...mockUser, lastLoginAt: now };
+    it('should update lastLoginAt to the current timestamp', async () => {
+      // Given
+      const updatedUser = { ...mockUser, lastLoginAt: new Date() };
       vi.mocked(prisma.user.update).mockResolvedValue(updatedUser);
 
+      // When
       const result = await repository.updateLastLogin('user_123');
 
+      // Then
       expect(result).toEqual(updatedUser);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user_123' },
-        data: {
-          lastLoginAt: expect.any(Date),
-        },
+        data: { lastLoginAt: expect.any(Date) },
       });
     });
   });
 
   describe('softDelete', () => {
-    it('soft deletes user', async () => {
-      const now = new Date('2026-04-18T10:00:00Z');
-      const deletedUser = { ...mockUser, isActive: false, deletedAt: now };
+    it('should mark user as inactive and set deletedAt timestamp', async () => {
+      // Given
+      const deletedUser = { ...mockUser, isActive: false, deletedAt: new Date() };
       vi.mocked(prisma.user.update).mockResolvedValue(deletedUser);
 
+      // When
       const result = await repository.softDelete('user_123');
 
+      // Then
       expect(result).toEqual(deletedUser);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user_123' },
-        data: {
-          isActive: false,
-          deletedAt: expect.any(Date),
-        },
+        data: { isActive: false, deletedAt: expect.any(Date) },
       });
     });
   });

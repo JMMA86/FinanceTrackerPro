@@ -1,15 +1,11 @@
 /**
- * Session Management Test Suite
- * Tests JWT session creation, verification, and cookie handling
  * @vitest-environment node
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Set JWT_SECRET env var before importing session module
 process.env.JWT_SECRET = 'test-secret-key-for-testing-min-32-characters-long';
 
-// Mock next/headers before importing
 const mockCookieStore = {
   set: vi.fn(),
   get: vi.fn(),
@@ -20,11 +16,10 @@ vi.mock('next/headers', () => ({
   cookies: vi.fn(() => mockCookieStore),
 }));
 
-// Now import after mocks are set up
 import * as sessionModule from '../session';
 import type { SessionData } from '../session';
 
-describe('Session Management', () => {
+describe('session management', () => {
   const mockSessionData: SessionData = {
     userId: 'user_123',
     email: 'test@example.com',
@@ -35,54 +30,72 @@ describe('Session Management', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    // Create a valid token for tests
     validToken = await sessionModule.createSession(mockSessionData);
   });
 
-  describe('createSession', () => {
-    it('creates JWT token with session data', async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  describe('when creating a session', () => {
+    it('should return a JWT string with three parts', async () => {
+      // Given / When
       const token = await sessionModule.createSession(mockSessionData);
 
+      // Then
       expect(typeof token).toBe('string');
       expect(token.length).toBeGreaterThan(0);
-      expect(token.split('.')).toHaveLength(3); // JWT format: header.payload.signature
+      expect(token.split('.')).toHaveLength(3);
     });
 
-    it('creates different tokens for same data (due to timestamps)', async () => {
+    it('should generate different tokens for the same data due to timestamps', async () => {
+      // Given
       const token1 = await sessionModule.createSession(mockSessionData);
-      await new Promise((resolve) => setTimeout(resolve, 1100)); // Wait 1.1s to ensure different iat
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      // When
       const token2 = await sessionModule.createSession(mockSessionData);
 
+      // Then
       expect(token1).not.toBe(token2);
     });
   });
 
-  describe('verifySession', () => {
-    it('verifies and decodes valid token', async () => {
+  describe('when verifying a session', () => {
+    it('should decode a valid token and return session data', async () => {
+      // Given / When
       const decoded = await sessionModule.verifySession(validToken);
 
+      // Then
       expect(decoded).toMatchObject(mockSessionData);
     });
 
-    it('returns null for invalid token', async () => {
+    it('should return null for an invalid token', async () => {
+      // Given / When
       const decoded = await sessionModule.verifySession('invalid-token');
 
+      // Then
       expect(decoded).toBeNull();
     });
 
-    it('returns null for malformed token', async () => {
+    it('should return null for a malformed token', async () => {
+      // Given / When
       const decoded = await sessionModule.verifySession(
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.expired.signature'
       );
 
+      // Then
       expect(decoded).toBeNull();
     });
   });
 
-  describe('setSessionCookie', () => {
-    it('sets httpOnly secure cookie', async () => {
+  describe('when setting the session cookie', () => {
+    it('should set an httpOnly cookie with lax sameSite policy', async () => {
+      // Given / When
       await sessionModule.setSessionCookie(validToken);
 
+      // Then
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         'session',
         validToken,
@@ -94,96 +107,114 @@ describe('Session Management', () => {
       );
     });
 
-    it('sets secure flag in production', async () => {
+    it('should set secure flag in production environment', async () => {
+      // Given
       vi.stubEnv('NODE_ENV', 'production');
 
+      // When
       await sessionModule.setSessionCookie(validToken);
 
+      // Then
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         'session',
         validToken,
-        expect.objectContaining({
-          secure: true,
-        })
+        expect.objectContaining({ secure: true })
       );
-
-      vi.unstubAllEnvs();
     });
 
-    it('does not set secure flag in development', async () => {
+    it('should not set secure flag in development environment', async () => {
+      // Given
       vi.stubEnv('NODE_ENV', 'development');
 
+      // When
       await sessionModule.setSessionCookie(validToken);
 
+      // Then
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         'session',
         validToken,
-        expect.objectContaining({
-          secure: false,
-        })
+        expect.objectContaining({ secure: false })
       );
-
-      vi.unstubAllEnvs();
     });
   });
 
-  describe('getSession', () => {
-    it('retrieves and verifies session from cookie', async () => {
+  describe('when getting the current session', () => {
+    it('should retrieve and verify the session from cookie', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue({ value: validToken });
 
+      // When
       const session = await sessionModule.getSession();
 
+      // Then
       expect(session).toMatchObject(mockSessionData);
       expect(mockCookieStore.get).toHaveBeenCalledWith('session');
     });
 
-    it('returns null when no cookie exists', async () => {
+    it('should return null when no session cookie exists', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue(undefined);
 
+      // When
       const session = await sessionModule.getSession();
 
+      // Then
       expect(session).toBeNull();
     });
 
-    it('returns null for invalid token in cookie', async () => {
+    it('should return null when the cookie token is invalid', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue({ value: 'invalid-token' });
 
+      // When
       const session = await sessionModule.getSession();
 
+      // Then
       expect(session).toBeNull();
     });
   });
 
-  describe('deleteSession', () => {
-    it('deletes session cookie', async () => {
+  describe('when deleting the session', () => {
+    it('should remove the session cookie', async () => {
+      // Given / When
       await sessionModule.deleteSession();
 
+      // Then
       expect(mockCookieStore.delete).toHaveBeenCalledWith('session');
     });
   });
 
-  describe('isAuthenticated', () => {
-    it('returns true when valid session exists', async () => {
+  describe('when checking authentication status', () => {
+    it('should return true when a valid session exists', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue({ value: validToken });
 
+      // When
       const authenticated = await sessionModule.isAuthenticated();
 
+      // Then
       expect(authenticated).toBe(true);
     });
 
-    it('returns false when no session exists', async () => {
+    it('should return false when no session exists', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue(undefined);
 
+      // When
       const authenticated = await sessionModule.isAuthenticated();
 
+      // Then
       expect(authenticated).toBe(false);
     });
 
-    it('returns false for invalid session', async () => {
+    it('should return false when the session token is invalid', async () => {
+      // Given
       mockCookieStore.get.mockReturnValue({ value: 'invalid-token' });
 
+      // When
       const authenticated = await sessionModule.isAuthenticated();
 
+      // Then
       expect(authenticated).toBe(false);
     });
   });

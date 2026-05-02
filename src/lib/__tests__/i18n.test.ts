@@ -1,8 +1,3 @@
-/**
- * i18n Utilities Test Suite
- * Tests locale detection and dictionary loading
- */
-
 import { describe, it, expect } from 'vitest';
 import {
   getDictionary,
@@ -13,83 +8,90 @@ import {
   SUPPORTED_LOCALES,
 } from '../i18n';
 
-describe('i18n Utilities', () => {
+describe('i18n.ts', () => {
   describe('getDictionary', () => {
-    it('loads Spanish auth dictionary', async () => {
+    it('should load Spanish auth dictionary', async () => {
+      // Given / When
       const dict = await getDictionary('es', 'auth');
 
+      // Then
       expect(dict).toBeDefined();
       expect(dict.login).toBeDefined();
     });
 
-    it('loads English auth dictionary', async () => {
+    it('should load English auth dictionary', async () => {
+      // Given / When
       const dict = await getDictionary('en', 'auth');
 
+      // Then
       expect(dict).toBeDefined();
       expect(dict.login).toBeDefined();
     });
 
-    it('loads Spanish common dictionary', async () => {
+    it('should load Spanish common dictionary', async () => {
+      // Given / When
       const dict = await getDictionary('es', 'common');
 
+      // Then
       expect(dict).toBeDefined();
       expect(dict.buttons).toBeDefined();
     });
 
-    it('fallbacks to default locale for invalid locale', async () => {
+    it('should fall back to default locale when locale is invalid', async () => {
+      // Given / When
       const dict = await getDictionary('invalid' as 'es', 'auth');
 
+      // Then
       expect(dict).toBeDefined();
-      // Should load Spanish (default) auth dictionary
       expect(dict.login).toBeDefined();
     });
   });
 
   describe('get', () => {
-    it('retrieves nested value with dot notation', () => {
-      const dict = {
-        auth: {
-          login: {
-            title: 'Inicia Sesión',
-          },
-        },
-      };
+    it('should retrieve nested value using dot notation', () => {
+      // Given
+      const dict = { auth: { login: { title: 'Inicia Sesión' } } };
 
+      // When
       const result = get(dict, 'auth.login.title');
 
+      // Then
       expect(result).toBe('Inicia Sesión');
     });
 
-    it('returns key itself if path not found', () => {
-      const dict = {
-        auth: {
-          login: {},
-        },
-      };
+    it('should return the key itself when path is not found', () => {
+      // Given
+      const dict = { auth: { login: {} } };
 
+      // When
       const result = get(dict, 'auth.login.nonexistent');
 
+      // Then
       expect(result).toBe('auth.login.nonexistent');
     });
 
-    it('handles single-level paths', () => {
-      const dict = {
-        title: 'Dashboard',
-      };
+    it('should resolve single-level paths', () => {
+      // Given
+      const dict = { title: 'Dashboard' };
 
+      // When
       const result = get(dict, 'title');
 
+      // Then
       expect(result).toBe('Dashboard');
     });
   });
 
   describe('isValidLocale', () => {
-    it('returns true for supported locales', () => {
+    it('should return true for all supported locales', () => {
+      // Given / When / Then
       expect(isValidLocale('es')).toBe(true);
       expect(isValidLocale('en')).toBe(true);
+      expect(isValidLocale('de')).toBe(true);
     });
 
-    it('returns false for unsupported locales', () => {
+    it('should return false for unsupported locales', () => {
+      // Given / When / Then
       expect(isValidLocale('fr')).toBe(false);
       expect(isValidLocale('it')).toBe(false);
       expect(isValidLocale('')).toBe(false);
@@ -97,56 +99,71 @@ describe('i18n Utilities', () => {
   });
 
   describe('getLocaleFromHeader', () => {
-    it('returns default locale for null header', () => {
+    it('should return default locale when header is null', () => {
+      // Given / When
       const locale = getLocaleFromHeader(null);
 
+      // Then
       expect(locale).toBe(DEFAULT_LOCALE);
     });
 
-    it('returns default locale for empty header', () => {
+    it('should return default locale when header is empty', () => {
+      // Given / When
       const locale = getLocaleFromHeader('');
 
+      // Then
       expect(locale).toBe(DEFAULT_LOCALE);
     });
 
-    it('parses simple Accept-Language header', () => {
+    it('should parse simple language code', () => {
+      // Given / When
       const locale = getLocaleFromHeader('en');
 
+      // Then
       expect(locale).toBe('en');
     });
 
-    it('parses Accept-Language with region', () => {
+    it('should extract base language from region-qualified code', () => {
+      // Given / When
       const locale = getLocaleFromHeader('es-ES');
 
+      // Then
       expect(locale).toBe('es');
     });
 
-    it('parses Accept-Language with quality values', () => {
+    it('should select highest quality supported language', () => {
+      // Given / When
       const locale = getLocaleFromHeader('en-US,en;q=0.9,es;q=0.8');
 
+      // Then
       expect(locale).toBe('en');
     });
 
-    it('returns highest quality supported locale', () => {
+    it('should skip unsupported languages and pick next best', () => {
+      // Given: fr not supported, es is best remaining
       const locale = getLocaleFromHeader('fr;q=0.9,es;q=0.8,en;q=0.7');
 
-      // fr not supported, so should return es (highest quality supported)
+      // Then
       expect(locale).toBe('es');
     });
 
-    it('returns default locale if no supported language found', () => {
+    it('should return default locale when no supported language found', () => {
+      // Given / When
       const locale = getLocaleFromHeader('fr,it,pt');
 
+      // Then
       expect(locale).toBe(DEFAULT_LOCALE);
     });
   });
 
   describe('constants', () => {
-    it('has correct default locale', () => {
+    it('should define Spanish as the default locale', () => {
+      // Given / When / Then
       expect(DEFAULT_LOCALE).toBe('es');
     });
 
-    it('has expected supported locales', () => {
+    it('should support exactly 3 locales', () => {
+      // Given / When / Then
       expect(SUPPORTED_LOCALES).toContain('es');
       expect(SUPPORTED_LOCALES).toContain('en');
       expect(SUPPORTED_LOCALES).toContain('de');

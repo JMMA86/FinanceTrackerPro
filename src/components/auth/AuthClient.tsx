@@ -37,10 +37,14 @@ export default function AuthClient({
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [registerData, setRegisterData] = useState({ name: '', email: '', password: '' });
 
-  const success = isRegistered && mode === 'login' ? get(auth, 'login.successMessage') : '';
+  const success =
+    (isRegistered || successMessage) && mode === 'login'
+      ? successMessage || get(auth, 'login.successMessage')
+      : '';
 
   const isRegisterValid = useMemo(() => {
     const allPasswordChecksPassed = PASSWORD_REQUIREMENTS.every((req) =>
@@ -78,7 +82,10 @@ export default function AuthClient({
     const result = await registerAction(registerData);
 
     if (result.success) {
-      router.push(`/${lang}/login?registered=true`);
+      setLoading(false);
+      setMode('login');
+      setSuccessMessage(get(auth, 'login.successMessage'));
+      setRegisterData({ name: '', email: '', password: '' });
     } else {
       setError(result.error || get(auth, 'errors.registerError'));
       setLoading(false);

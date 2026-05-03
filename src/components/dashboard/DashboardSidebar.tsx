@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { navigationItems } from '@/config/navigation';
 import { logoutAction } from '@/actions/auth.actions';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Locale } from '@/lib/i18n';
 
 interface DashboardSidebarProps {
@@ -14,6 +15,11 @@ interface DashboardSidebarProps {
   logoutLabel: string;
   loggingOutLabel: string;
 }
+
+const SIDEBAR_WIDTH = {
+  expanded: '17rem',
+  collapsed: '4.7rem',
+};
 
 export function DashboardSidebar({
   lang,
@@ -24,6 +30,25 @@ export function DashboardSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (globalThis.window !== undefined) {
+      return localStorage.getItem('sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+
+  const width = collapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-width', width);
+  }, [width]);
+
+  function toggleSidebar() {
+    const newCollapsed = !collapsed;
+    setCollapsed(newCollapsed);
+    localStorage.setItem('sidebar_collapsed', String(newCollapsed));
+    router.push(pathname, { scroll: false });
+  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -32,46 +57,61 @@ export function DashboardSidebar({
   }
 
   return (
-    <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 md:z-50">
+    <aside
+      className={`hidden md:flex md:flex-col md:fixed md:inset-y-0 md:z-50 transition-all duration-300`}
+      style={{ width }}
+    >
       {/* Sidebar Container */}
       <div
         className="flex flex-col flex-1 border-r backdrop-blur-xl"
         style={{
-          borderColor: 'color-mix(in srgb, var(--theme-accent) 24%, transparent)',
-          backgroundColor: 'color-mix(in srgb, var(--app-bg-mid) 88%, transparent)',
+          backgroundColor: 'color-mix(in srgb, var(--app-bg-mid) 72%, transparent)',
+          borderColor: 'rgba(255, 255, 255, 0.10)',
         }}
       >
         {/* Logo / Brand */}
         <div
-          className="flex items-center h-16 px-6 border-b"
+          className="flex items-center h-16"
           style={{
-            borderColor: 'color-mix(in srgb, var(--theme-accent) 18%, transparent)',
+            boxShadow: 'inset 0 -1px 0 rgba(66, 132, 255, 0.20)',
           }}
         >
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg shadow-lg"
-            style={{
-              background:
-                'linear-gradient(135deg, var(--theme-primary), var(--theme-primary-light))',
-            }}
-          >
-            <span className="font-bold text-white">FT</span>
+          <div className="flex items-center gap-3 px-4 w-full">
+            <div className="relative w-10 h-10 flex-shrink-0">
+              <Image src="/icon.png" alt="FinanceTrackerPro" fill className="object-contain" />
+            </div>
+            <span
+              className={`text-lg font-bold text-theme-gradient whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
+            >
+              FinanceTracker<span className="text-theme-primary">Pro</span>
+            </span>
           </div>
-          <span className="ml-3 text-lg font-bold text-theme-gradient">FinanceTracker</span>
         </div>
 
+        {/* Toggle Button */}
+        <button
+          onClick={toggleSidebar}
+          className="absolute top-20 -right-3 w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-all duration-200 border border-white/10 z-10 cursor-pointer"
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4 text-gray-300" />
+          ) : (
+            <ChevronLeft className="w-4 h-4 text-gray-300" />
+          )}
+        </button>
+
         {/* Navigation Links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 overflow-y-auto scrollbar-hide">
           {navigationItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = pathname.endsWith(item.href);
 
             return (
               <Link
                 key={item.href}
                 href={`/${lang}${item.href}`}
                 className={`
-                  flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl
+                  flex items-center gap-3 px-4 py-4 rounded-xl
                   transition-all duration-200
                   ${
                     isActive
@@ -82,7 +122,11 @@ export function DashboardSidebar({
                 title={navigationLabels[item.descKey] || item.descKey}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <span>{navigationLabels[item.nameKey] || item.nameKey}</span>
+                <span
+                  className={`text-sm font-medium whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
+                >
+                  {navigationLabels[item.nameKey] || item.nameKey}
+                </span>
               </Link>
             );
           })}
@@ -90,23 +134,27 @@ export function DashboardSidebar({
 
         {/* Logout Button */}
         <div
-          className="p-3 border-t"
+          className="px-3 py-4 border-t"
           style={{
-            borderColor: 'color-mix(in srgb, var(--theme-accent) 18%, transparent)',
+            borderColor: 'rgba(255, 255, 255, 0.10)',
           }}
         >
           <button
             onClick={handleLogout}
             disabled={loggingOut}
             className="
-              flex items-center gap-3 w-full px-4 py-3 text-sm font-medium
+              flex items-center gap-3 px-4 w-full py-3 text-sm font-medium
               text-red-400 hover:text-red-300 hover:bg-red-500/10
               rounded-xl transition-all duration-200
               disabled:opacity-50 disabled:cursor-not-allowed
             "
           >
             <LogOut className="w-5 h-5" />
-            <span>{loggingOut ? loggingOutLabel : logoutLabel}</span>
+            <span
+              className={`transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
+            >
+              {loggingOut ? loggingOutLabel : logoutLabel}
+            </span>
           </button>
         </div>
       </div>

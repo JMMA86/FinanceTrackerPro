@@ -4,7 +4,7 @@ import { DashboardBottomBar } from '@/components/dashboard/DashboardBottomBar';
 import { DEFAULT_LOCALE, getDictionary, get, isValidLocale } from '@/lib/i18n';
 
 export const metadata: Metadata = {
-  title: 'Dashboard | FinanceTrackerPro',
+  title: 'FinanceTrackerPro',
   description: 'Banking-grade financial management system',
 };
 
@@ -33,7 +33,7 @@ export default async function DashboardLayout({
       />
 
       {/* Main Content Area */}
-      <main className="md:ml-64 min-h-screen pb-20 md:pb-0">
+      <main className="md:ml-(--sidebar-width) min-h-screen pb-20 md:pb-0 border-l border-white/10 transition-all duration-300">
         <div className="container mx-auto max-w-[1920px] px-3 py-4 sm:px-4 md:px-6 md:py-6">
           {children}
         </div>

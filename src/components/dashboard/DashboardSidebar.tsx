@@ -63,9 +63,9 @@ export function DashboardSidebar({
     >
       {/* Sidebar Container */}
       <div
-        className="flex flex-col flex-1 border-r backdrop-blur-xl"
+        className="flex flex-col flex-1 border-r backdrop-blur-md"
         style={{
-          backgroundColor: 'color-mix(in srgb, var(--app-bg-mid) 72%, transparent)',
+          backgroundColor: 'rgba(12, 30, 68, 0.4)',
           borderColor: 'rgba(255, 255, 255, 0.10)',
         }}
       >

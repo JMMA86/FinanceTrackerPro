@@ -9,12 +9,14 @@
  * - Rule 14: Extended audit (IP, user agent)
  *
  * REFACTORED: Uses Repository Pattern with DI + Centralized Error Handling
+ * TYPES: Interfaces extracted to src/types/transfer.ts
  */
 
 'use server';
 import 'server-only';
 
 import { headers } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import type { Prisma, Transaction } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
@@ -31,16 +33,13 @@ import {
   CurrencyMismatchError,
   InactiveAccountError,
 } from '@/lib/errors/api-errors';
-
-/**
- * Transfer result type
- */
-type TransferResult = {
-  transferId: string;
-  debitTransaction: { id: string; amountCents: number };
-  creditTransaction: { id: string; amountCents: number };
-  wasIdempotent?: boolean;
-};
+import type {
+  TransferResult,
+  TransferAccountRecord,
+  TransferTransactionResult,
+  PairedTransferTransactions,
+  ReverseTransferInput,
+} from '@/types/transfer';
 
 /**
  * Execute atomic transfer between accounts (INTERNAL - NO ERROR HANDLING)
@@ -79,26 +78,22 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
   const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown';
   const userAgent = headersList.get('user-agent') || 'unknown';
 
+  // Log transfer initiation
+  log.info(
+    {
+      action: 'TRANSFER_INITIATED',
+      fromAccountId: validated.fromAccountId,
+      toAccountId: validated.toAccountId,
+      amountCents: validated.amountCents,
+      currency: validated.currency,
+      idempotencyKey: validated.idempotencyKey,
+      userId: validated.userId,
+      ipAddress,
+    },
+    '[TRANSFER] Transfer initiated'
+  );
+
   // 4. ATOMIC TRANSACTION (Rule 3)
-  interface TransferAccountRecord {
-    id: string;
-    userId: string;
-    balanceCents: number;
-    currency: TransferInput['currency'];
-    isActive: boolean;
-  }
-
-  interface TransferTransactionSummary {
-    id: string;
-    amountCents: number;
-  }
-
-  interface TransferTransactionResult {
-    transferId: string;
-    debitTransaction: TransferTransactionSummary;
-    creditTransaction: TransferTransactionSummary;
-  }
-
   const result: TransferTransactionResult = await prisma.$transaction<TransferTransactionResult>(
     async (tx: Prisma.TransactionClient): Promise<TransferTransactionResult> => {
       // 4.1. Verify both accounts exist and belong to user
@@ -244,6 +239,25 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
     }
   );
 
+  // Log successful transfer
+  log.info(
+    {
+      action: 'TRANSFER_SUCCESS',
+      transferId: result.transferId,
+      debitTransactionId: result.debitTransaction.id,
+      creditTransactionId: result.creditTransaction.id,
+      amountCents: validated.amountCents,
+      currency: validated.currency,
+      userId: validated.userId,
+      ipAddress,
+    },
+    '[TRANSFER] Transfer completed successfully'
+  );
+
+  // Revalidate dashboard cache after transfer
+  revalidatePath('/[lang]/dashboard', 'page');
+  revalidatePath('/[lang]/accounts', 'page');
+
   return result;
 }
 
@@ -257,10 +271,7 @@ export const transferBetweenAccounts = safeAction(transferBetweenAccountsInterna
  * Get transfer details by transferId (INTERNAL)
  * Returns both paired transactions (TRANSFER_OUT and TRANSFER_IN)
  */
-async function getTransferDetailsInternal(transferId: string): Promise<{
-  debitTransaction: Transaction;
-  creditTransaction: Transaction;
-}> {
+async function getTransferDetailsInternal(transferId: string): Promise<PairedTransferTransactions> {
   const transactionRepo = getTransactionRepository();
   const transactions = await transactionRepo.findPairedTransfers(transferId);
 
@@ -298,11 +309,7 @@ export const getTransferDetails = safeAction(getTransferDetailsInternal);
  * Reverse/cancel a transfer (INTERNAL)
  * Only allowed within 24 hours of transfer
  */
-async function reverseTransferInternal(input: {
-  transferId: string;
-  userId: string;
-  reason: string;
-}): Promise<TransferResult> {
+async function reverseTransferInternal(input: ReverseTransferInput): Promise<TransferResult> {
   const { transferId, userId, reason } = input;
 
   // Get original transfer

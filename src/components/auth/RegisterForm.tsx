@@ -45,6 +45,7 @@ export default function RegisterForm({
   labels,
 }: Readonly<RegisterFormProps>) {
   const suffix = isMobile ? '-mobile' : '-desktop';
+  const hasError = error && error.length > 0;
   const inputBgClass = isMobile
     ? 'bg-white/70 dark:bg-gray-700/70 border-gray-300'
     : 'bg-gray-50 dark:bg-gray-700 border-gray-200';
@@ -76,6 +77,7 @@ export default function RegisterForm({
           id={`name${suffix}`}
           name="name"
           required
+          aria-required="true"
           minLength={2}
           maxLength={100}
           disabled={loading}
@@ -98,6 +100,9 @@ export default function RegisterForm({
           id={`email${suffix}`}
           name="email"
           required
+          aria-required="true"
+          aria-invalid={hasError ? 'true' : 'false'}
+          aria-describedby={hasError ? `error${suffix}` : undefined}
           disabled={loading}
           value={formData.email}
           onChange={(e) => onFieldChange('email', e.target.value)}
@@ -118,6 +123,9 @@ export default function RegisterForm({
           id={`password${suffix}`}
           name="password"
           required
+          aria-required="true"
+          aria-invalid={hasError ? 'true' : 'false'}
+          aria-describedby={hasError ? `error${suffix}` : undefined}
           minLength={8}
           disabled={loading}
           value={formData.password}
@@ -177,6 +185,8 @@ export default function RegisterForm({
 
       {error && (
         <div
+          id={`error${suffix}`}
+          role="alert"
           className={`${errorBgClass} border border-red-200 dark:border-red-800 rounded-xl ${isMobile ? 'p-3' : 'p-4'}`}
         >
           <div className="flex items-start">

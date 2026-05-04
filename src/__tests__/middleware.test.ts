@@ -229,5 +229,46 @@ describe('proxy middleware', () => {
       // Then
       expect(response.status).not.toBe(307);
     });
+
+    it('should use locale from URL prefix when present (line 33)', async () => {
+      // Given: URL has locale prefix /en, user is authenticated
+      vi.mocked(verifySession).mockResolvedValue(authenticatedSession);
+      const request = new NextRequest('http://localhost:3000/en/login');
+      request.cookies.set('session', 'valid-token');
+
+      // When
+      const response = await proxy(request);
+
+      // Then: authenticated user should be redirected away from login to dashboard
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toContain('/en/dashboard');
+    });
+
+    it('should strip locale prefix from pathname for route checking (lines 44-45)', async () => {
+      // Given: authenticated user accessing /en/dashboard
+      vi.mocked(verifySession).mockResolvedValue(authenticatedSession);
+      const request = new NextRequest('http://localhost:3000/en/dashboard');
+      request.cookies.set('session', 'valid-token');
+
+      // When
+      const response = await proxy(request);
+
+      // Then: should allow access (route check uses pathnameWithoutLang)
+      expect(response.status).not.toBe(307);
+    });
+
+    it('should redirect from /en/login to /en/dashboard for authenticated user', async () => {
+      // Given: authenticated user accessing /en/login
+      vi.mocked(verifySession).mockResolvedValue(authenticatedSession);
+      const request = new NextRequest('http://localhost:3000/en/login');
+      request.cookies.set('session', 'valid-token');
+
+      // When
+      const response = await proxy(request);
+
+      // Then: should redirect to dashboard preserving locale prefix
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toContain('/en/dashboard');
+    });
   });
 });

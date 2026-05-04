@@ -31,10 +31,8 @@ export function DashboardSidebar({
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
-    if (globalThis.window !== undefined) {
-      return localStorage.getItem('sidebar_collapsed') === 'true';
-    }
-    return false;
+    if (globalThis.window === undefined) return false;
+    return localStorage.getItem('sidebar_collapsed') === 'true';
   });
 
   const width = collapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded;
@@ -78,7 +76,13 @@ export function DashboardSidebar({
         >
           <div className="flex items-center gap-3 px-4 w-full">
             <div className="relative w-10 h-10 flex-shrink-0">
-              <Image src="/icon.png" alt="FinanceTrackerPro" fill className="object-contain" />
+              <Image
+                src="/icon.png"
+                alt="FinanceTrackerPro"
+                className="object-contain"
+                width={36}
+                height={36}
+              />
             </div>
             <span
               className={`text-lg font-bold text-theme-gradient whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
@@ -91,6 +95,8 @@ export function DashboardSidebar({
         {/* Toggle Button */}
         <button
           onClick={toggleSidebar}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
           className="absolute top-20 -right-3 w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-all duration-200 border border-white/10 z-10 cursor-pointer"
         >
           {collapsed ? (
@@ -110,6 +116,7 @@ export function DashboardSidebar({
               <Link
                 key={item.href}
                 href={`/${lang}${item.href}`}
+                aria-current={isActive ? 'page' : undefined}
                 className={`
                   flex items-center gap-3 px-4 py-4 rounded-xl
                   transition-all duration-200

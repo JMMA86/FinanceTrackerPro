@@ -1,9 +1,21 @@
 /**
  * Financial Validation Schemas (Zod)
  * Server-side validation following CLAUDE.md Rule 5
+ * SECURITY: Includes integer overflow protection with MAX_SAFE_CENTS
  */
 
 import { z } from 'zod';
+
+/**
+ * Maximum safe cents value (9999999999999 = $99,999,999,999.99)
+ * Prevents Integer.MAX_SAFE_INTEGER overflow
+ */
+export const MAX_SAFE_CENTS = 9999999999999;
+
+/**
+ * Minimum safe cents value (for transfers)
+ */
+export const MIN_SAFE_CENTS = 1;
 
 /**
  * ISO 4217 Currency codes supported
@@ -59,8 +71,14 @@ export const TransferSchema = z
     // Destination account
     toAccountId: CUIDSchema,
 
-    // Amount in cents (positive integer)
-    amountCents: z.number().int().positive('Amount must be positive'),
+    // Amount in cents (positive integer with overflow protection)
+    amountCents: z
+      .number()
+      .int('Amount must be an integer')
+      .min(MIN_SAFE_CENTS, 'Amount must be at least 1 cent')
+      .max(MAX_SAFE_CENTS, `Amount cannot exceed ${MAX_SAFE_CENTS} cents`),
+      // NOTE: For transfers, negative amounts are handled by the business logic
+      // This validates the absolute value
 
     // Currency (same for both accounts in this version)
     currency: CurrencySchema,
@@ -89,10 +107,20 @@ export const CreateAccountSchema = z.object({
   name: z.string().min(1).max(100),
   type: AccountTypeSchema,
   currency: CurrencySchema.default('COP'),
-  initialBalanceCents: z.number().int().default(0),
+  initialBalanceCents: z
+    .number()
+    .int('Balance must be an integer')
+    .min(-MAX_SAFE_CENTS, 'Balance cannot exceed negative limit')
+    .max(MAX_SAFE_CENTS, 'Balance cannot exceed maximum')
+    .default(0),
 
   // Credit card specific
-  creditLimitCents: z.number().int().positive().optional(),
+  creditLimitCents: z
+    .number()
+    .int('Credit limit must be an integer')
+    .min(MIN_SAFE_CENTS, 'Credit limit must be at least 1 cent')
+    .max(MAX_SAFE_CENTS, 'Credit limit cannot exceed maximum')
+    .optional(),
   cutoffDay: z.number().int().min(1).max(31).optional(),
   paymentDueDay: z.number().int().min(1).max(31).optional(),
 
@@ -107,34 +135,67 @@ export type CreateAccountInput = z.infer<typeof CreateAccountSchema>;
 
 /**
  * Create transaction validation schema
+ * SECURITY: Includes integer overflow protection
  */
-export const CreateTransactionSchema = z.object({
-  idempotencyKey: UUIDv4Schema,
-  userId: CUIDSchema,
-  accountId: CUIDSchema,
-  type: TransactionTypeSchema,
-  amountCents: z.number().int(),
-  currency: CurrencySchema,
-  description: z.string().max(500).optional(),
-  date: z.coerce.date().optional(),
+export const CreateTransactionSchema = z
+  .object({
+    idempotencyKey: UUIDv4Schema,
+    userId: CUIDSchema,
+    accountId: CUIDSchema,
+    type: TransactionTypeSchema,
+    amountCents: z
+      .number()
+      .int('Amount must be an integer')
+      .min(-MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit')
+      .max(MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit'),
+    currency: CurrencySchema,
+    description: z.string().max(500).optional(),
+    date: z.coerce.date().optional(),
 
-  // Currency conversion (optional)
-  originalAmountCents: z.number().int().optional(),
-  originalCurrency: CurrencySchema.optional(),
-  exchangeRate: z.number().positive().optional(),
+    // Currency conversion (optional)
+    originalAmountCents: z
+      .number()
+      .int('Original amount must be an integer')
+      .min(-MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
+      .max(MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
+      .optional(),
+    originalCurrency: CurrencySchema.optional(),
+    exchangeRate: z.number().positive().max(1000).optional(),
 
-  // Category
-  categoryId: CUIDSchema.optional(),
-});
+    // Category
+    categoryId: CUIDSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      // For TRANSFER_OUT, amount must be negative
+      if (data.type === 'TRANSFER_OUT' && data.amountCents >= 0) {
+        return false;
+      }
+      // For TRANSFER_IN, amount must be positive
+      if (data.type === 'TRANSFER_IN' && data.amountCents <= 0) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Transfer amounts must have correct sign (negative for OUT, positive for IN)',
+      path: ['amountCents'],
+    }
+  );
 
 export type CreateTransactionInput = z.infer<typeof CreateTransactionSchema>;
 
 /**
  * Update account balance validation
+ * SECURITY: Includes overflow protection
  */
 export const UpdateAccountBalanceSchema = z.object({
   accountId: CUIDSchema,
-  newBalanceCents: z.number().int(),
+  newBalanceCents: z
+    .number()
+    .int('Balance must be an integer')
+    .min(-MAX_SAFE_CENTS, 'Balance cannot exceed negative limit')
+    .max(MAX_SAFE_CENTS, 'Balance cannot exceed maximum'),
   lastModifiedBy: z.string(),
 });
 
@@ -143,13 +204,30 @@ export const UpdateAccountBalanceSchema = z.object({
  */
 export const CurrencyConversionSchema = z
   .object({
-    amountCents: z.number().int().positive(),
+    amountCents: z
+      .number()
+      .int('Amount must be an integer')
+      .min(MIN_SAFE_CENTS, 'Amount must be at least 1 cent')
+      .max(MAX_SAFE_CENTS, 'Amount exceeds maximum safe value'),
     fromCurrency: CurrencySchema,
     toCurrency: CurrencySchema,
-    exchangeRate: z.number().positive(),
+    exchangeRate: z
+      .number()
+      .positive('Exchange rate must be positive')
+      .max(10000, 'Exchange rate seems unrealistic'),
   })
   .refine((data) => data.fromCurrency !== data.toCurrency, {
     message: 'Source and destination currencies must be different',
   });
 
 export type CurrencyConversionInput = z.infer<typeof CurrencyConversionSchema>;
+
+/**
+ * Reversal action validation
+ */
+export const ReversalSchema = z.object({
+  transferId: CUIDSchema,
+  userId: CUIDSchema,
+});
+
+export type ReversalInput = z.infer<typeof ReversalSchema>;

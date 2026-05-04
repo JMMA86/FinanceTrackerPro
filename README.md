@@ -87,7 +87,11 @@ Open [http://localhost:3000](http://localhost:3000)
 - `npm run lint` - ESLint with auto-fix
 - `npm run format` - Prettier format all files
 - `npm run format:check` - Check formatting
-- `npm run sonar` - Run SonarQube analysis
+
+### SonarQube Analysis
+
+- `npm run sonar` - Run SonarQube analysis + export issues to `.opencode/sonar-issues.json`
+- `npm run sonar:check` - Verify SonarQube server is running
 
 ### Git Hooks
 
@@ -114,75 +118,168 @@ wsl -d docker-desktop sysctl -w vm.max_map_count=262144
 docker-compose -f docker-compose.sonarqube.yml up -d
 ```
 
-2. Access SonarQube UI:
+3. Verify server is running:
+
+```bash
+npm run sonar:check
+```
+
+4. Access SonarQube UI:
    - URL: http://localhost:9000
    - Default credentials: `admin` / `admin`
    - Change password on first login
 
-3. Generate authentication token:
+5. Generate authentication token:
    - Go to: User menu → My Account → Security → Generate Tokens
    - Name: `financetrackerpro`
+   - Type: User Token
    - Copy token for next step
 
-4. Configure token in `.env`:
+6. Configure token in `.env`:
 
 ```bash
 # Add to .env file
-SONAR_TOKEN=your_token_here
+SONAR_TOKEN=squ_your_token_here
+SONAR_HOST_URL=http://localhost:9000
+SONAR_PROJECT_KEY=financetrackerpro
 ```
 
-5. Run analysis:
+7. Run complete analysis:
 
 ```bash
-# Generate coverage report first
-npm run test:coverage
-
-# Run SonarQube scan
+# Analyze + export issues in one step
 npm run sonar
 ```
 
-6. View results:
+8. View results:
    - Open http://localhost:9000
    - Navigate to `financetrackerpro` project
+   - Issues also saved to `.opencode/sonar-issues.json`
 
 ### Configuration
 
 - **Project config**: `sonar-project.properties`
 - **Docker setup**: `docker-compose.sonarqube.yml`
 - **Coverage path**: `coverage/lcov.info`
+- **Issues output**: `.opencode/sonar-issues.json` (auto-generated)
+- **Fetch script**: `scripts/fetch-sonar.ps1` (PowerShell)
 
 ### Quality Gates
 
 Default quality gate enforces:
 
-- 80% minimum coverage
-- 0 security vulnerabilities
-- 0 bugs
-- Maintainability rating A
+- **Coverage**: 80% minimum (enforced via Vitest)
+- **Bugs**: Zero tolerance (blocks merge)
+- **Vulnerabilities**: Zero tolerance (blocks merge)
+- **Security Hotspots**: Manual review required
+- **Cognitive Complexity**: Max 15 per function
+- **Code Duplication**: Max 3% across project
+- **TypeScript Strictness**: Zero `any` types in production code
+
+**Merge blocked if**:
+
+- Any BLOCKER or CRITICAL issues exist
+- Coverage drops below 80%
+- New security vulnerabilities introduced
 
 ### CI/CD Integration
 
 For production CI/CD:
 
-1. Set `SONAR_HOST_URL` and `SONAR_TOKEN` environment variables
-2. Run `npm run sonar` in CI pipeline after tests
-3. Configure quality gate to block PRs with issues
+1. Set environment variables:
+
+   ```bash
+   SONAR_HOST_URL=https://sonarqube.yourdomain.com
+   SONAR_TOKEN=your_production_token
+   ```
+
+2. Add to CI pipeline (GitHub Actions example):
+
+```yaml
+# .github/workflows/quality.yml
+- name: Run Tests with Coverage
+  run: npm run test:coverage
+
+- name: SonarQube Analysis
+  run: npm run sonar
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+- name: Check Quality Gate
+  run: |
+    BLOCKER=$(cat .opencode/sonar-issues.json | jq '[.issues[] | select(.severity=="BLOCKER")] | length')
+    if [ "$BLOCKER" -gt 0 ]; then
+      echo "❌ Quality gate failed: $BLOCKER BLOCKER issues found"
+      exit 1
+    fi
+```
+
+3. Configure quality gate in SonarQube UI to block PRs with issues
 
 ### Running Analysis Workflow
 
-Complete workflow for code quality check:
+Full workflow for code quality check:
 
 ```bash
-# 1. Run tests with coverage (generates lcov.info)
+# 1. Verify SonarQube is running
+npm run sonar:check
+
+# 2. Run tests with coverage (generates lcov.info)
 npm run test:coverage
 
-# 2. Run SonarQube analysis (requires server + SONAR_TOKEN in .env)
+# 3. Analyze + export issues
 npm run sonar
-
-# 3. View results at http://localhost:9000/dashboard?id=financetrackerpro
 ```
 
-**Note**: The scanner automatically reads `SONAR_TOKEN` from the environment via `dotenv-cli`.
+Results:
+
+- Web UI: http://localhost:9000/dashboard?id=financetrackerpro
+- JSON file: `.opencode/sonar-issues.json`
+
+#### Understanding Output
+
+`sonar-issues.json` structure:
+
+```json
+{
+  "total": 6,
+  "issues": [...],
+  "hotspots": [...],
+  "qualityGate": {
+    "status": "ERROR",
+    "conditions": [
+      {
+        "metricKey": "new_coverage",
+        "status": "ERROR",
+        "actualValue": "65.4",
+        "errorThreshold": "80"
+      }
+    ]
+  },
+  "coverage": {
+    "coverage": "72.5",
+    "new_coverage": "65.4",
+    "new_lines_to_cover": "48",
+    "new_uncovered_lines": "17"
+  }
+}
+```
+
+**Severity levels**:
+
+- **BLOCKER**: Merge blocked (security vulnerabilities)
+- **CRITICAL**: Review required (bugs, type safety)
+- **MAJOR**: Should be fixed (code smells)
+- **MINOR**: Optional improvement
+- **INFO**: Informational only
+
+**Issue types**:
+
+- **BUG**: Runtime error risk
+- **VULNERABILITY**: Security risk
+- **CODE_SMELL**: Maintainability issue
+- **SECURITY_HOTSPOT**: Manual security review needed
 
 ### Database Connection Test
 

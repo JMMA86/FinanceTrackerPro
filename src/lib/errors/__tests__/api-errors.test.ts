@@ -33,6 +33,23 @@ describe('api-errors.ts', () => {
       // Then
       expect(error.stack).toBeDefined();
     });
+
+    it('should call Error.captureStackTrace when available (line 25)', () => {
+      // Given: Error.captureStackTrace exists in Node.js/V8
+      const originalCaptureStackTrace = Error.captureStackTrace;
+      
+      if (originalCaptureStackTrace) {
+        const captureStackTraceSpy = vi.spyOn(Error, 'captureStackTrace');
+        
+        // When
+        const error = new AppError('Capture test', 500, 'CAPTURE');
+        
+        // Then: should have called Error.captureStackTrace
+        expect(captureStackTraceSpy).toHaveBeenCalledWith(error, error.constructor);
+        
+        captureStackTraceSpy.mockRestore();
+      }
+    });
   });
 
   describe('ValidationError', () => {

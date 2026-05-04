@@ -45,6 +45,12 @@ describe('i18n.ts', () => {
       expect(dict).toBeDefined();
       expect(dict.login).toBeDefined();
     });
+
+    it('should throw error when loading non-existent namespace for DEFAULT_LOCALE (line 26)', async () => {
+      // Given: trying to load non-existent namespace from DEFAULT_LOCALE
+      // When / Then: should throw error since fallback to DEFAULT_LOCALE also fails
+      await expect(getDictionary('es', 'nonexistent-namespace')).rejects.toThrow();
+    });
   });
 
   describe('get', () => {

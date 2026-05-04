@@ -11,13 +11,13 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('next/headers', () => ({
-  headers: vi.fn(() => ({
-    get: vi.fn((name: string) => {
-      if (name === 'x-forwarded-for') return '192.168.1.1';
-      if (name === 'user-agent') return 'test-agent';
-      return null;
-    }),
-  })),
+  headers: vi.fn(() => {
+    const headersMap = new Map();
+    headersMap.set('x-forwarded-for', '192.168.1.1');
+    headersMap.set('x-real-ip', '192.168.1.1');
+    headersMap.set('user-agent', 'test-agent');
+    return headersMap;
+  }),
 }));
 
 vi.mock('@/services/reconciliation.service', () => ({
@@ -38,6 +38,10 @@ vi.mock('@/lib/repositories', () => ({
     findPairedTransfers: vi.fn(() => Promise.resolve([])),
     create: vi.fn(),
   })),
+}));
+
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
 }));
 
 const VALID_USER_ID = 'clh1234567890abcdefghij';
@@ -480,29 +484,58 @@ describe('transfer.actions.ts', () => {
       it('should create double-entry transactions and return transferId', async () => {
         // Given
         const { prisma } = await import('@/lib/db');
-        const mockDebitTx = { id: 'tx-debit', amountCents: -10000, transferId: 'transfer-123' };
-        const mockCreditTx = { id: 'tx-credit', amountCents: 10000, transferId: 'transfer-123' };
-        vi.mocked(prisma.$transaction).mockImplementationOnce(
-          async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
-            const mockTx = {
-              account: {
-                findUnique: vi
-                  .fn()
-                  .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
-                  .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
-                update: vi.fn().mockResolvedValue({}),
-              },
-              transaction: {
-                create: vi
-                  .fn()
-                  .mockResolvedValueOnce(mockDebitTx)
-                  .mockResolvedValueOnce(mockCreditTx),
-              },
-            };
-            return callback(asTransactionClient(mockTx));
-          }
-        );
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
+          const mockTx = {
+            account: {
+              findUnique: vi.fn()
+                .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
+                .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
+              update: vi.fn().mockResolvedValue({}),
+            },
+            transaction: {
+              create: vi.fn()
+                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-debit', type: 'TRANSFER_OUT', amountCents: -10000 }))
+                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-credit', type: 'TRANSFER_IN', amountCents: 10000 })),
+            },
+          };
+          return callback(asTransactionClient(mockTx));
+        });
+
         const input = buildValidTransferInput();
+
+        // When
+        const response = await transferBetweenAccounts(input);
+
+        // Then
+        expect(response.success).toBe(true);
+        expect(response.data?.transferId).toBeDefined();
+      });
+
+      it('should create a reversal transfer with swapped accounts', async () => {
+        // Given
+        const { prisma } = await import('@/lib/db');
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
+          const mockTx = {
+            account: {
+              findUnique: vi.fn()
+                .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)) // Swapped
+                .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT)), // Swapped
+              update: vi.fn().mockResolvedValue({}),
+            },
+            transaction: {
+              create: vi.fn()
+                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-reversal-debit', type: 'TRANSFER_OUT', amountCents: -10000 }))
+                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-reversal-credit', type: 'TRANSFER_IN', amountCents: 10000 })),
+            },
+          };
+          return callback(asTransactionClient(mockTx));
+        });
+
+        const input = buildValidTransferInput({
+          fromAccountId: VALID_TO_ACCOUNT,
+          toAccountId: VALID_FROM_ACCOUNT,
+          description: 'Reversal-like transfer',
+        });
 
         // When
         const response = await transferBetweenAccounts(input);
@@ -733,7 +766,7 @@ describe('transfer.actions.ts', () => {
           createMany: vi.fn(),
           softDelete: vi.fn(),
         });
-        vi.mocked(prisma.$transaction).mockImplementationOnce(
+        vi.mocked(prisma.$transaction).mockImplementation(
           async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
             const mockTx = {
               account: {
@@ -762,7 +795,6 @@ describe('transfer.actions.ts', () => {
           }
         );
 
-        // When
         const response = await reverseTransfer({
           transferId: 'transfer-to-reverse',
           userId: VALID_USER_ID,

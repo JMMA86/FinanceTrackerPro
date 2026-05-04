@@ -1,11 +1,44 @@
 import { getDictionary, get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
+import type { Metadata } from 'next';
+import { unstable_noStore } from 'next/cache';
+import { Suspense } from 'react';
+import { DashboardMetrics } from './DashboardMetrics';
+import { DashboardSkeleton } from './DashboardSkeleton';
 
 interface DashboardPageProps {
   params: Promise<{ lang: Locale }>;
 }
 
+export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
+  const { lang } = await params;
+  return {
+    title: `Dashboard - FinanceTrackerPro`,
+    description: 'Your financial command center. Track expenses, manage budgets, and monitor investments.',
+    openGraph: {
+      title: 'Dashboard - FinanceTrackerPro',
+      description: 'Your financial command center',
+      url: `https://financetrackerpro.com/${lang}/dashboard`,
+      siteName: 'FinanceTrackerPro',
+      locale: lang,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Dashboard - FinanceTrackerPro',
+      description: 'Your financial command center',
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+  };
+}
+
 export default async function DashboardPage({ params }: Readonly<DashboardPageProps>) {
+  // Prevent caching of financial data (Rule 13 - Source of Truth)
+  unstable_noStore();
+
   const { lang } = await params;
   const dashboard = await getDictionary(lang, 'dashboard');
 
@@ -15,40 +48,10 @@ export default async function DashboardPage({ params }: Readonly<DashboardPagePr
         {get(dashboard, 'title')}
       </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric Cards */}
-        <div className="app-shell rounded-2xl p-6 hover:border-white/20 hover:shadow-[0_20px_55px_-24px_rgba(47,124,246,0.35)] transition-all duration-300">
-          <p className="text-sm text-gray-400 mb-1">{get(dashboard, 'totalBalance')}</p>
-          <p className="text-2xl font-bold text-white">$2,850,000</p>
-          <p className="text-xs text-green-400 mt-2">+12.5%</p>
-        </div>
-
-        <div className="app-shell rounded-2xl p-6 hover:border-white/20 hover:shadow-[0_20px_55px_-24px_rgba(47,124,246,0.35)] transition-all duration-300">
-          <p className="text-sm text-gray-400 mb-1">{get(dashboard, 'income')}</p>
-          <p className="text-2xl font-bold text-white">$5,000,000</p>
-          <p className="text-xs text-green-400 mt-2">{get(dashboard, 'thisMonth')}</p>
-        </div>
-
-        <div className="app-shell rounded-2xl p-6 hover:border-white/20 hover:shadow-[0_20px_55px_-24px_rgba(47,124,246,0.35)] transition-all duration-300">
-          <p className="text-sm text-gray-400 mb-1">{get(dashboard, 'expenses')}</p>
-          <p className="text-2xl font-bold text-white">$2,150,000</p>
-          <p className="text-xs text-red-400 mt-2">-43% {get(dashboard, 'vsLastMonth')}</p>
-        </div>
-
-        <div className="app-shell rounded-2xl p-6 hover:border-white/20 hover:shadow-[0_20px_55px_-24px_rgba(47,124,246,0.35)] transition-all duration-300">
-          <p className="text-sm text-gray-400 mb-1">{get(dashboard, 'investments')}</p>
-          <p className="text-2xl font-bold text-white">$1,500 USD</p>
-          <p className="text-xs text-blue-400 mt-2">Binance</p>
-        </div>
-      </div>
-
-      {/* Placeholder for charts/transactions */}
-      <div className="app-shell rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-4">
-          {get(dashboard, 'recentTransactions')}
-        </h2>
-        <p className="text-gray-400">{get(dashboard, 'connectingDb')}</p>
-      </div>
+      {/* PPR with Suspense - Static shell loads instantly, data loads async */}
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardMetrics lang={lang} />
+      </Suspense>
     </div>
   );
 }

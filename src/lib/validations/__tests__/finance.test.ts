@@ -6,6 +6,8 @@ import {
   TransferSchema,
   CreateAccountSchema,
   CurrencyConversionSchema,
+  ReversalSchema,
+  CreateTransactionSchema,
 } from '../finance';
 
 describe('finance.ts validation schemas', () => {
@@ -217,6 +219,59 @@ describe('finance.ts validation schemas', () => {
 
       // When / Then
       expect(() => CurrencyConversionSchema.parse(invalid)).toThrow();
+    });
+  });
+
+  describe('ReversalSchema', () => {
+    it('should accept a valid reversal', () => {
+      // Given
+      const validReversal = {
+        transferId: 'clh1234567890abcdefghij',
+        userId: 'clh1234567890abcdefghik',
+      };
+
+      // When / Then
+      expect(() => ReversalSchema.parse(validReversal)).not.toThrow();
+    });
+  });
+
+  describe('CreateTransactionSchema', () => {
+    const validTransaction = {
+      idempotencyKey: crypto.randomUUID(),
+      userId: 'clh1234567890abcdefghij',
+      accountId: 'clh1234567890abcdefghik',
+      type: 'INCOME',
+      amountCents: 10000,
+      currency: 'USD',
+    };
+
+    it('should accept a valid transaction', () => {
+      // Given / When / Then
+      expect(() => CreateTransactionSchema.parse(validTransaction)).not.toThrow();
+    });
+
+    it('should reject when TRANSFER_OUT amount is positive', () => {
+      // Given
+      const invalid = {
+        ...validTransaction,
+        type: 'TRANSFER_OUT',
+        amountCents: 100,
+      };
+
+      // When / Then
+      expect(() => CreateTransactionSchema.parse(invalid)).toThrow();
+    });
+
+    it('should reject when TRANSFER_IN amount is negative', () => {
+      // Given
+      const invalid = {
+        ...validTransaction,
+        type: 'TRANSFER_IN',
+        amountCents: -100,
+      };
+
+      // When / Then
+      expect(() => CreateTransactionSchema.parse(invalid)).toThrow();
     });
   });
 });

@@ -1,0 +1,18 @@
+# Robots.txt for FinanceTrackerPro
+# https://financetrackerpro.com
+
+User-agent: *
+Allow: /
+
+# Disallow sensitive routes
+Disallow: /api/
+Disallow: /actions/
+Disallow: /_next/
+Disallow: /*/settings
+Disallow: /*/profile
+
+# Sitemap location
+Sitemap: https://financetrackerpro.com/sitemap.xml
+
+# Crawl-delay (optional, for politeness)
+Crawl-delay: 0

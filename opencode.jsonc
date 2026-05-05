@@ -1,0 +1,66 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    // Seguridad global: validación humana requerida para cambios destructivos
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "anthropic/claude-sonnet-4-6",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      },
+      "permission": {
+        "bash": {
+          "*": "ask",
+          "git status *": "allow",
+          "git log *": "allow",
+          "git diff *": "allow"
+        }
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "model": "anthropic/claude-haiku-4-5-20251001",
+      // Respuesta determinista para análisis y planificación
+      "temperature": 0.1,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  },
+  "mcp": {
+    "finance-docs": {
+      "type": "remote",
+      // URL del servidor MCP interno de documentación financiera
+      "url": "https://mcp.financetrackerpro.internal/docs",
+      // Deshabilitar por defecto - activar solo en sesiones que requieran docs
+      "enabled": false,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:FINANCE_API_KEY}"
+      }
+    }
+  },
+  "provider": {
+    "anthropic": {
+      "models": {
+        "claude-sonnet-4-6": {
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              // Presupuesto expandido para lógica financiera compleja (conciliaciones, auditorías)
+              "budgetTokens": 16000
+            }
+          }
+        }
+      }
+    }
+  }
+}

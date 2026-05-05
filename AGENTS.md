@@ -1,19 +1,74 @@
 # Agent System - FinanceTrackerPro
 
-Este documento define los agentes especializados disponibles en el proyecto y cómo interactuar con ellos.
+Este documento define la arquitectura de agentes del proyecto, sus roles, responsabilidades y cómo interactúan entre sí.
 
-## Agentes Disponibles
+---
 
-### 1. dev-backend (Senior Backend Developer)
+## Arquitectura del Sistema
+
+El sistema sigue un modelo de **orquestación jerárquica**: existe un único agente primario (`tech-lead`) que recibe todas las tareas del usuario, decide el flujo de trabajo y delega a subagentes especializados. Los subagentes no interactúan directamente con el usuario.
+
+```
+Usuario
+  └── tech-lead (PRIMARIO — orquestador)
+        ├── dev-backend    (subagente — implementación)
+        ├── dev-frontend   (subagente — implementación)
+        ├── dev-tester     (subagente — testing)
+        ├── qa-lead        (subagente — auditoría)
+        ├── sec-ops        (subagente — seguridad)
+        └── audit-finance  (subagente — integridad financiera)
+```
+
+---
+
+## Agente Primario
+
+### tech-lead (Tech Lead — Orquestador)
+
+**Modo**: `primary` — único punto de entrada del sistema.
+
+**Responsabilidades**:
+
+- Analizar cada tarea y determinar qué subagentes invocar y en qué orden
+- Proveer briefings estructurados a cada subagente (contexto, alcance, restricciones, entregable)
+- Validar los resultados de cada subagente antes de pasar al siguiente
+- Garantizar que los quality gates se cumplan antes de cerrar cualquier ciclo
+- Consolidar reportes de `qa-lead`, `sec-ops` y `audit-finance` en un resumen ejecutivo para el usuario
+- Gestionar bloqueos y reasignar trabajo cuando un subagente falla o QA rechaza
+
+**Workflows que conoce**:
+
+| Tipo de tarea          | Secuencia de subagentes                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| Feature full-stack     | `dev-backend` → `dev-frontend` → `dev-tester` → `qa-lead`   |
+| Feature solo backend   | `dev-backend` → `dev-tester` → `qa-lead`                    |
+| Feature solo frontend  | `dev-frontend` → `dev-tester` → `qa-lead`                   |
+| Bug fix                | `dev-backend` y/o `dev-frontend` → `dev-tester` → `qa-lead` |
+| Auditoría de seguridad | `sec-ops` → `dev-backend` → `qa-lead`                       |
+| Auditoría financiera   | `audit-finance` → `dev-backend` → `dev-tester` → `qa-lead`  |
+| Review de PR           | `qa-lead` → `sec-ops`_ → `audit-finance`_                   |
+
+> \* Solo si el PR toca auth/pagos o cálculos monetarios respectivamente.
+
+**Ubicación**: `.opencode/agents/tech-lead/prompt.md`
+
+---
+
+## Subagentes Especializados
+
+### 1. dev-backend (Desarrollador Backend Senior)
+
+**Modo**: `subagent`
 
 **Responsabilidades**:
 
 - Implementar Server Actions en `src/actions/*.ts`
 - Operaciones de base de datos con Prisma
-- Transacciones atómicas (ACID)
-- Validación con Zod
+- Transacciones atómicas (ACID) con `prisma.$transaction()`
+- Validación server-side con Zod
 - Seguridad: Argon2id hashing, timing-safe comparisons
-- Cálculos financieros con Decimal.js
+- Cálculos financieros con Decimal.js en `src/lib/money.ts`
+- Migraciones de base de datos con Prisma Migrate
 
 **Tech Stack**:
 
@@ -25,17 +80,20 @@ Este documento define los agentes especializados disponibles en el proyecto y c�
 
 ---
 
-### 2. dev-frontend (Senior Frontend Developer)
+### 2. dev-frontend (Desarrollador Frontend Senior)
+
+**Modo**: `subagent`
 
 **Responsabilidades**:
 
 - UI/UX con Next.js App Router
-- Componentes Server (RSC) vs Client
+- Componentes Server (RSC) vs Client — correcta separación de límites
 - Accesibilidad WCAG 2.2 AA
-- SEO optimization (metadata, sitemap)
+- SEO optimization (metadata, sitemap, robots.txt)
 - Tailwind CSS v4
-- Zustand (estado UI, sin lógica de negocio)
-- React Hook Form + Zod
+- Zustand exclusivamente para estado de UI (sin lógica de negocio)
+- React Hook Form + Zod para formularios
+- Integración con Server Actions de `dev-backend`
 
 **Tech Stack**:
 
@@ -47,79 +105,91 @@ Este documento define los agentes especializados disponibles en el proyecto y c�
 
 ---
 
-### 3. dev-tester (SDET - Software Development Engineer in Test)
+### 3. dev-tester (SDET — Ingeniero en Pruebas)
+
+**Modo**: `subagent`
 
 **Responsabilidades**:
 
-- Mantener coverage mínimo 80%
-- Tests unitarios, integración, E2E
-- Testing de edge cases en cálculos financieros
-- Mock de servicios externos
+- Mantener cobertura mínima del 80% (líneas, ramas, funciones, sentencias)
+- Tests unitarios para cálculos financieros (`src/lib/money.ts`)
+- Tests de integración para Server Actions (rollback, idempotencia, atomicidad)
+- Tests de componentes (accesibilidad, interacción, estados de error)
+- Testing de edge cases en cálculos con Decimal.js
 
-**Comandos obligatorios**:
+**Comando obligatorio**:
 
 ```bash
 npm run test:coverage
 ```
 
+**Patrones de archivos**:
+
+- Tests unitarios: `src/**/__tests__/*.spec.ts`
+- Tests de integración: `src/**/__tests__/*.integration.test.ts`
+
 **Ubicación**: `.opencode/agents/dev-tester/prompt.md`
 
 ---
 
-### 4. qa-lead (QA Lead)
+### 4. qa-lead (QA Lead — Auditor de Calidad)
+
+**Modo**: `subagent` | `edit: deny`
 
 **Responsabilidades**:
 
-- Auditar todos los cambios contra reglas de integridad financiera (14 reglas de CLAUDE.md)
-- Verificar seguridad backend
-- Validar accesibilidad WCAG 2.2 AA
-- Cumplimiento de skills instalados
-- Code review checklist
-- Ejecutar SonarQube y validar quality gates
+- Auditar todos los cambios contra las 14 reglas de integridad financiera de `CLAUDE.md`
+- Verificar seguridad backend (Argon2, timing-safe, errores genéricos)
+- Validar accesibilidad WCAG 2.2 AA en componentes UI
+- Ejecutar SonarQube y validar quality gates globales
+- Generar reportes de auditoría con hallazgos categorizados por severidad
+- Asignar correcciones a los subagentes correspondientes
 
-**14 Reglas de Integridad Financiera** (de CLAUDE.md):
+**14 Reglas de Integridad Financiera** (de `CLAUDE.md`):
 
-1. Decimal.js precision - todos los cálculos financieros
-2. Integer storage - montos como centavos
-3. Banker's rounding - ROUND_HALF_EVEN
-4. Currency codes - ISO 4217
-5. Atomic transactions - prisma.$transaction()
-6. Soft deletes - isActive: false
-7. Audit trail - createdBy, lastModifiedBy, ipAddress, userAgent
-8. Server-side validation - Zod en Server Actions
-9. Currency traceability - originalAmountCents, exchangeRate
-10. Idempotency - UUID v4
-11. Source of truth - reconciliation desde transacciones
-12. TypeScript strictness - NO any
-13. Database constraints - CHECK, ON DELETE RESTRICT
-14. Security logging - rate limiting, MFA, encryption
+1. Decimal.js precision — todos los cálculos financieros
+2. Integer storage — montos como centavos en DB
+3. Banker's rounding — ROUND_HALF_EVEN
+4. Currency codes — ISO 4217 obligatorio
+5. Atomic transactions — `prisma.$transaction()`
+6. Soft deletes — `isActive: false`, nunca DELETE físico
+7. Audit trail — `createdBy`, `lastModifiedBy`, `ipAddress`, `userAgent`
+8. Server-side validation — Zod en Server Actions
+9. Currency traceability — `originalAmountCents`, `exchangeRate`
+10. Idempotency — UUID v4 en transacciones y transferencias
+11. Source of truth — reconciliación desde historial de transacciones
+12. TypeScript strictness — sin tipos `any`
+13. Database constraints — CHECK, ON DELETE RESTRICT
+14. Security logging — rate limiting, MFA, cifrado en reposo
 
 **Checks obligatorios**:
 
 ```bash
-npm run type-check
-npm run lint
-npm run test:coverage
-npm run sonar
+npm run type-check    # TypeScript — exit code 0
+npm run lint          # ESLint — exit code 0
+npm run test:coverage # Cobertura ≥ 80%
+npm run sonar         # BLOCKER/CRITICAL = 0
 ```
 
 **Ubicación**: `.opencode/agents/qa-lead/prompt.md`
 
 ---
 
-### 5. sec-ops (Cybersecurity & SecOps Lead)
+### 5. sec-ops (Líder de Ciberseguridad y SecOps)
+
+**Modo**: `subagent` | `edit: deny`
 
 **Responsabilidades**:
 
 - Auditoría OWASP Top 10 (2021)
-- Protección PII
-- Rate limiting implementation
-- Input validation (defense in depth)
-- Secure session management
-- Security headers
-- Dependency audit
+- Protección de datos PII (cifrado, enmascaramiento en logs)
+- Implementación y verificación de rate limiting
+- Validación de input (defensa en profundidad)
+- Gestión segura de sesiones (httpOnly, secure, sameSite)
+- Security headers (CSP, X-Frame-Options, HSTS)
+- Auditoría de dependencias
 
-**OWASP Top 10 Auditados**:
+**OWASP Top 10 auditados**:
 
 - A01: Broken Access Control
 - A02: Cryptographic Failures
@@ -144,9 +214,36 @@ npm run lint
 
 ---
 
+### 6. audit-finance (Auditor de Integridad Financiera)
+
+**Modo**: `subagent` | `edit: deny` | `bash: false`
+
+**Responsabilidades**:
+
+- Verificar uso exclusivo de Decimal.js en cálculos monetarios
+- Detectar fugas de precisión IEEE 754 (uso de `float`/`number` nativo)
+- Auditar integridad del ledger (libro mayor): sin asientos duplicados
+- Validar trazabilidad de divisas (`originalAmountCents`, `exchangeRate` inmutable)
+- Verificar idempotencia en transacciones y transferencias
+- Auditar campos de soft delete y trail de auditoría
+- **No modifica código** — genera exclusivamente reportes de hallazgos
+
+**Severidades del reporte**:
+
+| Nivel     | Descripción                                           |
+| --------- | ----------------------------------------------------- |
+| `CRÍTICO` | Bloquea PR — impacto directo en integridad financiera |
+| `MAYOR`   | Requiere corrección antes del merge                   |
+| `MENOR`   | Mejora recomendada, no bloqueante                     |
+| `OK`      | Regla verificada y cumplida                           |
+
+**Ubicación**: `.opencode/agents/audit-finance/prompt.md`
+
+---
+
 ## Skills Instalados
 
-Los skills están en `.opencode/skills/` y contienen guías especializadas:
+Los skills están en `.opencode/skills/` y contienen guías de referencia técnica para los subagentes:
 
 | Skill                       | Descripción                                  |
 | --------------------------- | -------------------------------------------- |
@@ -170,41 +267,70 @@ Los skills están en `.opencode/skills/` y contienen guías especializadas:
 
 ---
 
-## Flujo de Trabajo
+## Flujos de Trabajo
 
-### Desarrollo de Features
+Todos los flujos son iniciados y coordinados por `tech-lead`. Los subagentes no se invocan directamente.
+
+### Desarrollo de Features (Full-Stack)
 
 ```
-1. dev-backend → Implementa Server Actions + DB
-2. dev-frontend → Implementa UI + integra Actions
-3. dev-tester → Añade tests (coverage ≥ 80%)
-4. qa-lead → Audita cambios (type-check, lint, test, sonar)
-5. sec-ops → Revisión seguridad si es necesario
+tech-lead
+  ├── 1. dev-backend   → Server Actions + schema Prisma + validación Zod
+  │         ↓ (si toca cálculos monetarios)
+  │   audit-finance   → Reporte de integridad (solo lectura)
+  ├── 2. dev-frontend  → UI + integración de Actions + accesibilidad
+  ├── 3. dev-tester    → Tests (coverage ≥ 80%)
+  │         ↓ (si toca auth/pagos)
+  │   sec-ops         → Auditoría OWASP (solo lectura)
+  └── 4. qa-lead       → Auditoría 14 reglas + quality gates
 ```
 
 ### Revisión de Seguridad
 
 ```
-1. sec-ops → Ejecuta auditoría OWASP
-2. Genera Security Audit Report
-3. qa-lead → Valida que issues de seguridad se resuelvan
+tech-lead
+  ├── 1. sec-ops      → Reporte OWASP Top 10
+  ├── 2. dev-backend  → Correcciones asignadas
+  └── 3. qa-lead      → Validación final de quality gates
 ```
 
-### Quality Gate (QA Lead)
+### Auditoría de Integridad Financiera
 
-Antes de aprobar PR:
+```
+tech-lead
+  ├── 1. audit-finance → Reporte de hallazgos (sin tocar código)
+  ├── 2. dev-backend   → Correcciones de lógica financiera
+  ├── 3. dev-tester    → Tests de los casos corregidos
+  └── 4. qa-lead       → Quality gate final
+```
 
-- `npm run type-check` → Exit code 0
-- `npm run lint` → Exit code 0
-- `npm run test:coverage` → Coverage ≥ 80%
-- `npm run sonar:full` → BLOCKER/CRITICAL = 0
+### Review de PR Antes de Merge
+
+```
+tech-lead
+  ├── 1. qa-lead       → Auditoría completa (14 reglas + sonar)
+  ├── 2. sec-ops*      → Si hay cambios en auth/pagos/datos sensibles
+  └── 3. audit-finance* → Si hay cambios en cálculos monetarios/transferencias
+```
+
+### Quality Gate — Criterios de Aprobación
+
+Ningún PR se aprueba sin que `qa-lead` confirme:
+
+| Check                   | Criterio               |
+| ----------------------- | ---------------------- |
+| `npm run type-check`    | Exit code 0            |
+| `npm run lint`          | Exit code 0            |
+| `npm run test:coverage` | Cobertura ≥ 80%        |
+| `npm run sonar`         | BLOCKER y CRITICAL = 0 |
 
 ---
 
 ## Referencias
 
-- **CLAUDE.md**: 14 Financial Integrity Rules
+- **CLAUDE.md**: 14 Financial Integrity Rules + Banking-Grade Integrity Pillars
 - **DATABASE.md**: Arquitectura de base de datos
 - **README.md**: Setup y scripts del proyecto
-- `.opencode/agents/*/prompt.md`: Prompts completos de cada agente
-- `.opencode/skills/*/SKILL.md`: Guías de skills específicos
+- `.opencode/agents/tech-lead/prompt.md`: Orquestador principal — leer para entender el sistema completo
+- `.opencode/agents/*/prompt.md`: Prompts completos de cada subagente
+- `.opencode/skills/*/SKILL.md`: Guías de referencia técnica por dominio

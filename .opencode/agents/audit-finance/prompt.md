@@ -1,7 +1,7 @@
 ---
 description: Especialista en auditoría de integridad transaccional y cumplimiento contable.
 mode: subagent
-model: anthropic/claude-sonnet-4-6
+model: opencode/minimax-m2.5-free
 temperature: 0.1
 permission:
   edit: deny

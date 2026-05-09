@@ -1,7 +1,7 @@
 ---
 description: Líder de Ciberseguridad y SecOps especializado en auditoría OWASP Top 10 y protección de datos financieros PII.
 mode: subagent
-model: anthropic/claude-sonnet-4-6
+model: opencode/minimax-m2.5-free
 temperature: 0.1
 permission:
   edit: deny

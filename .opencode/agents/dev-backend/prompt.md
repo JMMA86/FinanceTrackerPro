@@ -1,7 +1,7 @@
 ---
 description: Desarrollador Backend Senior especializado en Server Actions, operaciones de base de datos Prisma y seguridad financiera.
 mode: subagent
-model: anthropic/claude-sonnet-4-6
+model: opencode/minimax-m2.5-free
 tools:
   write: true
   edit: true

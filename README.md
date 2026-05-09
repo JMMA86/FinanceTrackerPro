@@ -90,7 +90,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### SonarQube Analysis
 
-- `npm run sonar` - Run SonarQube analysis + export issues to `.opencode/sonar-issues.json`
+- `npm run sonar` - Run sonar-scanner (`SONAR_TOKEN` must be set in the OS environment)
 - `npm run sonar:check` - Verify SonarQube server is running
 
 ### Git Hooks
@@ -102,7 +102,7 @@ Pre-commit hook (Husky + lint-staged):
 
 ## SonarQube Setup
 
-SonarQube provides static code analysis for code quality, security vulnerabilities, and technical debt detection.
+SonarQube provides static code analysis for code quality, security vulnerabilities, and technical debt detection. Results are accessed via the **SonarQube MCP server** configured in `opencode.jsonc` — no intermediate JSON file is generated.
 
 ### Local Setup
 
@@ -135,34 +135,42 @@ npm run sonar:check
    - Type: User Token
    - Copy token for next step
 
-6. Configure token in `.env`:
+6. Set the token in the OS environment:
 
-```bash
-# Add to .env file
-SONAR_TOKEN=squ_your_token_here
-SONAR_HOST_URL=http://localhost:9000
-SONAR_PROJECT_KEY=financetrackerpro
+```powershell
+# PowerShell — add to your profile for persistence
+$env:SONAR_TOKEN = "squ_your_token_here"
 ```
 
-7. Run complete analysis:
+> `sonar-scanner` 5.x reads `SONAR_TOKEN` natively from the OS environment. The MCP server in `opencode.jsonc` uses the same variable (`{env:SONAR_TOKEN}`). No `.env` file is needed for the scanner. All other settings (`sonar.host.url`, `sonar.projectKey`, etc.) are in `sonar-project.properties`.
+
+7. Run analysis:
 
 ```bash
-# Analyze + export issues in one step
 npm run sonar
 ```
 
 8. View results:
-   - Open http://localhost:9000
-   - Navigate to `financetrackerpro` project
-   - Issues also saved to `.opencode/sonar-issues.json`
+   - Web UI: http://localhost:9000/dashboard?id=financetrackerpro
+   - Via MCP tools in OpenCode (agents query issues, quality gate, and metrics directly)
+
+### MCP Integration
+
+The SonarQube MCP server (`@sonarqube/mcp-server`) is pre-configured in `opencode.jsonc`. It connects to the local SonarQube instance and exposes tools that agents use to:
+
+- Check Quality Gate status
+- Search issues by severity, type, or rule
+- Query coverage and duplication metrics
+- Review Security Hotspots
+
+This replaces the previous approach of fetching issues to `.opencode/sonar-issues.json`. Agents interact with SonarQube results in real time through MCP.
 
 ### Configuration
 
 - **Project config**: `sonar-project.properties`
 - **Docker setup**: `docker-compose.sonarqube.yml`
 - **Coverage path**: `coverage/lcov.info`
-- **Issues output**: `.opencode/sonar-issues.json` (auto-generated)
-- **Fetch script**: `scripts/fetch-sonar.ps1` (PowerShell)
+- **MCP config**: `opencode.jsonc` → `mcp.sonarqube`
 
 ### Quality Gates
 
@@ -178,8 +186,9 @@ Default quality gate enforces:
 
 **Merge blocked if**:
 
+- Quality Gate status is `ERROR`
 - Any BLOCKER or CRITICAL issues exist
-- Coverage drops below 80%
+- Coverage on new code drops below 80%
 - New security vulnerabilities introduced
 
 ### CI/CD Integration
@@ -208,18 +217,21 @@ For production CI/CD:
 
 - name: Check Quality Gate
   run: |
-    BLOCKER=$(cat .opencode/sonar-issues.json | jq '[.issues[] | select(.severity=="BLOCKER")] | length')
-    if [ "$BLOCKER" -gt 0 ]; then
-      echo "❌ Quality gate failed: $BLOCKER BLOCKER issues found"
+    STATUS=$(curl -s -u $SONAR_TOKEN: \
+      "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=financetrackerpro" \
+      | jq -r '.projectStatus.status')
+    if [ "$STATUS" != "OK" ]; then
+      echo "❌ Quality gate failed: $STATUS"
       exit 1
     fi
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 ```
 
 3. Configure quality gate in SonarQube UI to block PRs with issues
 
 ### Running Analysis Workflow
-
-Full workflow for code quality check:
 
 ```bash
 # 1. Verify SonarQube is running
@@ -228,42 +240,12 @@ npm run sonar:check
 # 2. Run tests with coverage (generates lcov.info)
 npm run test:coverage
 
-# 3. Analyze + export issues
+# 3. Trigger scanner analysis
 npm run sonar
-```
 
-Results:
-
-- Web UI: http://localhost:9000/dashboard?id=financetrackerpro
-- JSON file: `.opencode/sonar-issues.json`
-
-#### Understanding Output
-
-`sonar-issues.json` structure:
-
-```json
-{
-  "total": 6,
-  "issues": [...],
-  "hotspots": [...],
-  "qualityGate": {
-    "status": "ERROR",
-    "conditions": [
-      {
-        "metricKey": "new_coverage",
-        "status": "ERROR",
-        "actualValue": "65.4",
-        "errorThreshold": "80"
-      }
-    ]
-  },
-  "coverage": {
-    "coverage": "72.5",
-    "new_coverage": "65.4",
-    "new_lines_to_cover": "48",
-    "new_uncovered_lines": "17"
-  }
-}
+# 4. Results available in:
+#    - SonarQube UI: http://localhost:9000/dashboard?id=financetrackerpro
+#    - OpenCode agents: via MCP SonarQube tools
 ```
 
 **Severity levels**:

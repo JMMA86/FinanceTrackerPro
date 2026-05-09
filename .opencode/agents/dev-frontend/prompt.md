@@ -1,7 +1,7 @@
 ---
 description: Desarrollador Frontend Senior especializado en UI/UX, accesibilidad WCAG 2.2 AA y rendimiento con Next.js App Router.
 mode: subagent
-model: anthropic/claude-sonnet-4-6
+model: opencode/minimax-m2.5-free
 tools:
   write: true
   edit: true

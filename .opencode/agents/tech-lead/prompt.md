@@ -1,7 +1,7 @@
 ---
 description: Tech Lead orquestador de FinanceTrackerPro. Único agente primario. Analiza cada tarea, decide qué subagentes invocar y en qué orden, y valida que los quality gates se cumplan antes de cerrar cualquier ciclo.
 mode: primary
-model: anthropic/claude-sonnet-4-6
+model: opencode/minimax-m2.5-free
 tools:
   write: true
   edit: true

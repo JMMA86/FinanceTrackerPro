@@ -36,16 +36,25 @@
     }
   },
   "mcp": {
-    "finance-docs": {
-      "type": "remote",
-      // URL del servidor MCP interno de documentación financiera
-      "url": "https://mcp.financetrackerpro.internal/docs",
-      // Deshabilitar por defecto - activar solo en sesiones que requieran docs
-      "enabled": false,
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {env:FINANCE_API_KEY}"
-      }
+    "sonarqube": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "SONARQUBE_URL",
+        "-e",
+        "SONARQUBE_TOKEN",
+        "mcp/sonarqube"
+      ],
+      "environment": {
+        "SONARQUBE_URL": "http://host.docker.internal:9000",
+        "SONARQUBE_TOKEN": "{env:SONAR_TOKEN}"
+      },
+      "timeout": 15000
     }
   },
   "provider": {

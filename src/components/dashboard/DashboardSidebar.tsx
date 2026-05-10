@@ -10,10 +10,10 @@ import { useState, useEffect } from 'react';
 import type { Locale } from '@/lib/i18n';
 
 interface DashboardSidebarProps {
-  lang: Locale;
-  navigationLabels: Record<string, string>;
-  logoutLabel: string;
-  loggingOutLabel: string;
+  readonly lang: Locale;
+  readonly navigationLabels: Readonly<Record<string, string>>;
+  readonly logoutLabel: string;
+  readonly loggingOutLabel: string;
 }
 
 const SIDEBAR_WIDTH = {
@@ -92,22 +92,24 @@ export function DashboardSidebar({
           </div>
         </div>
 
-        {/* Toggle Button */}
+        {/* Toggle Button - Integrated design */}
         <button
           onClick={toggleSidebar}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
-          className="absolute top-20 -right-3 w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-all duration-200 border border-white/10 z-10 cursor-pointer"
+          className="absolute top-20 -right-3 w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-all duration-300 border border-white/10 z-10 cursor-pointer hover:scale-110 active:scale-95"
         >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-          ) : (
-            <ChevronLeft className="w-4 h-4 text-gray-300" />
-          )}
+          <span className="block transition-transform duration-300">
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4 text-gray-300" />
+            ) : (
+              <ChevronLeft className="w-4 h-4 text-gray-300" />
+            )}
+          </span>
         </button>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-3 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 py-2 overflow-y-auto scrollbar-hide">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.endsWith(item.href);
@@ -118,22 +120,54 @@ export function DashboardSidebar({
                 href={`/${lang}${item.href}`}
                 aria-current={isActive ? 'page' : undefined}
                 className={`
-                  flex items-center gap-3 px-4 py-4 rounded-xl
+                  group relative flex items-center gap-3 px-4 py-3.5 rounded-xl
                   transition-all duration-200
                   ${
                     isActive
-                      ? 'bg-theme-primary text-white shadow-theme-glow'
-                      : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      ? 'bg-theme-primary/20 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }
                 `}
                 title={navigationLabels[item.descKey] || item.descKey}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                {/* Active indicator bar - left side */}
+                {isActive && (
+                  <span 
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
+                    style={{
+                      background: 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)',
+                      boxShadow: '0 0 12px rgba(59, 130, 246, 0.6)',
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+
+                {/* Icon with hover micro-animation */}
+                <span className={`relative flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-105' : 'group-hover:-translate-y-0.5'}`}>
+                  <Icon 
+                    className={`w-5 h-5 transition-all duration-200 ${isActive ? 'text-blue-400 drop-shadow-lg' : 'text-gray-400 group-hover:text-white'}`} 
+                  />
+                  {/* Floating micro-dot on hover */}
+                  <span className="absolute -top-1 -right-1 w-1.5 h-1 rounded-full bg-blue-400/0 group-hover:bg-blue-400 group-hover:animate-ping transition-all duration-200" />
+                </span>
+
+                {/* Label with fade */}
                 <span
                   className={`text-sm font-medium whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
                 >
                   {navigationLabels[item.nameKey] || item.nameKey}
                 </span>
+
+                {/* Active glow effect */}
+                {isActive && (
+                  <span 
+                    className="absolute inset-0 rounded-xl pointer-events-none"
+                    style={{
+                      boxShadow: '0 0 20px rgba(59, 130, 246, 0.3), inset 0 0 20px rgba(59, 130, 246, 0.1)',
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
               </Link>
             );
           })}

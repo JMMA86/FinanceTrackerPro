@@ -263,6 +263,28 @@ body {
   }
 }
 
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.4s ease;
 }
@@ -283,9 +305,390 @@ body {
   animation: glow-pulse 4s infinite ease-in-out;
 }
 
+.animate-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.slide-in-from-top-4 {
+  animation: slideInFromTop 0.5s ease-out;
+}
+
+.slide-in-from-bottom-4 {
+  animation: slideInFromBottom 0.5s ease-out;
+}
+
+.slide-in-from-top-2 {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+.duration-500 {
+  animation-duration: 0.5s;
+}
+
+.duration-300 {
+  animation-duration: 0.3s;
+}
+
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
 /* Radial gradient utility */
 .bg-gradient-radial {
   background: radial-gradient(circle at center, var(--tw-gradient-from) 0%, transparent 70%);
+}
+
+/* ============================================================================
+   BUTTONS - Premium Cosmic Finance
+   ============================================================================ */
+
+/* Primary Button - Gradient with white top border */
+.btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 4px 14px -3px rgba(37, 99, 235, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(180deg, #4b91f7 0%, #2b6fd3 100%);
+  box-shadow:
+    0 6px 20px -4px rgba(37, 99, 235, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-primary:active {
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow:
+    0 2px 8px -2px rgba(37, 99, 235, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: scale(0.97);
+}
+
+.btn-primary:active::before {
+  opacity: 0;
+}
+
+/* Secondary Button - Animated dash sweep */
+.btn-secondary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 12px;
+  color: #8ebde6;
+  background: transparent;
+  border: 1px solid rgba(47, 124, 246, 0.4);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.btn-secondary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 1px;
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  background-size: 200% 100%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition:
+    opacity 0.25s,
+    background-position 0.5s;
+}
+
+.btn-secondary:hover {
+  color: #ffffff;
+  border-color: rgba(59, 130, 246, 0.8);
+  background: rgba(37, 99, 235, 0.25);
+}
+
+.btn-secondary:hover::before {
+  opacity: 1;
+  background-position: 100% 0;
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+  background: rgba(47, 124, 246, 0.15);
+}
+
+/* ============================================================================
+   BACKGROUND ENHANCEMENTS - Orb & Noise
+   ============================================================================ */
+
+/* Floating orb - top right */
+.bg-orb {
+  position: fixed;
+  top: -200px;
+  right: -200px;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  animation: orb-float 15s ease-in-out infinite;
+}
+
+@keyframes orb-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.6;
+  }
+  25% {
+    transform: translate(-20px, 30px) scale(1.05);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(-10px, 50px) scale(1);
+    opacity: 0.5;
+  }
+  75% {
+    transform: translate(20px, 20px) scale(1.03);
+    opacity: 0.7;
+  }
+}
+
+/* Noise texture overlay */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Enhanced grid overlay */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(88, 150, 220, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 150, 220, 0.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-pulse 8s ease-in-out infinite;
+}
+
+@keyframes grid-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   PAGE LOAD ANIMATIONS - Premium Staggered Reveal
+   ============================================================================ */
+
+/* Title text reveal */
+@keyframes text-reveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+.animate-text-reveal {
+  animation: text-reveal 0.8s cubic-bezier(0.77, 0, 0.175, 1) forwards;
+  opacity: 0;
+}
+
+/* Staggered children animation */
+@keyframes stagger-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-stagger > * {
+  opacity: 0;
+  animation: stagger-fade-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-stagger > *:nth-child(1) {
+  animation-delay: 100ms;
+}
+.animate-stagger > *:nth-child(2) {
+  animation-delay: 150ms;
+}
+.animate-stagger > *:nth-child(3) {
+  animation-delay: 200ms;
+}
+.animate-stagger > *:nth-child(4) {
+  animation-delay: 250ms;
+}
+.animate-stagger > *:nth-child(5) {
+  animation-delay: 300ms;
+}
+.animate-stagger > *:nth-child(6) {
+  animation-delay: 350ms;
+}
+.animate-stagger > *:nth-child(7) {
+  animation-delay: 400ms;
+}
+.animate-stagger > *:nth-child(8) {
+  animation-delay: 450ms;
+}
+
+/* ============================================================================
+   PREMIUM DASHBOARD ANIMATIONS
+   ============================================================================ */
+
+/* Hero card glow animation */
+@keyframes hero-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 60px -15px rgba(59, 130, 246, 0.5);
+  }
+}
+
+.animate-hero-glow {
+  animation: hero-glow 4s ease-in-out infinite;
+}
+
+/* Card entrance animation */
+@keyframes card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-card-enter {
+  animation: card-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Pulse glow effect */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Scale in effect */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Shimmer effect for loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Float up down animation */
+@keyframes float-up-down {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-float-up-down {
+  animation: float-up-down 3s ease-in-out infinite;
 }
 
 /* ============================================================================

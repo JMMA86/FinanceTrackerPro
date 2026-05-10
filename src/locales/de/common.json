@@ -30,6 +30,7 @@
     "fixedExpenses": "Fixkosten",
     "variableExpenses": "Variable Ausgaben",
     "loans": "Darlehen",
+    "creditCards": "Kreditkarten",
     "settings": "Einstellungen",
     "dashboardDesc": "Finanzübersicht",
     "transactionsDesc": "Transaktionsverlauf",
@@ -39,6 +40,7 @@
     "fixedExpensesDesc": "Wiederkehrende Ausgaben",
     "variableExpensesDesc": "Ausgaben nach Kategorie",
     "loansDesc": "Darlehensverwaltung",
+    "creditCardsDesc": "Kreditkartenverwaltung",
     "settingsDesc": "Systemeinstellungen"
   }
 }

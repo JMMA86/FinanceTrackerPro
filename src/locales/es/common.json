@@ -30,6 +30,7 @@
     "fixedExpenses": "Gastos Fijos",
     "variableExpenses": "Gastos Variables",
     "loans": "Préstamos",
+    "creditCards": "Tarjetas de Crédito",
     "settings": "Configuración",
     "dashboardDesc": "Vista general de finanzas",
     "transactionsDesc": "Historial de movimientos",
@@ -39,6 +40,7 @@
     "fixedExpensesDesc": "Gastos recurrentes",
     "variableExpensesDesc": "Gastos por categoría",
     "loansDesc": "Gestión de préstamos",
+    "creditCardsDesc": "Gestión de tarjetas de crédito",
     "settingsDesc": "Preferencias del sistema"
   }
 }

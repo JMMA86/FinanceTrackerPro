@@ -38,7 +38,18 @@
     "investmentsDesc": "Investment portfolio",
     "fixedExpensesDesc": "Recurring expenses",
     "variableExpensesDesc": "Expenses by category",
+    "loans": "Loans",
+    "creditCards": "Credit Cards",
+    "settings": "Settings",
+    "dashboardDesc": "Financial overview",
+    "transactionsDesc": "Transaction history",
+    "accountsDesc": "Account management",
+    "savingsDesc": "Savings goals",
+    "investmentsDesc": "Investment portfolio",
+    "fixedExpensesDesc": "Recurring expenses",
+    "variableExpensesDesc": "Expenses by category",
     "loansDesc": "Loan management",
+    "creditCardsDesc": "Credit card management",
     "settingsDesc": "System preferences"
   }
 }

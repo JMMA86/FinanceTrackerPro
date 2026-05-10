@@ -42,31 +42,34 @@ const staticRoutes = [
   '/es/settings',
   '/en/settings',
   '/de/settings',
+  '/es/credit-cards',
+  '/en/credit-cards',
+  '/de/credit-cards',
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   const getPriority = (route: string): number => {
-  if (route === '') return 1;
-  if (route.includes('/dashboard')) return 0.9;
-  return 0.7;
-};
-
-const getChangeFrequency = (route: string): 'weekly' | 'monthly' => {
-  return route === '' ? 'weekly' : 'monthly';
-};
-
-const routes = staticRoutes.map((route) => {
-  const url = route === '' ? BASE_URL : `${BASE_URL}${route}`;
-
-  return {
-    url,
-    lastModified: now,
-    changeFrequency: getChangeFrequency(route),
-    priority: getPriority(route),
+    if (route === '') return 1;
+    if (route.includes('/dashboard')) return 0.9;
+    return 0.7;
   };
-});
+
+  const getChangeFrequency = (route: string): 'weekly' | 'monthly' => {
+    return route === '' ? 'weekly' : 'monthly';
+  };
+
+  const routes = staticRoutes.map((route) => {
+    const url = route === '' ? BASE_URL : `${BASE_URL}${route}`;
+
+    return {
+      url,
+      lastModified: now,
+      changeFrequency: getChangeFrequency(route),
+      priority: getPriority(route),
+    };
+  });
 
   return routes;
 }

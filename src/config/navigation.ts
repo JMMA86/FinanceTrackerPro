@@ -8,6 +8,7 @@ import {
   ShoppingBasket,
   HandCoins,
   Settings,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -74,6 +75,13 @@ export const navigationItems: NavigationItem[] = [
     descKey: 'loansDesc',
     href: '/loans',
     icon: HandCoins,
+    showInMobile: false,
+  },
+  {
+    nameKey: 'creditCards',
+    descKey: 'creditCardsDesc',
+    href: '/credit-cards',
+    icon: CreditCard,
     showInMobile: false,
   },
   {

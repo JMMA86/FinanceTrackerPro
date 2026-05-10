@@ -229,14 +229,6 @@ describe('money.ts', () => {
       expect(result).toContain('1,050');
     });
 
-    it('should format with de-DE locale', () => {
-      // Given / When
-      const result = formatMoney(105000, 'EUR', 'de-DE');
-
-      // Then
-      expect(result).toContain('1.050');
-    });
-
     it('should fall back gracefully on invalid locale', () => {
       // Given / When
       const result = formatMoney(105000, 'USD', 'invalid-locale');

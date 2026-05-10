@@ -137,14 +137,10 @@ function getEmptyMetrics(): DashboardMetrics {
 }
 
 function getLocale(language: string): string {
-  switch (language) {
-    case 'es':
-      return 'es-CO';
-    case 'de':
-      return 'de-DE';
-    default:
-      return 'en-US';
+  if (language === 'es') {
+    return 'es-CO';
   }
+  return 'en-US';
 }
 
 // ===== Helper Functions =====

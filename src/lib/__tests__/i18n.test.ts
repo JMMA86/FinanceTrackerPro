@@ -93,7 +93,6 @@ describe('i18n.ts', () => {
       // Given / When / Then
       expect(isValidLocale('es')).toBe(true);
       expect(isValidLocale('en')).toBe(true);
-      expect(isValidLocale('de')).toBe(true);
     });
 
     it('should return false for unsupported locales', () => {
@@ -168,12 +167,11 @@ describe('i18n.ts', () => {
       expect(DEFAULT_LOCALE).toBe('es');
     });
 
-    it('should support exactly 3 locales', () => {
+    it('should support exactly 2 locales', () => {
       // Given / When / Then
       expect(SUPPORTED_LOCALES).toContain('es');
       expect(SUPPORTED_LOCALES).toContain('en');
-      expect(SUPPORTED_LOCALES).toContain('de');
-      expect(SUPPORTED_LOCALES).toHaveLength(3);
+      expect(SUPPORTED_LOCALES).toHaveLength(2);
     });
   });
 });

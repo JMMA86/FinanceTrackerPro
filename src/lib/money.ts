@@ -128,7 +128,7 @@ export function calculateMonthlyPayment(
  * Format money for display with locale support
  * @param cents Amount in cents
  * @param currency ISO 4217 currency code
- * @param locale Locale string (e.g., 'es-CO', 'en-US', 'de-DE')
+ * @param locale Locale string (e.g., 'es-CO', 'en-US')
  * @returns Formatted currency string
  */
 export function formatMoney(cents: number, currency: string, locale: string = 'es-CO'): string {

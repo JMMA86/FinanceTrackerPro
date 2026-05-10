@@ -3,10 +3,10 @@
  * Handles locale detection and dictionary loading
  */
 
-export type Locale = 'es' | 'en' | 'de';
+export type Locale = 'es' | 'en';
 
 export const DEFAULT_LOCALE: Locale = 'es';
-export const SUPPORTED_LOCALES: Locale[] = ['es', 'en', 'de'];
+export const SUPPORTED_LOCALES: Locale[] = ['es', 'en'];
 
 type Dictionary = Record<string, unknown>;
 

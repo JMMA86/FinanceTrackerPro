@@ -16,7 +16,6 @@ interface LanguageSelectorProps {
   labels: {
     es: string;
     en: string;
-    de: string;
   };
 }
 

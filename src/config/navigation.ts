@@ -3,12 +3,10 @@ import {
   ArrowLeftRight,
   Wallet,
   PiggyBank,
-  LineChart,
   Home,
   ShoppingBasket,
   HandCoins,
   Settings,
-  CreditCard,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -50,13 +48,6 @@ export const navigationItems: NavigationItem[] = [
     showInMobile: true,
   },
   {
-    nameKey: 'investments',
-    descKey: 'investmentsDesc',
-    href: '/investments',
-    icon: LineChart,
-    showInMobile: false,
-  },
-  {
     nameKey: 'fixedExpenses',
     descKey: 'fixedExpensesDesc',
     href: '/fixed-expenses',
@@ -75,13 +66,6 @@ export const navigationItems: NavigationItem[] = [
     descKey: 'loansDesc',
     href: '/loans',
     icon: HandCoins,
-    showInMobile: false,
-  },
-  {
-    nameKey: 'creditCards',
-    descKey: 'creditCardsDesc',
-    href: '/credit-cards',
-    icon: CreditCard,
     showInMobile: false,
   },
   {

@@ -176,9 +176,7 @@ describe('dashboard.actions.ts', () => {
 
     it.each([
       ['es', 'es-CO'],
-      ['de', 'de-DE'],
       ['en', 'en-US'],
-      ['fr', 'en-US'], // default branch
     ])('maps lang=%s → locale=%s passed to formatMoney', async (lang, expectedLocale) => {
       await getDashboardMetricsByUser(USER_ID, lang);
 

@@ -28,7 +28,7 @@ Enterprise-grade financial management system with **ACID transactions**, **high-
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL 14+
+- Docker Desktop (for local Postgres)
 
 ### Installation
 
@@ -38,10 +38,36 @@ Install dependencies:
 npm install
 ```
 
-Configure environment (`.env`):
+Create environment file from `.env.example` and fill the required values:
+
+```bash
+cp .env.example .env
+```
+
+Required variables (local Postgres):
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/financetracker"
+POSTGRES_HOST=
+POSTGRES_PORT=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=
+POSTGRES_SCHEMA=
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
+```
+
+Optional variables:
+
+```env
+SONAR_TOKEN=
+```
+
+You do not need PostgreSQL installed locally; use Docker Compose to run it.
+
+Start local Postgres (Docker Compose):
+
+```bash
+docker-compose -f docker-compose.postgres.yml up -d
 ```
 
 Setup database:

@@ -3,7 +3,7 @@
  * Uses TEST_DATABASE_URL for isolated test environment
  */
 
-import 'dotenv/config';
+import './src/lib/env';
 import { beforeAll, afterAll, vi } from 'vitest';
 
 const TEST_DB_NAME = 'financetrackerpro_test';

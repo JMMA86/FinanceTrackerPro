@@ -1,4 +1,3 @@
-import { getDictionary, get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import type { Metadata } from 'next';
 import { unstable_noStore } from 'next/cache';
@@ -40,17 +39,21 @@ export default async function DashboardPage({ params }: Readonly<DashboardPagePr
   unstable_noStore();
 
   const { lang } = await params;
-  const dashboard = await getDictionary(lang, 'dashboard');
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-theme-gradient text-glow">
-        {get(dashboard, 'title')}
-      </h1>
+    <div className="space-y-6 relative">
+      {/* Floating orb background */}
+      <div className="bg-orb" aria-hidden="true" />
+      {/* Noise texture overlay */}
+      <div className="noise-overlay" aria-hidden="true" />
+      {/* Grid overlay */}
+      <div className="grid-overlay" aria-hidden="true" />
 
       {/* PPR with Suspense - Static shell loads instantly, data loads async */}
       <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardMetrics lang={lang} />
+        <div className="animate-stagger">
+          <DashboardMetrics lang={lang} />
+        </div>
       </Suspense>
     </div>
   );

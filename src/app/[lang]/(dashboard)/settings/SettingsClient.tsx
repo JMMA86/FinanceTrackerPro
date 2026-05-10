@@ -48,8 +48,6 @@ export default function SettingsClient({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-theme-gradient">{get(settings, 'title')}</h1>
-
       {/* Language Settings */}
       <div className="app-shell rounded-2xl p-6">
         <div className="flex items-start gap-4">

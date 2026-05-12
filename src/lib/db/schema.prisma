@@ -15,11 +15,9 @@ datasource db {
 // ============================================================================
 
 enum Currency {
+  COP // Colombian Peso
   USD // US Dollar
   EUR // Euro
-  GBP // British Pound
-  COP // Colombian Peso
-  MXN // Mexican Peso
 }
 
 enum Language {
@@ -35,10 +33,19 @@ enum Theme {
 }
 
 enum AccountType {
-  SAVINGS       // Cuenta de Ahorros
-  INVESTMENT    // Cuenta de Inversión
-  CREDIT_CARD   // Tarjeta de Crédito
-  POCKET        // Bolsillo (sub-account)
+  CHECKING      // Cuenta Corriente bancaria
+  CASH          // Efectivo en billetera
+  SAVINGS       // Cuenta de Ahorros bancaria
+  POCKET        // Bolsillo (sub-cuenta)
+  INVESTMENT    // Reservado — sección Inversiones
+  CREDIT_CARD   // Reservado — sección Tarjetas
+}
+
+enum CardNetwork {
+  NONE
+  VISA
+  MASTERCARD
+  AMEX
 }
 
 enum TransactionType {
@@ -172,6 +179,14 @@ model Account {
 
   // Relations
   transactions      Transaction[]
+
+  // Card personalization
+  cardColor         String?     // Hex color or preset theme key
+  cardImageUrl      String?     // Custom background image URL
+  cardNetwork       CardNetwork @default(NONE)
+
+  // Idempotency (Rule 12)
+  idempotencyKey    String?     @unique
 
   // Audit fields (Rule 4)
   isActive          Boolean     @default(true)

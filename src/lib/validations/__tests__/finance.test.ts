@@ -12,17 +12,17 @@ import {
 
 describe('finance.ts validation schemas', () => {
   describe('CurrencySchema', () => {
-    it('should accept all valid ISO 4217 currency codes', () => {
+    it('should accept COP, USD and EUR', () => {
       // Given / When / Then
+      expect(() => CurrencySchema.parse('COP')).not.toThrow();
       expect(() => CurrencySchema.parse('USD')).not.toThrow();
       expect(() => CurrencySchema.parse('EUR')).not.toThrow();
-      expect(() => CurrencySchema.parse('GBP')).not.toThrow();
-      expect(() => CurrencySchema.parse('COP')).not.toThrow();
-      expect(() => CurrencySchema.parse('MXN')).not.toThrow();
     });
 
     it('should reject unsupported currency codes', () => {
       // Given / When / Then
+      expect(() => CurrencySchema.parse('GBP')).toThrow();
+      expect(() => CurrencySchema.parse('MXN')).toThrow();
       expect(() => CurrencySchema.parse('XXX')).toThrow();
       expect(() => CurrencySchema.parse('INVALID')).toThrow();
     });

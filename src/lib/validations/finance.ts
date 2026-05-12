@@ -20,7 +20,7 @@ export const MIN_SAFE_CENTS = 1;
 /**
  * ISO 4217 Currency codes supported
  */
-export const CurrencySchema = z.enum(['USD', 'EUR', 'GBP', 'COP', 'MXN']);
+export const CurrencySchema = z.enum(['COP', 'USD', 'EUR']);
 
 /**
  * Account types

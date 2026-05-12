@@ -19,6 +19,7 @@ type ModalId =
   | 'create-transaction'
   | 'create-transfer'
   | 'edit-account'
+  | 'edit-pocket'
   | 'delete-confirm'
   | 'settings'
   | null;

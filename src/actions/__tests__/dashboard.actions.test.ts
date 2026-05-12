@@ -62,17 +62,17 @@ const FIXED_NOW = new Date('2024-06-15T12:00:00.000Z');
 
 const USER_ID = 'user-test-123';
 
-type AccountRow = {
+type _AccountRow = {
   id: string;
   name: string;
   balanceCents: number;
-  currency: 'COP' | 'USD' | 'EUR' | 'GBP' | 'MXN';
+  currency: 'COP' | 'USD' | 'EUR';
   type: string;
   creditLimitCents: number | null;
   interestRateEA: number | Decimal | null;
 };
 
-function makeAccount(overrides: Partial<AccountRow> = {}): AccountRow {
+function makeAccount(overrides: Record<string, unknown> = {}) {
   return {
     id: 'acc-1',
     name: 'Test Account',
@@ -82,30 +82,28 @@ function makeAccount(overrides: Partial<AccountRow> = {}): AccountRow {
     creditLimitCents: null,
     interestRateEA: null,
     ...overrides,
-  };
+  } as unknown as Awaited<ReturnType<typeof prisma.account.findMany>>[number];
 }
 
-function makeLoanRow(overrides: Partial<{ id: string; name: string; balanceCents: number }> = {}) {
-  return { id: 'loan-1', name: 'Test Loan', balanceCents: 500_000, ...overrides };
+function makeLoanRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'loan-1',
+    name: 'Test Loan',
+    balanceCents: 500_000,
+    ...overrides,
+  } as unknown as Awaited<ReturnType<typeof prisma.loan.findMany>>[number];
 }
 
-function makeTxRow(overrides: Partial<{
-  id: string;
-  description: string | null;
-  amountCents: number;
-  currency: 'COP' | 'USD';
-  type: string;
-  date: Date;
-}> = {}) {
+function makeTxRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'tx-1',
     description: 'Test',
     amountCents: 10_000,
-    currency: 'COP' as const,
+    currency: 'COP',
     type: 'INCOME',
     date: new Date('2024-06-10T00:00:00.000Z'),
     ...overrides,
-  };
+  } as unknown as Awaited<ReturnType<typeof prisma.transaction.findMany>>[number];
 }
 
 // Single transaction to bypass the early-return (accounts=0, txs=0) guard
@@ -156,7 +154,7 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('queries the database with the correct userId when session exists', async () => {
-      mockGetSession.mockResolvedValue({ userId: USER_ID });
+      mockGetSession.mockResolvedValue({ userId: USER_ID, email: 'test@example.com', name: 'Test' });
 
       await getDashboardMetrics('en');
 

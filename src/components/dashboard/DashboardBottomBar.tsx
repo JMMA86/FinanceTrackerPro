@@ -15,7 +15,7 @@ export function DashboardBottomBar({ lang, navigationLabels }: Readonly<Dashboar
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[65] border-t backdrop-blur-xl"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--app-bg-mid) 78%, transparent)',
         borderColor: 'rgba(255, 255, 255, 0.10)',

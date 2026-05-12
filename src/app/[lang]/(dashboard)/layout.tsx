@@ -33,7 +33,8 @@ export default async function DashboardLayout({
       />
 
       {/* Main Content Area */}
-      <main className="md:ml-(--sidebar-width) min-h-screen pb-20 md:pb-0 border-l border-white/10 transition-all duration-300 relative z-0">
+      {/* z-0 removed: it created a stacking context that trapped AccountFullDetail below the sidebar */}
+      <main className="md:ml-(--sidebar-width) min-h-screen pb-20 md:pb-0 border-l border-white/10 transition-all duration-300">
         <div className="container mx-auto max-w-[1920px] px-3 py-4 sm:px-4 md:px-6 md:py-6">
           {children}
         </div>

@@ -50,6 +50,10 @@ const buildMockAccount = (overrides: Partial<Account> = {}): Account => ({
   paymentDueDay: null,
   parentAccountId: null,
   lastReconciled: null,
+  idempotencyKey: null,
+  cardColor: null,
+  cardImageUrl: null,
+  cardNetwork: 'NONE' as const,
   ...overrides,
 });
 

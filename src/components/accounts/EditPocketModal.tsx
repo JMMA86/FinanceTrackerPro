@@ -10,6 +10,7 @@ import { useUIStore } from '@/store/ui.store';
 import { updateBankAccount } from '@/actions/account.actions';
 import { UpdateAccountSchema, type UpdateAccountInput } from '@/actions/account.schema';
 import { get } from '@/lib/i18n';
+import { log } from '@/lib/logger';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import type { AccountCardData } from './AccountCard';
 
@@ -50,6 +51,7 @@ export function EditPocketModal({ pockets, dictionary }: Readonly<EditPocketModa
 
   useEffect(() => {
     if (isOpen && pocket) {
+      log.info({ action: 'pocket.edit.open', pocketId: pocket.id }, 'Edit pocket modal opened');
       const rate = toRateHundredths(pocket.interestRateEA);
       reset({ accountId: pocket.id, name: pocket.name, interestRateEA: rate / 100 });
       // setState inside rAF callback satisfies react-hooks/set-state-in-effect
@@ -76,15 +78,18 @@ export function EditPocketModal({ pockets, dictionary }: Readonly<EditPocketModa
   }, [isOpen, handleClose]);
 
   async function onSubmit(data: UpdateAccountInput) {
+    log.info({ action: 'pocket.update.submit', pocketId: data.accountId }, 'Pocket update submit');
     const result = await updateBankAccount(data);
     if (result.success) {
       const newName = data.name ?? pocket.name;
       document.dispatchEvent(new CustomEvent('finance:account-updated', {
         detail: { accountId: pocket.id, cardColor: pocket.cardColor, name: newName, interestRateEA: data.interestRateEA },
       }));
+      log.info({ action: 'pocket.update.success', pocketId: pocket.id }, 'Pocket updated (client)');
       addNotification('success', get(dictionary, 'updateSuccess') as string);
       handleClose();
     } else {
+      log.info({ action: 'pocket.update.failure', pocketId: data.accountId, code: result.code }, 'Pocket update failed (client)');
       addNotification('error', get(dictionary, 'errors.updateFailed') as string);
     }
   }

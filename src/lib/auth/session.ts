@@ -6,6 +6,7 @@
 import 'server-only';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { log } from '@/lib/logger';
 
 const SECRET_KEY = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-secret-key-change-in-production-min-32-chars-long'
@@ -30,6 +31,7 @@ export async function createSession(data: SessionData): Promise<string> {
     .setExpirationTime('7d')
     .sign(SECRET_KEY);
 
+  log.info({ action: 'session.create', userId: data.userId, email: data.email }, 'Session JWT created');
   return token;
 }
 
@@ -41,6 +43,7 @@ export async function verifySession(token: string): Promise<SessionData | null> 
     const verified = await jwtVerify(token, SECRET_KEY);
     return verified.payload as unknown as SessionData;
   } catch {
+    log.info({ action: 'session.verify.fail' }, 'Session JWT verification failed');
     return null;
   }
 }
@@ -57,6 +60,7 @@ export async function setSessionCookie(token: string): Promise<void> {
     maxAge: SESSION_DURATION / 1000,
     path: '/',
   });
+  log.info({ action: 'session.cookie.set' }, 'Session cookie set');
 }
 
 /**
@@ -79,6 +83,7 @@ export async function getSession(): Promise<SessionData | null> {
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
+  log.info({ action: 'session.cookie.delete' }, 'Session cookie deleted');
 }
 
 /**

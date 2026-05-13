@@ -6,6 +6,7 @@ import { AlertTriangle, X, Trash2 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { deleteBankAccount } from '@/actions/account.actions';
 import { get } from '@/lib/i18n';
+import { log } from '@/lib/logger';
 
 interface DeleteConfirmModalProps {
   dictionary: Record<string, unknown>;
@@ -31,15 +32,23 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
 
   useEffect(() => {
     if (isOpen) {
+      log.info(
+        { action: 'account.delete.open', accountId, isPocket },
+        'Delete confirm modal opened',
+      );
       const id = requestAnimationFrame(() => setIsVisible(true));
       return () => cancelAnimationFrame(id);
     }
     const id = requestAnimationFrame(() => setIsVisible(false));
     return () => cancelAnimationFrame(id);
-  }, [isOpen]);
+  }, [isOpen, accountId, isPocket]);
 
   const handleDelete = useCallback(async () => {
     if (!accountId) return;
+    log.info(
+      { action: 'account.delete.submit', accountId, isPocket },
+      'Delete account submit',
+    );
     setIsDeleting(true);
 
     const result = await deleteBankAccount({ accountId });
@@ -49,6 +58,10 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
       addNotification('success', get(dictionary, `delete${isPocket ? 'Pocket' : 'Account'}Success`) as string);
       setIsDeleting(false);
       closeModal();
+      log.info(
+        { action: 'account.delete.success', accountId, isPocket },
+        'Account deleted (client)',
+      );
       if (isPocket) {
         document.dispatchEvent(new CustomEvent('finance:pocket-deleted', { detail: { pocketId: accountId } }));
         document.dispatchEvent(new CustomEvent('finance:account-deleted', { detail: { accountId } }));
@@ -56,6 +69,10 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
         document.dispatchEvent(new CustomEvent('finance:account-deleted', { detail: { accountId } }));
       }
     } else {
+      log.info(
+        { action: 'account.delete.failure', accountId, isPocket, code: result.code },
+        'Account delete failed (client)',
+      );
       addNotification('error', get(dictionary, 'errors.deleteFailed') as string);
       setIsDeleting(false);
     }

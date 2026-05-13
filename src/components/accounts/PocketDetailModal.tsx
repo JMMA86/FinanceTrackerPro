@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TrendingUp, ChevronLeft, ChevronRight, Activity, Pencil, Trash2 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
+import { log } from '@/lib/logger';
 import { getAccountTransactions } from '@/actions/account-transactions.actions';
 import { TYPE_GRADIENTS } from './AccountCard';
 import type { AccountCardData } from './AccountCard';
@@ -99,6 +100,7 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
       setLiveRate(null);
       setIsVisible(true);
     });
+    log.info({ action: 'pocket.detail.open', pocketId }, 'Pocket detail opened');
     return () => cancelAnimationFrame(id);
   }, [pocket?.id]);
 
@@ -135,7 +137,10 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
   const handleClose = useCallback(() => {
     setIsVisible(false);
     setTimeout(onClose, ANIM_MS);
-  }, [onClose]);
+    if (pocketId) {
+      log.info({ action: 'pocket.detail.close', pocketId }, 'Pocket detail closed');
+    }
+  }, [onClose, pocketId]);
 
   useEffect(() => {
     if (!pocket) return;

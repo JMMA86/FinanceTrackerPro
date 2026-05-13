@@ -23,7 +23,7 @@ function maskEmail(email: string): string {
   if (!local || !domain) return email;
   const maskedLocal = local.length > 2 ? local[0] + '***' : local[0] + '**';
   const domainParts = domain.split('.');
-  const maskedDomain = domainParts.length > 1 
+  const maskedDomain = domainParts.length > 1
     ? domainParts[0][0] + '***.' + domainParts.slice(1).join('.')
     : domain;
   return `${maskedLocal}@${maskedDomain}`;
@@ -55,7 +55,7 @@ function getMaskType(key: string): string {
 
 function maskValue(key: string, value: unknown): unknown {
   if (typeof value !== 'string') return value;
-  
+
   const maskType = getMaskType(key);
   switch (maskType) {
     case 'email':
@@ -71,7 +71,7 @@ function maskValue(key: string, value: unknown): unknown {
 
 function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
-  
+
   for (const [key, value] of Object.entries(obj)) {
     if (isPIIField(key)) {
       sanitized[key] = maskValue(key, value);
@@ -81,7 +81,7 @@ function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
       sanitized[key] = value;
     }
   }
-  
+
   return sanitized;
 }
 
@@ -143,8 +143,6 @@ export const log = {
   debug: (obj: object | string, msg?: string) => logWithSanitization('debug', obj, msg),
   trace: (obj: object | string, msg?: string) => logWithSanitization('trace', obj, msg),
 };
-
-export default logger;
 
 export { sanitizeObject, maskEmail, maskPhone, maskString };
 export { PII_FIELDS };

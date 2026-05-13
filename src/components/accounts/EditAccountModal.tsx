@@ -10,6 +10,7 @@ import { useUIStore } from '@/store/ui.store';
 import { updateBankAccount } from '@/actions/account.actions';
 import { UpdateAccountSchema, type UpdateAccountInput } from '@/actions/account.schema';
 import { get } from '@/lib/i18n';
+import { log } from '@/lib/logger';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { CardDesignPicker } from './CardDesignPicker';
 import type { AccountCardData } from './AccountCard';
@@ -53,6 +54,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
 
   useEffect(() => {
     if (isOpen && account) {
+      log.info({ action: 'account.edit.open', accountId: account.id }, 'Edit account modal opened');
       const rate = toRateHundredths(account.interestRateEA);
       const accountCardColor = account.cardColor ?? null;
       reset({ accountId: account.id, name: account.name, interestRateEA: rate / 100 });
@@ -81,14 +83,17 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
   }, [isOpen, handleClose]);
 
   async function onSubmit(data: UpdateAccountInput) {
+    log.info({ action: 'account.update.submit', accountId: data.accountId }, 'Account update submit');
     const result = await updateBankAccount({ ...data, cardColor });
     if (result.success) {
       document.dispatchEvent(new CustomEvent('finance:account-updated', {
         detail: { accountId: account.id, cardColor },
       }));
+      log.info({ action: 'account.update.success', accountId: account.id }, 'Account updated (client)');
       addNotification('success', get(dictionary, 'updateSuccess') as string);
       handleClose();
     } else {
+      log.info({ action: 'account.update.failure', accountId: data.accountId, code: result.code }, 'Account update failed (client)');
       addNotification('error', get(dictionary, 'errors.updateFailed') as string);
     }
   }

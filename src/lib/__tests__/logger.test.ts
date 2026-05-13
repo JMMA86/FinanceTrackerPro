@@ -5,8 +5,8 @@ import {
   maskPhone,
   maskString,
   PII_FIELDS,
-} from '../logger';
-import { log } from '../logger';
+  log,
+} from '@/lib/logger';
 
 describe('logger.ts PII masking and sanitization', () => {
   describe('maskEmail', () => {
@@ -169,7 +169,7 @@ describe('logger.ts PII masking and sanitization', () => {
 
   describe('log.warn (line 141)', () => {
     beforeEach(() => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(console, 'warn').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -191,7 +191,7 @@ describe('logger.ts PII masking and sanitization', () => {
 
   describe('log.debug (line 143)', () => {
     beforeEach(() => {
-      vi.spyOn(console, 'debug').mockImplementation(() => {});
+      vi.spyOn(console, 'debug').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -213,7 +213,7 @@ describe('logger.ts PII masking and sanitization', () => {
 
   describe('log.trace (line 144)', () => {
     beforeEach(() => {
-      vi.spyOn(console, 'trace').mockImplementation(() => {});
+      vi.spyOn(console, 'trace').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -235,7 +235,7 @@ describe('logger.ts PII masking and sanitization', () => {
 
   describe('log.fatal (line 139)', () => {
     beforeEach(() => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => { });
     });
 
     afterEach(() => {

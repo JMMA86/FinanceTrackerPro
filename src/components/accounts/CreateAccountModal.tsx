@@ -10,6 +10,7 @@ import { useUIStore } from '@/store/ui.store';
 import { createBankAccount } from '@/actions/account.actions';
 import { CreateAccountSchema, type CreateAccountInput } from '@/actions/account.schema';
 import { get } from '@/lib/i18n';
+import { log } from '@/lib/logger';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { CardDesignPicker } from './CardDesignPicker';
 import { NetworkLogo } from './AccountCard';
@@ -61,6 +62,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
 
   useEffect(() => {
     if (!isOpen) return;
+    log.info({ action: 'account.modal.open', type: isPocket ? 'POCKET' : 'ACCOUNT' }, 'Create account modal opened');
     const parent = prefillParentId ? accounts.find((a) => a.id === prefillParentId) : null;
     reset({
       idempotencyKey: crypto.randomUUID(),
@@ -78,7 +80,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
       setCardNetwork('NONE');
     });
     return () => cancelAnimationFrame(id);
-  }, [isOpen, accounts, prefillParentId, prefillType, reset]);
+  }, [isOpen, accounts, prefillParentId, prefillType, reset, isPocket]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -88,15 +90,21 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
   }, [isOpen, closeModal]);
 
   async function onSubmit(data: CreateAccountInput) {
+    log.info(
+      { action: 'account.create.submit', type: data.type, parentAccountId: data.parentAccountId ?? null },
+      'Create account submit',
+    );
     const result = await createBankAccount({
       ...data,
       cardColor: cardColor ?? undefined,
       cardNetwork,
     });
     if (result.success) {
+      log.info({ action: 'account.create.success', accountId: result.data.account.id }, 'Account created (client)');
       addNotification('success', get(dictionary, 'createSuccess') as string);
       closeModal();
     } else {
+      log.info({ action: 'account.create.failure', code: result.code }, 'Account create failed (client)');
       const msg = result.code === 'SESSION_INVALID'
         ? (get(dictionary, 'errors.sessionInvalid') as string)
         : (get(dictionary, 'errors.createFailed') as string);

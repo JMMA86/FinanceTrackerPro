@@ -8,7 +8,7 @@
  */
 
 import { Decimal } from 'decimal.js';
-import { log } from './logger';
+import { log } from '@/lib/logger';
 
 // Configure Decimal.js globally
 Decimal.set({
@@ -204,7 +204,7 @@ export function assertConversionMatches(
   if (computed !== convertedCents) {
     throw new Error(
       `Conversion mismatch: ${originalCents} * ${exchangeRate} = ${computed}, ` +
-        `but got ${convertedCents}`
+      `but got ${convertedCents}`
     );
   }
 }

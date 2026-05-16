@@ -12,10 +12,17 @@ import { get } from '@/lib/i18n';
 import { log } from '@/lib/logger';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { CardDesignPicker } from './CardDesignPicker';
-import type { AccountCardData } from './AccountCard';
+import { NetworkLogo } from './AccountCard';
+import type { AccountCardData, CardNetwork } from './AccountCard';
 
 const RATE_TYPES = new Set(['SAVINGS', 'POCKET']);
 const MAX_RATE = 10_000;
+const NETWORKS: { value: CardNetwork; labelKey: string }[] = [
+  { value: 'NONE', labelKey: 'networks.NONE' },
+  { value: 'VISA', labelKey: 'visa' },
+  { value: 'MASTERCARD', labelKey: 'mastercard' },
+  { value: 'AMEX', labelKey: 'amex' },
+];
 
 function toRateHundredths(rate: number | null | undefined): number {
   return rate == null ? 0 : Math.round(Number(rate) * 100);
@@ -39,6 +46,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [rateHundredths, setRateHundredths] = useState(0);
   const [cardColor, setCardColor] = useState<string | null>(null);
+  const [cardNetwork, setCardNetwork] = useState<CardNetwork>('NONE');
   const [isVisible, setIsVisible] = useState(false);
 
   const {
@@ -70,10 +78,12 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
     log.info({ action: 'account.edit.open', accountId: account.id }, 'Edit account modal opened');
     const rate = toRateHundredths(account.interestRateEA);
     const accountCardColor = account.cardColor ?? null;
+    const accountCardNetwork = (account.cardNetwork as CardNetwork) ?? 'NONE';
     reset({ accountId: account.id, name: account.name, interestRateEA: rate / 100 });
     const id = requestAnimationFrame(() => {
       setRateHundredths(rate);
       setCardColor(accountCardColor);
+      setCardNetwork(accountCardNetwork);
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
@@ -94,10 +104,10 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
 
   async function onSubmit(data: UpdateAccountInput) {
     log.info({ action: 'account.update.submit', accountId: data.accountId }, 'Account update submit');
-    const result = await updateBankAccount({ ...data, cardColor });
+    const result = await updateBankAccount({ ...data, cardColor, cardNetwork });
     if (result.success) {
       document.dispatchEvent(new CustomEvent('finance:account-updated', {
-        detail: { accountId: account.id, cardColor },
+        detail: { accountId: account.id, cardColor, cardNetwork },
       }));
       log.info({ action: 'account.update.success', accountId: account.id }, 'Account updated (client)');
       addNotification('success', get(dictionary, 'updateSuccess'));
@@ -162,6 +172,36 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
                 className={`${inputCls} font-mono tabular-nums`} />
             </div>
           )}
+
+          <div>
+            <p className={labelCls}>{get(dictionary, 'paymentNetwork')}</p>
+            <div className="grid grid-cols-4 gap-2">
+              {NETWORKS.map(({ value, labelKey }) => {
+                const isSelected = cardNetwork === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCardNetwork(value)}
+                    aria-pressed={isSelected}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-medium transition-all ${isSelected
+                      ? 'border-blue-500/60 bg-blue-500/15 text-white'
+                      : 'border-white/10 bg-white/4 text-slate-400 hover:border-white/20'
+                      }`}
+                  >
+                    {value === 'NONE' ? (
+                      <span className="text-base">—</span>
+                    ) : (
+                      <span className="h-4 flex items-center">
+                        <NetworkLogo network={value} size="sm" />
+                      </span>
+                    )}
+                    <span className="text-[10px]">{get(dictionary, labelKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <CardDesignPicker cardColor={cardColor} onColorChange={setCardColor} dictionary={dictionary} />
 

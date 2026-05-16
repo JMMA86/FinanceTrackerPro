@@ -53,7 +53,7 @@ async function getBankAccountsInternal(_input: Record<string, never>) {
 
   return accounts.map((a) => ({
     ...a,
-    interestRateEA: a.interestRateEA !== null ? Number(a.interestRateEA) : null,
+    interestRateEA: a.interestRateEA == null ? null : Number(a.interestRateEA),
   }));
 }
 
@@ -127,7 +127,7 @@ async function createBankAccountInternal(input: unknown) {
   revalidatePath('/[lang]/accounts', 'page');
   revalidatePath('/[lang]/dashboard', 'page');
   return {
-    account: { ...account, interestRateEA: account.interestRateEA != null ? Number(account.interestRateEA) : null },
+    account: { ...account, interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA) },
     wasIdempotent: false,
   };
 }
@@ -141,7 +141,7 @@ async function updateBankAccountInternal(input: unknown) {
   const validated = UpdateAccountSchema.parse(input);
 
   const account = await prisma.account.findUnique({ where: { id: validated.accountId } });
-  if (!account || !account.isActive) throw new NotFoundError('Account', validated.accountId);
+  if (!account?.isActive) throw new NotFoundError('Account', validated.accountId);
   if (account.userId !== session.userId) throw new UnauthorizedError();
 
   const updated = await prisma.account.update({
@@ -158,7 +158,7 @@ async function updateBankAccountInternal(input: unknown) {
   log.info({ action: 'account.update', accountId: updated.id, userId: session.userId }, 'Account updated');
   revalidatePath('/[lang]/accounts', 'page');
   return {
-    account: { ...updated, interestRateEA: updated.interestRateEA != null ? Number(updated.interestRateEA) : null },
+    account: { ...updated, interestRateEA: updated.interestRateEA == null ? null : Number(updated.interestRateEA) },
   };
 }
 
@@ -171,7 +171,7 @@ async function deleteBankAccountInternal(input: unknown) {
   const { accountId } = DeleteAccountSchema.parse(input);
 
   const account = await prisma.account.findUnique({ where: { id: accountId } });
-  if (!account || !account.isActive) throw new NotFoundError('Account', accountId);
+  if (!account?.isActive) throw new NotFoundError('Account', accountId);
   if (account.userId !== session.userId) throw new UnauthorizedError();
 
   await prisma.account.update({

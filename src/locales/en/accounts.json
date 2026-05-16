@@ -43,6 +43,17 @@
   "cardPreview": "Preview",
   "pocketOf": "Pocket of",
   "pocket": "Pocket",
+  "newPocket": "New pocket",
+  "pocketName": "Pocket name",
+  "pocketNamePlaceholder": "E.g. Travel, Shopping...",
+  "accountNamePlaceholder": "E.g. Payroll Account",
+  "paymentNetwork": "Payment network",
+  "networks": {
+    "NONE": "None"
+  },
+  "visa": "Visa",
+  "mastercard": "Mastercard",
+  "amex": "Amex",
   "types": {
     "SAVINGS": "Savings Account",
     "CHECKING": "Checking Account",

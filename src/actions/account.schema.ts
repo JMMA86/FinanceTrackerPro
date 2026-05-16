@@ -5,7 +5,7 @@ export const CardNetworkSchema = z.enum(['NONE', 'VISA', 'MASTERCARD', 'AMEX']);
 
 export const BankAccountTypeSchema = z.enum(['CHECKING', 'CASH', 'SAVINGS', 'POCKET']);
 
-const UUIDv4 = z.string().uuid('Must be a valid UUID v4');
+const UUIDv4 = z.uuid('Must be a valid UUID v4');
 export const CUID = z.string().regex(/^c[a-z0-9]{20,}$/, 'Must be a valid CUID');
 const AccountName = z
   .string()

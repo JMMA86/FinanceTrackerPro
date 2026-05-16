@@ -38,7 +38,7 @@ export default async function AccountsPage({ params }: Readonly<AccountsPageProp
       <section className="app-shell rounded-2xl p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-white">
-            {get(dictionary, 'sections.investments') as string}
+            {get(dictionary, 'sections.investments')}
           </p>
           <p className="text-xs text-slate-400 mt-0.5">Próximamente</p>
         </div>
@@ -50,7 +50,7 @@ export default async function AccountsPage({ params }: Readonly<AccountsPageProp
       <section className="app-shell rounded-2xl p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-white">
-            {get(dictionary, 'sections.creditCards') as string}
+            {get(dictionary, 'sections.creditCards')}
           </p>
           <p className="text-xs text-slate-400 mt-0.5">Próximamente</p>
         </div>

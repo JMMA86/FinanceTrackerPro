@@ -18,7 +18,7 @@ export const TYPE_LABELS: Record<string, string> = {
 
 export type CardNetwork = 'NONE' | 'VISA' | 'MASTERCARD' | 'AMEX';
 
-function VisaLogo({ className, onLight }: { className: string; onLight?: boolean }) {
+function VisaLogo({ className, onLight }: Readonly<{ className: string; onLight?: boolean }>) {
   return (
     <svg viewBox="0 0 60 22" className={className} aria-label="Visa">
       <text x="0" y="18" fontFamily="Arial, sans-serif" fontSize="22" fontWeight="900"
@@ -27,7 +27,7 @@ function VisaLogo({ className, onLight }: { className: string; onLight?: boolean
   );
 }
 
-function MastercardLogo({ className }: { className: string }) {
+function MastercardLogo({ className }: Readonly<{ className: string }>) {
   return (
     <svg viewBox="0 0 46 30" className={className} aria-label="Mastercard">
       <circle cx="15" cy="15" r="15" fill="#EB001B"/>
@@ -36,7 +36,7 @@ function MastercardLogo({ className }: { className: string }) {
   );
 }
 
-function AmexLogo({ className, onLight }: { className: string; onLight?: boolean }) {
+function AmexLogo({ className, onLight }: Readonly<{ className: string; onLight?: boolean }>) {
   const ink = onLight ? '#1e293b' : 'white';
   return (
     <svg viewBox="0 0 52 22" className={className} aria-label="American Express">
@@ -51,7 +51,7 @@ export function isLightCard(account: AccountCardData): boolean {
   return account.cardColor != null && LIGHT_PRESET_KEYS.has(account.cardColor);
 }
 
-export function NetworkLogo({ network, size = 'md', onLight }: { network: CardNetwork; size?: 'sm' | 'md'; onLight?: boolean }) {
+export function NetworkLogo({ network, size = 'md', onLight }: Readonly<{ network: CardNetwork; size?: 'sm' | 'md'; onLight?: boolean }>) {
   const visa = size === 'sm' ? 'h-5 w-auto' : 'h-8 w-auto';
   const mc   = size === 'sm' ? 'h-6 w-auto' : 'h-9 w-auto';
   const amex = size === 'sm' ? 'h-5 w-auto' : 'h-8 w-auto';
@@ -104,7 +104,7 @@ export function AccountCard({
   account, parentName, isAnySelected = false, dictionary, locale = 'es-CO', onSelect,
 }: Readonly<AccountCardProps>) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const rateNumber = account.interestRateEA !== null ? Number(account.interestRateEA) : null;
+  const rateNumber = account.interestRateEA == null ? null : Number(account.interestRateEA);
   const showRate = rateNumber !== null && rateNumber > 0;
   const network = (account.cardNetwork ?? 'NONE') as CardNetwork;
 
@@ -122,7 +122,7 @@ export function AccountCard({
     <div className="group" ref={cardRef} data-account-id={account.id}>
       {parentName && (
         <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 px-1">
-          {get(dictionary, 'pocketOf') as string} {parentName}
+          {get(dictionary, 'pocketOf')} {parentName}
         </p>
       )}
 
@@ -163,7 +163,7 @@ export function AccountCard({
                 </p>
                 {showRate && (
                   <p className="text-[11px] font-medium opacity-70 pt-0.5">
-                    {rateNumber!.toFixed(2)}% EA
+                    {rateNumber.toFixed(2)}% EA
                   </p>
                 )}
               </div>

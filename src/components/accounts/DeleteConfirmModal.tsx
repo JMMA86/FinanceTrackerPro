@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, X, Trash2 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { deleteBankAccount } from '@/actions/account.actions';
@@ -27,23 +26,47 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
   const accountName = (modalData?.accountName as string) ?? '';
   const isPocket = (modalData?.isPocket as boolean) ?? false;
 
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
     if (isOpen) {
-      log.info(
-        { action: 'account.delete.open', accountId, isPocket },
-        'Delete confirm modal opened',
-      );
-      const id = requestAnimationFrame(() => setIsVisible(true));
-      return () => cancelAnimationFrame(id);
+      dialog.showModal();
+    } else if (dialog.open) {
+      setIsVisible(false);
+      setTimeout(() => {
+        if (dialog.open) dialog.close();
+      }, ANIM_MS);
     }
-    const id = requestAnimationFrame(() => setIsVisible(false));
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    log.info(
+      { action: 'account.delete.open', accountId, isPocket },
+      'Delete confirm modal opened',
+    );
+    const id = requestAnimationFrame(() => setIsVisible(true));
     return () => cancelAnimationFrame(id);
   }, [isOpen, accountId, isPocket]);
 
-  const handleDelete = useCallback(async () => {
+  const handleClose = () => {
+    const dialog = dialogRef.current;
+    if (!dialog?.open) return;
+    setIsVisible(false);
+    setTimeout(() => {
+      if (dialog.open) dialog.close();
+    }, ANIM_MS);
+  };
+
+  const handleDialogClose = () => {
+    closeModal();
+  };
+
+  async function handleDelete() {
     if (!accountId) return;
     log.info(
       { action: 'account.delete.submit', accountId, isPocket },
@@ -53,9 +76,8 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
 
     const result = await deleteBankAccount({ accountId });
     if (result.success) {
-      // Hold spinner for 1s so the user sees confirmation before animation kicks in
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      addNotification('success', get(dictionary, `delete${isPocket ? 'Pocket' : 'Account'}Success`) as string);
+      addNotification('success', get(dictionary, `delete${isPocket ? 'Pocket' : 'Account'}Success`));
       setIsDeleting(false);
       closeModal();
       log.info(
@@ -73,33 +95,18 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
         { action: 'account.delete.failure', accountId, isPocket, code: result.code },
         'Account delete failed (client)',
       );
-      addNotification('error', get(dictionary, 'errors.deleteFailed') as string);
+      addNotification('error', get(dictionary, 'errors.deleteFailed'));
       setIsDeleting(false);
     }
-  }, [accountId, isPocket, dictionary, closeModal, addNotification]);
-
-  const handleClose = useCallback(() => {
-    setIsVisible(false);
-    setTimeout(closeModal, ANIM_MS);
-  }, [closeModal]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
-    document.addEventListener('keydown', h);
-    return () => document.removeEventListener('keydown', h);
-  }, [isOpen, handleClose]);
-
-  if (!isOpen) return null;
-  if (typeof document === 'undefined') return null;
+  }
 
   const title = isPocket
-    ? get(dictionary, 'deletePocketTitle') as string
-    : get(dictionary, 'deleteAccountTitle') as string;
+    ? get(dictionary, 'deletePocketTitle')
+    : get(dictionary, 'deleteAccountTitle');
 
   const message = isPocket
-    ? get(dictionary, 'deletePocketMessage') as string
-    : get(dictionary, 'deleteAccountMessage') as string;
+    ? get(dictionary, 'deletePocketMessage')
+    : get(dictionary, 'deleteAccountMessage');
 
   const panelStyle: React.CSSProperties = {
     transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(12px)',
@@ -109,12 +116,12 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
       : `transform ${ANIM_MS - 40}ms ${EASE_OUT}, opacity ${ANIM_MS - 60}ms ${EASE_OUT}`,
   };
 
-  return createPortal(
-    <div role="dialog" aria-modal="true" aria-labelledby="delete-modal-title"
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+  return (
+    <dialog ref={dialogRef} onClose={handleDialogClose} aria-labelledby="delete-modal-title"
+      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        style={{ opacity: isVisible ? 1 : 0, transitionDuration: `${ANIM_MS - 20}ms` }}
+        className="fixed inset-0"
+        style={{ backgroundColor: isVisible ? 'rgba(0,0,0,0.60)' : 'rgba(0,0,0,0)', backdropFilter: isVisible ? 'blur(4px)' : 'none', transition: `background-color ${ANIM_MS - 20}ms ease, backdrop-filter ${ANIM_MS - 20}ms ease` }}
         onClick={handleClose}
         aria-hidden="true"
       />
@@ -158,7 +165,7 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
               disabled={isDeleting}
               className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors disabled:opacity-50"
             >
-              {get(dictionary, 'cancel') as string}
+              {get(dictionary, 'cancel')}
             </button>
             <button
               type="button"
@@ -171,14 +178,13 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
               ) : (
                 <>
                   <Trash2 className="w-4 h-4" />
-                  {get(dictionary, 'delete') as string}
+                  {get(dictionary, 'delete')}
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
-    </div>,
-    document.body,
+    </dialog>
   );
 }

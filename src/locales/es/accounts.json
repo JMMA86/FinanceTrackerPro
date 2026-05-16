@@ -43,6 +43,17 @@
   "cardPreview": "Vista previa",
   "pocketOf": "Bolsillo de",
   "pocket": "Bolsillo",
+  "newPocket": "Nuevo bolsillo",
+  "pocketName": "Nombre del bolsillo",
+  "pocketNamePlaceholder": "Ej. Viajes, Mercado...",
+  "accountNamePlaceholder": "Ej. Nómina Bancolombia",
+  "paymentNetwork": "Red de pago",
+  "networks": {
+    "NONE": "Ninguna"
+  },
+  "visa": "Visa",
+  "mastercard": "Mastercard",
+  "amex": "Amex",
   "types": {
     "SAVINGS": "Cuenta de Ahorros",
     "CHECKING": "Cuenta Corriente",

@@ -37,12 +37,11 @@ function animateCardDeletion(accountId: string, onDone: () => void) {
       const isAloneInRow = siblings.every((s) => s === cardEl || s.offsetTop !== cardTop);
 
       if (isAloneInRow) {
-        // Collapse the card's own height so the grid row shrinks and cards below slide up naturally.
-        // Transforms don't affect layout, so offsetHeight gives the true row height even after Phase 1.
         const cardHeight = cardEl.offsetHeight;
         cardEl.style.overflow = 'hidden';
         cardEl.style.height = `${cardHeight}px`;
-        void cardEl.offsetHeight; // force reflow
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        cardEl.offsetHeight; // force reflow
         cardEl.style.transition = `height ${COLLAPSE_MS}ms ${EASE_INOUT}`;
         cardEl.style.height = '0';
       }
@@ -111,7 +110,7 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">
-            {get(dictionary, 'sections.bank') as string}
+            {get(dictionary, 'sections.bank')}
           </h2>
           <button
             type="button"
@@ -119,7 +118,7 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            {get(dictionary, 'addAccount') as string}
+              {get(dictionary, 'addAccount')}
           </button>
         </div>
 
@@ -129,8 +128,8 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
               <Landmark className="w-8 h-8" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white mb-1">{get(dictionary, 'noAccounts') as string}</p>
-              <p className="text-xs text-slate-400 max-w-xs">{get(dictionary, 'noAccountsDesc') as string}</p>
+              <p className="text-sm font-semibold text-white mb-1">{get(dictionary, 'noAccounts')}</p>
+              <p className="text-xs text-slate-400 max-w-xs">{get(dictionary, 'noAccountsDesc')}</p>
             </div>
             <button
               type="button"
@@ -138,7 +137,7 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
-              {get(dictionary, 'addAccount') as string}
+            {get(dictionary, 'addAccount')}
             </button>
           </div>
         ) : (

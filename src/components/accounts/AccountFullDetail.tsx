@@ -34,7 +34,7 @@ function getAccentColor(account: AccountCardData, liveColor: string | null): str
       return LIGHT_PRESET_KEYS.has(preset.key) ? '#475569' : preset.from;
     }
   }
-  const match = (TYPE_GRADIENTS[account.type] ?? '').match(/#[0-9a-fA-F]{6}/);
+  const match = /#[0-9a-fA-F]{6}/.exec(TYPE_GRADIENTS[account.type] ?? '');
   return match ? match[0] : '#475569';
 }
 
@@ -89,11 +89,127 @@ interface AccountFullDetailProps {
   onDeletePocket?: (pocketId: string, pocketName: string) => void;
 }
 
+function forceReflow(el: HTMLElement) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  el.offsetHeight;
+}
+
+function getHeaderMinWidth(index: number): number {
+  if (index === 0) return 100;
+  if (index === 1) return 300;
+  if (index === 2) return 120;
+  return 100;
+}
+
+function getHeaderAlignClass(index: number): string {
+  if (index === 2) return 'hidden lg:table-cell';
+  if (index === 3) return 'text-right';
+  return '';
+}
+
+interface TxTableBodyProps {
+  isLoading: boolean;
+  transactions: Transaction[];
+  locale: string;
+}
+
+function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyProps>) {
+  if (isLoading) {
+    const skeletonRows = ['skeleton-row-0', 'skeleton-row-1', 'skeleton-row-2', 'skeleton-row-3', 'skeleton-row-4'];
+    const skeletonCells = ['skeleton-cell-date', 'skeleton-cell-desc', 'skeleton-cell-type', 'skeleton-cell-amount'];
+    return skeletonRows.map((rowKey) => (
+      <tr key={rowKey} className="border-b border-white/6">
+        {skeletonCells.map((cellKey, idx) => (
+          <td key={cellKey} className={`px-4 py-3.5 ${getHeaderAlignClass(idx)}`}>
+            <div className="h-3 bg-white/6 rounded animate-pulse" style={{ width: [100, 300, 100, 80][idx] }} />
+          </td>
+        ))}
+      </tr>
+    ));
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <tr>
+        <td colSpan={4}>
+          <div className="flex flex-col items-center justify-center py-14 gap-3 text-white/20">
+            <svg width="56" height="36" viewBox="0 0 56 36" fill="none">
+              <path d="M4 18 Q14 6 28 18 Q42 30 52 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M4 26 Q14 14 28 26 Q42 38 52 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.4" />
+            </svg>
+            <p className="text-sm">Sin movimientos</p>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  return transactions.map((tx) => {
+    const pos = tx.amountCents > 0;
+    return (
+      <tr key={tx.id} className="border-b border-white/6 hover:bg-white/[0.03] transition-colors">
+        <td className="px-4 py-3.5 text-xs text-white/40 whitespace-nowrap">{formatDateShort(tx.date)}</td>
+        <td className="px-4 py-3.5 text-sm text-white max-w-0">
+          <span className="block truncate">{tx.description ?? '—'}</span>
+        </td>
+        <td className="px-4 py-3.5 hidden lg:table-cell">
+          <span className="text-xs text-white/40">{TX_TYPE_LABELS[tx.type] ?? tx.type}</span>
+        </td>
+        <td className={`px-4 py-3.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap ${pos ? 'text-emerald-400' : 'text-rose-400'}`}>
+          {pos ? '+' : ''}{formatMoney(tx.amountCents, tx.currency, locale)}
+        </td>
+      </tr>
+    );
+  });
+}
+
 function formatDate(d: Date | string) {
   return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 function formatDateShort(d: Date | string) {
   return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function handlePocketCollapsePhase(
+  cardEl: HTMLElement,
+  pocketWidth: number,
+  isLastPocket: boolean,
+  COLLAPSE_MS: number,
+  EASE_INOUT: string,
+  router: ReturnType<typeof useRouter>,
+) {
+  cardEl.style.overflow = 'hidden';
+  cardEl.style.flexShrink = '0';
+  cardEl.style.width = `${pocketWidth}px`;
+  cardEl.style.minWidth = `${pocketWidth}px`;
+  forceReflow(cardEl);
+  cardEl.style.transition = `width ${COLLAPSE_MS}ms ${EASE_INOUT}, min-width ${COLLAPSE_MS}ms ${EASE_INOUT}, padding ${COLLAPSE_MS}ms ${EASE_INOUT}`;
+  cardEl.style.width = '0';
+  cardEl.style.minWidth = '0';
+  cardEl.style.paddingLeft = '0';
+  cardEl.style.paddingRight = '0';
+
+  setTimeout(() => handleListCollapsePhase(isLastPocket, COLLAPSE_MS, EASE_INOUT, router), COLLAPSE_MS + 20);
+}
+
+function handleListCollapsePhase(
+  isLastPocket: boolean,
+  COLLAPSE_MS: number,
+  EASE_INOUT: string,
+  router: ReturnType<typeof useRouter>,
+) {
+  if (!isLastPocket) { router.refresh(); return; }
+
+  const listEl = document.querySelector<HTMLElement>('[data-pockets-list]');
+  if (!listEl) { router.refresh(); return; }
+
+  const listHeight = listEl.offsetHeight;
+  listEl.style.overflow = 'hidden';
+  listEl.style.height = `${listHeight}px`;
+  forceReflow(listEl);
+  listEl.style.transition = `height 300ms ${EASE_INOUT}`;
+  listEl.style.height = '0';
+  setTimeout(() => { router.refresh(); }, 320);
 }
 
 export function AccountFullDetail({
@@ -109,7 +225,9 @@ export function AccountFullDetail({
   const accountRef = useRef(account);
   // Sync refs with the latest prop values using useLayoutEffect (runs before paint, in definition order)
   // Defined BEFORE the Step 1 useLayoutEffect so they are always updated first
+   
   useLayoutEffect(() => { cardRectRef.current = cardRect; });
+   
   useLayoutEffect(() => { accountRef.current = account; });
   const [contentVisible, setContentVisible] = useState(false);
   const [selectedPocket, setSelectedPocket] = useState<AccountCardData | null>(null);
@@ -165,15 +283,16 @@ export function AccountFullDetail({
         el.style.transition = `clip-path ${EXPAND_MS}ms ${IOS_EASE}, background ${EXPAND_MS + 100}ms ease-out, left 300ms ease`;
         el.style.clipPath = FINAL_CLIP;
         if (bgValue) el.style.background = bgValue;
-        setTimeout(() => setContentVisible(true), CONTENT_FADE_MS);
-        setTimeout(() => {
-          const ref = overlayRef.current;
-          if (!ref) return;
-          ref.style.transition = 'left 300ms ease';
-          ref.style.clipPath = '';
-        }, EXPAND_MS + 50);
       });
-      return () => cancelAnimationFrame(raf2);
+      const cleanup2 = () => cancelAnimationFrame(raf2);
+      setTimeout(() => setContentVisible(true), CONTENT_FADE_MS);
+      setTimeout(() => {
+        const ref = overlayRef.current;
+        if (!ref) return;
+        ref.style.transition = 'left 300ms ease';
+        ref.style.clipPath = '';
+      }, EXPAND_MS + 50);
+      return cleanup2;
     });
     return () => cancelAnimationFrame(raf1);
   }, [isOpen, account?.id, liveCardColor]);
@@ -197,7 +316,7 @@ export function AccountFullDetail({
       // Re-establish the full-screen clip as starting point (was cleared after open animation)
       el.style.transition = 'none';
       el.style.clipPath = FINAL_CLIP;
-      void el.offsetHeight; // force reflow so browser registers the starting value
+      forceReflow(el);
       el.style.transition = `clip-path ${SHRINK_MS}ms ${IOS_EASE}, left 300ms ease`;
       el.style.clipPath = getInitialClip(el, cr);
     }
@@ -224,13 +343,12 @@ export function AccountFullDetail({
   }, [isOpen, account, handleClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !account) return;
     const onPocketDeleted = (e: Event) => {
       const pocketId = (e as CustomEvent<{ pocketId: string }>).detail?.pocketId;
       const cardEl = document.querySelector<HTMLElement>(`[data-pocket-id="${pocketId}"]`);
       if (!cardEl) { router.refresh(); return; }
 
-      // Count before the animation so we know if this is the last pocket
       const isLastPocket = document.querySelectorAll('[data-pocket-id]').length === 1;
 
       const FADE_MS = 380;
@@ -244,38 +362,11 @@ export function AccountFullDetail({
       cardEl.style.opacity = '0';
       cardEl.style.transform = 'scale(0.88) translateY(-8px)';
 
-      setTimeout(() => {
-        cardEl.style.overflow = 'hidden';
-        cardEl.style.flexShrink = '0';
-        cardEl.style.width = `${pocketWidth}px`;
-        cardEl.style.minWidth = `${pocketWidth}px`;
-        void cardEl.offsetHeight; // force reflow
-        cardEl.style.transition = `width ${COLLAPSE_MS}ms ${EASE_INOUT}, min-width ${COLLAPSE_MS}ms ${EASE_INOUT}, padding ${COLLAPSE_MS}ms ${EASE_INOUT}`;
-        cardEl.style.width = '0';
-        cardEl.style.minWidth = '0';
-        cardEl.style.paddingLeft = '0';
-        cardEl.style.paddingRight = '0';
-
-        setTimeout(() => {
-          if (!isLastPocket) { router.refresh(); return; }
-
-          // Last pocket — collapse the row before refreshing so the transactions section slides up
-          const listEl = document.querySelector<HTMLElement>('[data-pockets-list]');
-          if (!listEl) { router.refresh(); return; }
-
-          const listHeight = listEl.offsetHeight;
-          listEl.style.overflow = 'hidden';
-          listEl.style.height = `${listHeight}px`;
-          void listEl.offsetHeight; // force reflow
-          listEl.style.transition = `height 300ms ${EASE_INOUT}`;
-          listEl.style.height = '0';
-          setTimeout(() => { router.refresh(); }, 320);
-        }, COLLAPSE_MS + 20);
-      }, FADE_MS + 20);
+      setTimeout(() => handlePocketCollapsePhase(cardEl, pocketWidth, isLastPocket, COLLAPSE_MS, EASE_INOUT, router), FADE_MS + 20);
     };
     document.addEventListener('finance:pocket-deleted', onPocketDeleted);
     return () => document.removeEventListener('finance:pocket-deleted', onPocketDeleted);
-  }, [isOpen, router]);
+  }, [isOpen, account, router]);
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -328,7 +419,7 @@ export function AccountFullDetail({
   const safeAcc = safeAccount(account);
   const light = (liveCardColor ?? safeAcc.cardColor) != null && LIGHT_PRESET_KEYS.has(liveCardColor ?? safeAcc.cardColor ?? '');
   const network = (safeAcc.cardNetwork ?? 'NONE') as CardNetwork;
-  const rateNumber = safeAcc.interestRateEA != null ? Number(safeAcc.interestRateEA) : 0;
+  const rateNumber = safeAcc.interestRateEA == null ? 0 : Number(safeAcc.interestRateEA);
   const projected = rateNumber > 0
     ? formatMoney(Math.floor(safeAcc.balanceCents * rateNumber / 100), safeAcc.currency, locale)
     : '—';
@@ -456,19 +547,17 @@ export function AccountFullDetail({
             {pockets.length > 0 ? (
               <div data-pockets-list className="flex gap-3 overflow-x-auto pb-1 -mx-4 sm:mx-0 px-4 sm:px-0">
                 {pockets.map((p) => (
-                  <div
+                  <button
                     key={p.id}
-                    role="button"
-                    tabIndex={0}
+                    type="button"
                     data-pocket-id={p.id}
                     onClick={() => setSelectedPocket(p)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedPocket(p); }}
                     className="relative group flex-shrink-0 rounded-xl p-4 flex flex-col justify-between border border-white/10 text-left transition-transform hover:scale-[1.03] active:scale-[0.97] cursor-pointer"
                     style={{ width: 160, height: 80, background: TYPE_GRADIENTS.POCKET + 'cc' }}
                   >
                     <p className="text-xs font-semibold text-white/80 truncate pr-4">{p.name}</p>
                     <p className="text-sm font-bold text-white">{formatMoney(p.balanceCents, p.currency, locale)}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -514,55 +603,15 @@ export function AccountFullDetail({
                     <tr className="border-b border-white/8">
                       {['Fecha', 'Descripción', 'Tipo', 'Monto'].map((h, i) => (
                         <th key={h}
-                          className={`text-left text-[10px] uppercase tracking-widest text-white/40 font-semibold px-4 py-3.5 ${i === 2 ? 'hidden lg:table-cell' : ''} ${i === 3 ? 'text-right' : ''}`}
-                          style={{ minWidth: i === 0 ? 100 : i === 1 ? 300 : i === 2 ? 120 : 100 }}>
+                          className={`text-left text-[10px] uppercase tracking-widest text-white/40 font-semibold px-4 py-3.5 ${getHeaderAlignClass(i)}`}
+                          style={{ minWidth: getHeaderMinWidth(i) }}>
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={i} className="border-b border-white/6">
-                          {[100, 300, 100, 80].map((w, j) => (
-                            <td key={j} className={`px-4 py-3.5 ${j === 2 ? 'hidden lg:table-cell' : ''}`}>
-                              <div className="h-3 bg-white/6 rounded animate-pulse" style={{ width: w }} />
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : transactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={4}>
-                          <div className="flex flex-col items-center justify-center py-14 gap-3 text-white/20">
-                            <svg width="56" height="36" viewBox="0 0 56 36" fill="none">
-                              <path d="M4 18 Q14 6 28 18 Q42 30 52 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                              <path d="M4 26 Q14 14 28 26 Q42 38 52 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.4" />
-                            </svg>
-                            <p className="text-sm">Sin movimientos</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      transactions.map((tx) => {
-                        const pos = tx.amountCents > 0;
-                        return (
-                          <tr key={tx.id} className="border-b border-white/6 hover:bg-white/[0.03] transition-colors">
-                            <td className="px-4 py-3.5 text-xs text-white/40 whitespace-nowrap">{formatDateShort(tx.date)}</td>
-                            <td className="px-4 py-3.5 text-sm text-white max-w-0">
-                              <span className="block truncate">{tx.description ?? '—'}</span>
-                            </td>
-                            <td className="px-4 py-3.5 hidden lg:table-cell">
-                              <span className="text-xs text-white/40">{TX_TYPE_LABELS[tx.type] ?? tx.type}</span>
-                            </td>
-                            <td className={`px-4 py-3.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap ${pos ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {pos ? '+' : ''}{formatMoney(tx.amountCents, tx.currency, locale)}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
+                    <TxTableBody isLoading={isLoading} transactions={transactions} locale={locale} />
                   </tbody>
                 </table>
               </div>

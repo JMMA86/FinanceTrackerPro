@@ -37,7 +37,7 @@ export function CardDesignPicker({
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-        {get(dictionary, 'cardDesign') as string}
+        {get(dictionary, 'cardDesign')}
       </p>
       <div className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => {

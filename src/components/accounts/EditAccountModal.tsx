@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import type { Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,7 +18,7 @@ const RATE_TYPES = new Set(['SAVINGS', 'POCKET']);
 const MAX_RATE = 10_000;
 
 function toRateHundredths(rate: number | null | undefined): number {
-  return rate != null ? Math.round(Number(rate) * 100) : 0;
+  return rate == null ? 0 : Math.round(Number(rate) * 100);
 }
 
 interface EditAccountModalProps {
@@ -37,6 +36,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
   const accountId = (modalData?.accountId as string) ?? null;
   const account = accounts.find((a) => a.id === accountId) ?? null;
 
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [rateHundredths, setRateHundredths] = useState(0);
   const [cardColor, setCardColor] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -53,34 +53,44 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
   });
 
   useEffect(() => {
-    if (isOpen && account) {
-      log.info({ action: 'account.edit.open', accountId: account.id }, 'Edit account modal opened');
-      const rate = toRateHundredths(account.interestRateEA);
-      const accountCardColor = account.cardColor ?? null;
-      reset({ accountId: account.id, name: account.name, interestRateEA: rate / 100 });
-      // setState inside rAF callbacks satisfies react-hooks/set-state-in-effect
-      const id = requestAnimationFrame(() => {
-        setRateHundredths(rate);
-        setCardColor(accountCardColor);
-        setIsVisible(true);
-      });
-      return () => cancelAnimationFrame(id);
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (isOpen) {
+      dialog.showModal();
+    } else if (dialog.open) {
+      setIsVisible(false);
+      setTimeout(() => {
+        if (dialog.open) dialog.close();
+      }, 240);
     }
-    const id = requestAnimationFrame(() => setIsVisible(false));
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !account) return;
+    log.info({ action: 'account.edit.open', accountId: account.id }, 'Edit account modal opened');
+    const rate = toRateHundredths(account.interestRateEA);
+    const accountCardColor = account.cardColor ?? null;
+    reset({ accountId: account.id, name: account.name, interestRateEA: rate / 100 });
+    const id = requestAnimationFrame(() => {
+      setRateHundredths(rate);
+      setCardColor(accountCardColor);
+      setIsVisible(true);
+    });
     return () => cancelAnimationFrame(id);
   }, [isOpen, account, reset]);
 
-  const handleClose = useCallback(() => {
+  const handleClose = () => {
+    const dialog = dialogRef.current;
+    if (!dialog?.open) return;
     setIsVisible(false);
-    setTimeout(closeModal, 240);
-  }, [closeModal]);
+    setTimeout(() => {
+      if (dialog.open) dialog.close();
+    }, 240);
+  };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [isOpen, handleClose]);
+  const handleDialogClose = () => {
+    closeModal();
+  };
 
   async function onSubmit(data: UpdateAccountInput) {
     log.info({ action: 'account.update.submit', accountId: data.accountId }, 'Account update submit');
@@ -90,16 +100,15 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
         detail: { accountId: account.id, cardColor },
       }));
       log.info({ action: 'account.update.success', accountId: account.id }, 'Account updated (client)');
-      addNotification('success', get(dictionary, 'updateSuccess') as string);
-      handleClose();
+      addNotification('success', get(dictionary, 'updateSuccess'));
+      closeModal();
     } else {
       log.info({ action: 'account.update.failure', accountId: data.accountId, code: result.code }, 'Account update failed (client)');
-      addNotification('error', get(dictionary, 'errors.updateFailed') as string);
+      addNotification('error', get(dictionary, 'errors.updateFailed'));
     }
   }
 
-  if (!isOpen || !account) return null;
-  if (typeof document === 'undefined') return null;
+  if (!account) return null;
 
   const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
   const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
@@ -115,18 +124,18 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
   const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-transparent transition-all';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
-  return createPortal(
-    <div role="dialog" aria-modal="true" aria-labelledby="edit-account-title"
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-      style={{ backgroundColor: isVisible ? 'rgba(0,0,0,0.60)' : 'rgba(0,0,0,0)', backdropFilter: isVisible ? 'blur(4px)' : 'none', transition: 'background-color 220ms ease, backdrop-filter 220ms ease' }}>
+  return (
+    <dialog ref={dialogRef} onClose={handleDialogClose} aria-labelledby="edit-account-title"
+      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4">
       <button type="button" aria-label="Close" onClick={handleClose}
-        className="absolute inset-0" />
+        className="fixed inset-0"
+        style={{ backgroundColor: isVisible ? 'rgba(0,0,0,0.60)' : 'rgba(0,0,0,0)', backdropFilter: isVisible ? 'blur(4px)' : 'none', transition: 'background-color 220ms ease, backdrop-filter 220ms ease' }} />
 
       <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
         style={panelStyle}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 sticky top-0 bg-slate-900 z-10">
           <h2 id="edit-account-title" className="text-base font-semibold text-white">
-            {get(dictionary, 'edit') as string}
+            {get(dictionary, 'edit')}
           </h2>
           <button type="button" onClick={handleClose} aria-label="Close"
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors">
@@ -138,7 +147,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
           <input type="hidden" {...register('accountId')} />
 
           <div>
-            <label htmlFor="edit-name" className={labelCls}>{get(dictionary, 'accountName') as string}</label>
+            <label htmlFor="edit-name" className={labelCls}>{get(dictionary, 'accountName')}</label>
             <input id="edit-name" type="text" autoComplete="off"
               aria-invalid={!!errors.name} className={inputCls} {...register('name')} />
             {errors.name && <p role="alert" className="mt-1 text-xs text-red-400">{errors.name.message}</p>}
@@ -146,7 +155,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
 
           {showRate && (
             <div>
-              <label htmlFor="edit-rate" className={labelCls}>{get(dictionary, 'interestRate') as string}</label>
+              <label htmlFor="edit-rate" className={labelCls}>{get(dictionary, 'interestRate')}</label>
               <FormattedNumericInput id="edit-rate" value={rateHundredths} suffix="%"
                 maxValue={MAX_RATE}
                 onChange={(v) => { setRateHundredths(v); setValue('interestRateEA', v / 100); }}
@@ -159,16 +168,15 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={handleClose}
               className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
-              {get(dictionary, 'cancel') as string}
+              {get(dictionary, 'cancel')}
             </button>
             <button type="submit" disabled={isSubmitting}
               className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-              {isSubmitting ? '…' : (get(dictionary, 'save') as string)}
+              {isSubmitting ? '…' : get(dictionary, 'save')}
             </button>
           </div>
         </form>
       </div>
-    </div>,
-    document.body,
+    </dialog>
   );
 }

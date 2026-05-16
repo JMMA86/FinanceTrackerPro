@@ -32,7 +32,7 @@ export function FormattedNumericInput({
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key >= '0' && e.key <= '9') {
       e.preventDefault();
-      const next = value * 10 + parseInt(e.key);
+      const next = value * 10 + Number.parseInt(e.key, 10);
       if (next > maxValue) return;
       onChange(next);
     } else if (e.key === 'Backspace') {

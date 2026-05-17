@@ -416,14 +416,98 @@ export async function loginAsTestUser(page: Page): Promise<void> {
 }
 ```
 
-## Variables de Entorno Requeridas
+## Aislamiento de Base de Datos con Schema de PostgreSQL
+
+**NUNCA ejecutes tests E2E contra el schema de desarrollo.** Los tests crean y eliminan datos reales, lo que contaminaría la base de datos de desarrollo y podría destruir trabajo en curso.
+
+El proyecto ya soporta múltiples schemas mediante la variable `POSTGRES_SCHEMA` en `DATABASE_URL`. Aprovecha esto para apuntar los tests a un schema completamente separado (`e2e`).
+
+### Cómo funciona
+
+```
+PostgreSQL (mismo servidor, misma BD)
+├── schema: public   ← desarrollo local (nunca tocar desde tests)
+└── schema: e2e      ← exclusivo para tests E2E (se puede resetear libremente)
+```
+
+Prisma crea todas las tablas dentro del schema especificado en `DATABASE_URL`. Con `?schema=e2e`, las tablas viven en `e2e.User`, `e2e.Account`, etc., completamente aisladas de `public.User`, `public.Account`.
+
+### Variables de Entorno
 
 ```env
-# .env.test (no commitear)
-E2E_TEST_USER=test@financetrackerpro.com
-E2E_TEST_PASSWORD=TestPassword123
+# .env.e2e (no commitear — copiar de .env.example)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=financetracker
+POSTGRES_SCHEMA=e2e
+
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=e2e
+
+E2E_TEST_USER=e2e@financetrackerpro.com
+E2E_TEST_PASSWORD=E2ePassword123
 BASE_URL=http://localhost:3000
 ```
+
+### Preparar el schema E2E antes de los tests
+
+```bash
+# 1. Aplicar migraciones al schema e2e (sin tocar el schema de desarrollo)
+DATABASE_URL="...?schema=e2e" npx prisma migrate deploy
+
+# O usando el script del proyecto:
+npm run db:setup:e2e
+```
+
+### Resetear solo datos E2E
+
+```bash
+# Resetea únicamente el schema e2e — el schema public queda intacto
+npm run db:reset:e2e
+```
+
+Este script ejecuta `prisma migrate reset` apuntando al schema `e2e`, por lo que **nunca afecta los datos de desarrollo**.
+
+### Integración con `playwright.config.ts`
+
+El `webServer` de Playwright debe arrancar Next.js con `DATABASE_URL` apuntando al schema `e2e`:
+
+```typescript
+import { defineConfig, devices } from '@playwright/test';
+import { defineBddConfig } from 'playwright-bdd';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.e2e' });
+
+const testDir = defineBddConfig({
+  features: 'e2e/features/**/*.feature',
+  steps: 'e2e/steps/**/*.ts',
+});
+
+export default defineConfig({
+  testDir,
+  // ...
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    env: {
+      // Next.js arranca con el schema e2e — no toca datos de desarrollo
+      DATABASE_URL: process.env.DATABASE_URL!,
+    },
+  },
+});
+```
+
+### Reglas de uso del schema E2E
+
+- **SIEMPRE** usar `DATABASE_URL` con `?schema=e2e` al ejecutar tests
+- **NUNCA** hardcodear `?schema=public` en ningún script de test
+- Los seeds de test van en `prisma/seed.e2e.ts`, separados del seed de desarrollo
+- Antes de cada suite de tests, ejecutar `npm run db:reset:e2e` para partir de estado limpio
+- El schema `e2e` puede resetearse en cualquier momento sin consecuencias para el desarrollo
 
 ## Proceso de Ejecución
 

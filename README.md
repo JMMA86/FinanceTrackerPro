@@ -100,6 +100,8 @@ Open [http://localhost:3000](http://localhost:3000)
 - `npm run db:push` - Push schema (dev only - no migration history)
 - `npm run db:migrate` - Create migration (prod - traceable changes)
 - `npm run db:reset` - Delete all data, re-run migrations, and re-seed
+- `npm run db:setup:e2e` - Apply migrations to the isolated E2E schema (reads `.env.e2e`)
+- `npm run db:reset:e2e` - Reset only the E2E schema without touching development data
 - `npm run db:studio` - Open Prisma Studio GUI
 
 ### Testing

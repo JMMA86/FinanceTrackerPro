@@ -21,6 +21,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "db:setup:e2e": "dotenv -e .env.e2e -- prisma migrate deploy",
+    "db:reset:e2e": "dotenv -e .env.e2e -- prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "prepare": "husky"
   },

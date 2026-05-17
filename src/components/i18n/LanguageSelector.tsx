@@ -53,7 +53,7 @@ export function LanguageSelector({ currentLocale, labels }: Readonly<LanguageSel
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden animate-slideUp">
+        <div className="absolute right-0 top-full mt-2 w-44 bg-gray-800 rounded-xl shadow-xl border border-gray-700 z-50 overflow-hidden animate-slideUp">
           {SUPPORTED_LOCALES.map((locale) => (
             <button
               key={locale}
@@ -63,7 +63,7 @@ export function LanguageSelector({ currentLocale, labels }: Readonly<LanguageSel
                 ${
                   locale === currentLocale
                     ? 'bg-slate-700 text-white font-semibold'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    : 'text-gray-300 hover:bg-gray-700'
                 }
               `}
             >

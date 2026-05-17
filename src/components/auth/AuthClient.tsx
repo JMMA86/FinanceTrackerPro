@@ -124,27 +124,27 @@ export default function AuthClient({
       <div className="w-full max-w-6xl relative z-10 pointer-events-none">
         <div className="pointer-events-auto">
           {/* Desktop View - Overlapping Slide Animation */}
-          <div className="hidden md:block bg-white dark:bg-gray-800 rounded-3xl shadow-2xl shadow-black/50 border border-white/10 overflow-hidden backdrop-blur-sm">
+          <div className="hidden md:block bg-gray-800 rounded-3xl shadow-2xl shadow-black/50 border border-white/10 overflow-hidden backdrop-blur-sm">
             <div className="relative h-[800px] overflow-hidden">
               {/* Layer 1: Fixed Forms (z-10) */}
               {/* Login Form - Fixed Left */}
               <div
-                className="absolute left-0 top-0 w-1/2 h-full bg-white dark:bg-gray-800 z-10 transition-opacity duration-500"
+                className="absolute left-0 top-0 w-1/2 h-full bg-gray-800 z-10 transition-opacity duration-500"
                 style={{ opacity: mode === 'login' ? 1 : 0.3 }}
               >
                 <div className="absolute inset-0 p-12 overflow-y-auto flex flex-col justify-center">
                   <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-white mb-2">
                       {get(auth, 'login.subtitleDesktop')}
                     </h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-lg">
+                    <p className="text-gray-400 text-lg">
                       {get(auth, 'login.subtitleDescDesktop')}
                     </p>
                   </div>
 
                   <form onSubmit={handleLoginSubmit} className="space-y-5">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">
                         {get(auth, 'login.email')}
                       </label>
                       <input
@@ -153,13 +153,13 @@ export default function AuthClient({
                         disabled={loading}
                         value={loginData.email}
                         onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50"
+                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50"
                         placeholder={get(auth, 'login.emailPlaceholder')}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">
                         {get(auth, 'login.password')}
                       </label>
                       <input
@@ -168,22 +168,22 @@ export default function AuthClient({
                         disabled={loading}
                         value={loginData.password}
                         onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50"
+                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50"
                         placeholder={get(auth, 'login.passwordPlaceholder')}
                       />
                     </div>
 
                     {success && (
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                        <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                      <div className="bg-green-900/20 border border-green-800 rounded-xl p-4">
+                        <p className="text-sm text-green-200 font-medium">
                           {success}
                         </p>
                       </div>
                     )}
 
                     {error && mode === 'login' && (
-                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-                        <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                      <div className="bg-red-900/20 border border-red-800 rounded-xl p-4">
+                        <p className="text-sm text-red-200 font-medium">
                           {error}
                         </p>
                       </div>
@@ -199,7 +199,7 @@ export default function AuthClient({
 
                     <button
                       type="button"
-                      className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-semibold py-3.5 px-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 mt-3"
+                      className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3.5 px-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 mt-3"
                     >
                       <svg
                         className="w-5 h-5"
@@ -222,15 +222,15 @@ export default function AuthClient({
 
               {/* Register Form - Fixed Right */}
               <div
-                className="absolute right-0 top-0 w-1/2 h-full bg-white dark:bg-gray-800 z-10 transition-opacity duration-500"
+                className="absolute right-0 top-0 w-1/2 h-full bg-gray-800 z-10 transition-opacity duration-500"
                 style={{ opacity: mode === 'register' ? 1 : 0.3 }}
               >
                 <div className="absolute inset-0 p-12 overflow-y-auto flex flex-col justify-center">
                   <div className="mb-6">
-                    <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-white mb-2">
                       {get(auth, 'register.title')}
                     </h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-lg">
+                    <p className="text-gray-400 text-lg">
                       {get(auth, 'register.subtitleDesktop')}
                     </p>
                   </div>

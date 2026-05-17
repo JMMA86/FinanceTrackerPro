@@ -39,6 +39,23 @@ body {
   color-scheme: dark;
 }
 
+input,
+select,
+textarea,
+button {
+  color-scheme: dark;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(255, 255, 255, 0.05) inset;
+  -webkit-text-fill-color: white;
+  caret-color: white;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 html {
   background:
     radial-gradient(ellipse 60% 50% at 15% 10%, rgba(47, 124, 246, 0.18), transparent),

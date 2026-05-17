@@ -55,15 +55,15 @@ export default function SettingsClient({
             <Globe className="w-6 h-6 text-indigo-500" />
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+            <h2 className="text-xl font-bold text-white mb-1">
               {get(settings, 'language.title')}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-400 mb-4">
               {get(settings, 'language.description')}
             </p>
 
             <div className="space-y-3">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
+              <div className="text-sm text-gray-300">
                 <span className="font-semibold">{get(settings, 'language.current')}:</span>{' '}
                 {languageLabels[lang]}
               </div>
@@ -79,7 +79,7 @@ export default function SettingsClient({
                       ${
                         locale === lang
                           ? 'bg-indigo-500 text-white cursor-default'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }
                       disabled:opacity-50 disabled:cursor-not-allowed
                     `}
@@ -111,8 +111,8 @@ export default function SettingsClient({
               </div>
 
               {success && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-3">
-                  <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                <div className="bg-green-900/20 border border-green-800 rounded-xl p-3">
+                  <p className="text-sm text-green-200 font-medium">
                     {success}
                   </p>
                 </div>
@@ -129,10 +129,10 @@ export default function SettingsClient({
             <LogOut className="w-6 h-6 text-red-500" />
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+            <h2 className="text-xl font-bold text-white mb-1">
               {get(settings, 'account.title')}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-400 mb-4">
               {get(settings, 'account.logoutDescription')}
             </p>
 

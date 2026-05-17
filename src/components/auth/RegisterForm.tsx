@@ -47,14 +47,12 @@ export default function RegisterForm({
   const suffix = isMobile ? '-mobile' : '-desktop';
   const hasError = error && error.length > 0;
   const inputBgClass = isMobile
-    ? 'bg-white/70 dark:bg-gray-700/70 border-gray-300'
-    : 'bg-gray-50 dark:bg-gray-700 border-gray-200';
+    ? 'bg-gray-700/70 border-gray-600'
+    : 'bg-gray-700 border-gray-600';
   const checklistBgClass = isMobile
-    ? 'bg-gray-50/90 dark:bg-gray-700/50 border-gray-200'
-    : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200';
-  const errorBgClass = isMobile
-    ? 'bg-red-50/90 dark:bg-red-900/30'
-    : 'bg-red-50 dark:bg-red-900/20';
+    ? 'bg-gray-700/50 border-gray-600'
+    : 'bg-gray-700/50 border-gray-600';
+  const errorBgClass = isMobile ? 'bg-red-900/30' : 'bg-red-900/20';
 
   const passwordRequirements: PasswordRequirement[] = [
     { id: 'min-length', label: labels.passwordMinLength, test: (p) => p.length >= 8 },
@@ -68,7 +66,7 @@ export default function RegisterForm({
       <div>
         <label
           htmlFor={`name${suffix}`}
-          className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
+          className="block text-sm font-semibold text-gray-300 mb-2"
         >
           {labels.name}
         </label>
@@ -83,7 +81,7 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.name}
           onChange={(e) => onFieldChange('name', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          className={`w-full px-4 py-3 ${inputBgClass} border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50`}
           placeholder={labels.namePlaceholder}
         />
       </div>
@@ -91,7 +89,7 @@ export default function RegisterForm({
       <div>
         <label
           htmlFor={`email${suffix}`}
-          className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
+          className="block text-sm font-semibold text-gray-300 mb-2"
         >
           {labels.email}
         </label>
@@ -106,7 +104,7 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.email}
           onChange={(e) => onFieldChange('email', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          className={`w-full px-4 py-3 ${inputBgClass} border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50`}
           placeholder={labels.emailPlaceholder}
         />
       </div>
@@ -114,7 +112,7 @@ export default function RegisterForm({
       <div>
         <label
           htmlFor={`password${suffix}`}
-          className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2"
+          className="block text-sm font-semibold text-gray-300 mb-2"
         >
           {labels.password}
         </label>
@@ -130,13 +128,13 @@ export default function RegisterForm({
           disabled={loading}
           value={formData.password}
           onChange={(e) => onFieldChange('password', e.target.value)}
-          className={`w-full px-4 py-3 ${inputBgClass} border dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-all disabled:opacity-50`}
+          className={`w-full px-4 py-3 ${inputBgClass} border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50`}
           placeholder={labels.passwordPlaceholder}
         />
 
         {formData.password && (
-          <div className={`mt-3 p-3 ${checklistBgClass} rounded-lg border dark:border-gray-600`}>
-            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className={`mt-3 p-3 ${checklistBgClass} rounded-lg border border-gray-600`}>
+            <p className="text-xs font-semibold text-gray-300 mb-2">
               {labels.passwordRequirements}
             </p>
             <ul className="space-y-1.5">
@@ -170,8 +168,8 @@ export default function RegisterForm({
                   <span
                     className={
                       req.test(formData.password)
-                        ? 'text-green-700 dark:text-green-400 font-medium'
-                        : 'text-gray-600 dark:text-gray-400'
+                        ? 'text-green-400 font-medium'
+                        : 'text-gray-400'
                     }
                   >
                     {req.label}
@@ -187,11 +185,11 @@ export default function RegisterForm({
         <div
           id={`error${suffix}`}
           role="alert"
-          className={`${errorBgClass} border border-red-200 dark:border-red-800 rounded-xl ${isMobile ? 'p-3' : 'p-4'}`}
+          className={`${errorBgClass} border border-red-800 rounded-xl ${isMobile ? 'p-3' : 'p-4'}`}
         >
           <div className="flex items-start">
             <svg
-              className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 flex-shrink-0"
+              className="h-5 w-5 text-red-400 mt-0.5 mr-2 flex-shrink-0"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -201,7 +199,7 @@ export default function RegisterForm({
                 clipRule="evenodd"
               />
             </svg>
-            <p className="text-sm text-red-800 dark:text-red-200 font-medium">{error}</p>
+            <p className="text-sm text-red-200 font-medium">{error}</p>
           </div>
         </div>
       )}

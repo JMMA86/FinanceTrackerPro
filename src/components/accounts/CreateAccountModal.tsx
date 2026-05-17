@@ -119,7 +119,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
       cardNetwork,
     });
     if (result.success) {
-      log.info({ action: 'account.create.success', accountId: result.data.account.id }, 'Account created (client)');
+      log.info({ action: 'account.create.success', accountId: result.data?.account?.id }, 'Account created (client)');
       addNotification('success', get(dictionary, 'createSuccess'));
       closeModal();
     } else {

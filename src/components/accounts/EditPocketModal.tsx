@@ -91,11 +91,11 @@ export function EditPocketModal({ pockets, dictionary }: Readonly<EditPocketModa
     log.info({ action: 'pocket.update.submit', pocketId: data.accountId }, 'Pocket update submit');
     const result = await updateBankAccount(data);
     if (result.success) {
-      const newName = data.name ?? pocket.name;
+      const newName = data.name ?? pocket?.name;
       document.dispatchEvent(new CustomEvent('finance:account-updated', {
-        detail: { accountId: pocket.id, cardColor: pocket.cardColor, name: newName, interestRateEA: data.interestRateEA },
+        detail: { accountId: pocket?.id, cardColor: pocket?.cardColor, name: newName, interestRateEA: data.interestRateEA },
       }));
-      log.info({ action: 'pocket.update.success', pocketId: pocket.id }, 'Pocket updated (client)');
+      log.info({ action: 'pocket.update.success', pocketId: pocket?.id }, 'Pocket updated (client)');
       addNotification('success', get(dictionary, 'updateSuccess'));
       closeModal();
     } else {

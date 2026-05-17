@@ -107,9 +107,9 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
     const result = await updateBankAccount({ ...data, cardColor, cardNetwork });
     if (result.success) {
       document.dispatchEvent(new CustomEvent('finance:account-updated', {
-        detail: { accountId: account.id, cardColor, cardNetwork },
+        detail: { accountId: account?.id, cardColor, cardNetwork },
       }));
-      log.info({ action: 'account.update.success', accountId: account.id }, 'Account updated (client)');
+      log.info({ action: 'account.update.success', accountId: account?.id }, 'Account updated (client)');
       addNotification('success', get(dictionary, 'updateSuccess'));
       closeModal();
     } else {

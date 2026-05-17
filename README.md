@@ -135,11 +135,37 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### E2E Testing (Playwright + Cucumber BDD)
 
-- `npx bddgen` - Generate Playwright tests from `.feature` files (run before test)
-- `npx playwright test` - Run full E2E suite
-- `npx playwright test --headed` - Run with visible browser
-- `npx playwright test --grep "Feature name"` - Run a specific feature
-- `npx playwright show-report` - Open HTML report
+**Setup (first time only):**
+
+```bash
+npm install -D playwright-bdd   # Install playwright-bdd
+npx playwright install           # Install browser binaries
+npm run db:setup:e2e             # Apply migrations to isolated e2e schema
+```
+
+**Run E2E tests:**
+
+```bash
+# CLI — headless (CI mode)
+npx bddgen; npx playwright test
+
+# CLI — headed (see browser while running) -- (recommended)
+npx bddgen; npx playwright test --headed
+
+# CLI — run a specific feature
+npx bddgen; npx playwright test --grep "Autenticación"
+
+# CLI — debug mode (step-by-step with Playwright Inspector)
+npx bddgen; npx playwright test --debug
+
+# Frontend — open interactive UI to pick and run individual tests
+npx playwright test --ui
+
+# Open HTML report after running tests
+npx playwright show-report
+```
+
+> **Always run `npx bddgen` before `npx playwright test`** — it compiles `.feature` Gherkin files into Playwright test specs.
 
 ### Code Quality
 

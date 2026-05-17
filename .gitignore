@@ -50,3 +50,12 @@ next-env.d.ts
 
 # sonarqube
 /.scannerwork
+
+# playwright mcp
+/.playwright-mcp
+
+# playwright e2e
+/playwright-report/
+/test-results/
+/blob-report/
+e2e-results.json

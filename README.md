@@ -62,6 +62,21 @@ Optional variables:
 SONAR_TOKEN=
 ```
 
+For E2E testing, create a separate `.env.e2e` file pointing to the isolated E2E schema:
+
+```bash
+cp .env.example .env.e2e
+```
+
+Then set `POSTGRES_SCHEMA=e2e` in `.env.e2e` along with E2E test credentials:
+
+```env
+POSTGRES_SCHEMA=e2e
+E2E_TEST_USER=e2e@financetrackerpro.com
+E2E_TEST_PASSWORD=E2ePassword123
+BASE_URL=http://localhost:3000
+```
+
 You do not need PostgreSQL installed locally; use Docker Compose to run it.
 
 Start local Postgres (Docker Compose):
@@ -76,6 +91,13 @@ Setup database:
 npm run db:push        # Dev: Quick schema sync
 npm run db:migrate     # Prod: Traceable migrations
 npm run db:generate    # Generate Prisma Client
+npm run db:setup:e2e   # E2E: Apply migrations to isolated e2e schema
+```
+
+Install Playwright browsers (first time only):
+
+```bash
+npx playwright install
 ```
 
 Run development server:
@@ -106,10 +128,18 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### Testing
 
-- `npm test` - Run tests (CI mode)
+- `npm test` - Run unit/integration tests (CI mode)
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:ui` - Run tests with Vitest UI
 - `npm run test:coverage` - Coverage report (80% minimum)
+
+### E2E Testing (Playwright + Cucumber BDD)
+
+- `npx bddgen` - Generate Playwright tests from `.feature` files (run before test)
+- `npx playwright test` - Run full E2E suite
+- `npx playwright test --headed` - Run with visible browser
+- `npx playwright test --grep "Feature name"` - Run a specific feature
+- `npx playwright show-report` - Open HTML report
 
 ### Code Quality
 
@@ -330,7 +360,8 @@ This queries user, account, and transaction counts via Prisma.
 
 ### Quality & Testing
 
-- **Testing**: Vitest + React Testing Library
+- **Unit/Integration Testing**: Vitest + React Testing Library
+- **E2E Testing**: Playwright + `playwright-bdd` + Cucumber (Gherkin `.feature` files)
 - **Coverage**: 80% minimum enforced
 - **Linting**: ESLint + TypeScript ESLint
 - **Formatting**: Prettier
@@ -369,6 +400,23 @@ src/
 │   └── formatCurrency.ts
 └── __tests__/        # Test files (co-located)
     └── unit/
+
+e2e/                  # Playwright E2E tests (Cucumber BDD)
+├── features/         # Gherkin .feature files (human-readable scenarios)
+│   ├── auth.feature
+│   ├── dashboard.feature
+│   ├── accounts.feature
+│   └── transactions.feature
+├── steps/            # Step definitions (TypeScript)
+│   ├── auth.steps.ts
+│   ├── dashboard.steps.ts
+│   ├── accounts.steps.ts
+│   ├── transactions.steps.ts
+│   └── common.steps.ts
+├── helpers/
+│   └── auth.ts       # Shared login helper
+└── fixtures/
+    └── index.ts      # Playwright fixtures
 ```
 
 ## Database Architecture

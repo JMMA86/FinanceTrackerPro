@@ -13,7 +13,8 @@ Usuario
   └── tech-lead (PRIMARIO — orquestador)
         ├── dev-backend    (subagente — implementación)
         ├── dev-frontend   (subagente — implementación)
-        ├── dev-tester     (subagente — testing)
+        ├── dev-tester     (subagente — testing unitario/integración)
+        ├── dev-e2e        (subagente — testing E2E Playwright + Cucumber)
         ├── qa-lead        (subagente — auditoría)
         ├── sec-ops        (subagente — seguridad)
         └── audit-finance  (subagente — integridad financiera)
@@ -38,15 +39,15 @@ Usuario
 
 **Workflows que conoce**:
 
-| Tipo de tarea          | Secuencia de subagentes                                     |
-| ---------------------- | ----------------------------------------------------------- |
-| Feature full-stack     | `dev-backend` → `dev-frontend` → `dev-tester` → `qa-lead`   |
-| Feature solo backend   | `dev-backend` → `dev-tester` → `qa-lead`                    |
-| Feature solo frontend  | `dev-frontend` → `dev-tester` → `qa-lead`                   |
-| Bug fix                | `dev-backend` y/o `dev-frontend` → `dev-tester` → `qa-lead` |
-| Auditoría de seguridad | `sec-ops` → `dev-backend` → `qa-lead`                       |
-| Auditoría financiera   | `audit-finance` → `dev-backend` → `dev-tester` → `qa-lead`  |
-| Review de PR           | `qa-lead` → `sec-ops`_ → `audit-finance`_                   |
+| Tipo de tarea          | Secuencia de subagentes                                               |
+| ---------------------- | --------------------------------------------------------------------- |
+| Feature full-stack     | `dev-backend` → `dev-frontend` → `dev-tester` → `dev-e2e` → `qa-lead` |
+| Feature solo backend   | `dev-backend` → `dev-tester` → `qa-lead`                              |
+| Feature solo frontend  | `dev-frontend` → `dev-tester` → `dev-e2e` → `qa-lead`                 |
+| Bug fix                | `dev-backend` y/o `dev-frontend` → `dev-tester` → `qa-lead`           |
+| Auditoría de seguridad | `sec-ops` → `dev-backend` → `qa-lead`                                 |
+| Auditoría financiera   | `audit-finance` → `dev-backend` → `dev-tester` → `qa-lead`            |
+| Review de PR           | `qa-lead` → `dev-e2e` → `sec-ops`_ → `audit-finance`_                 |
 
 > \* Solo si el PR toca auth/pagos o cálculos monetarios respectivamente.
 
@@ -132,7 +133,49 @@ npm run test:coverage
 
 ---
 
-### 4. qa-lead (QA Lead — Auditor de Calidad)
+### 4. dev-e2e (Ingeniero E2E — Playwright + Cucumber BDD)
+
+**Modo**: `subagent`
+
+**Responsabilidades**:
+
+- Tests E2E de flujos críticos de usuario en navegadores reales (Chromium, Firefox, WebKit, mobile)
+- Escribir escenarios en Gherkin (`.feature` files) legibles por todo el equipo
+- Implementar step definitions en TypeScript con `playwright-bdd`
+- Usar el **MCP de Playwright** para explorar flujos manualmente y convertirlos en tests automatizados (ciclo obligatorio: explorar → anotar en Gherkin → implementar → verificar)
+- Garantizar aislamiento de datos usando el schema PostgreSQL `e2e` (nunca el schema de desarrollo)
+- Detectar regresiones visuales, problemas de navegación y errores de servidor no capturados por tests unitarios
+
+**Regla de Oro**:
+
+Cada flujo explorado con el MCP **debe** producir un `.feature` file + step definitions antes de cerrar la tarea.
+
+**Tech Stack**:
+
+- Playwright + `playwright-bdd` + Cucumber / Gherkin
+- Schema PostgreSQL aislado (`?schema=e2e` vía `.env.e2e`)
+- Chromium, Firefox, WebKit, Pixel 7 (mobile)
+
+**Comandos obligatorios**:
+
+```bash
+npm run db:reset:e2e     # Limpiar schema e2e antes de la suite
+npx bddgen               # Generar tests desde .feature files
+npx playwright test      # Ejecutar suite E2E
+npx playwright show-report
+```
+
+**Estructura de archivos**:
+
+- Features: `e2e/features/*.feature`
+- Steps: `e2e/steps/*.steps.ts`
+- Helpers: `e2e/helpers/auth.ts`
+
+**Ubicación**: `.opencode/agents/dev-e2e/prompt.md`
+
+---
+
+### 5. qa-lead (QA Lead — Auditor de Calidad)
 
 **Modo**: `subagent` | `edit: deny`
 
@@ -175,7 +218,7 @@ npm run sonar         # BLOCKER/CRITICAL = 0
 
 ---
 
-### 5. sec-ops (Líder de Ciberseguridad y SecOps)
+### 6. sec-ops (Líder de Ciberseguridad y SecOps)
 
 **Modo**: `subagent` | `edit: deny`
 
@@ -214,7 +257,7 @@ npm run lint
 
 ---
 
-### 6. audit-finance (Auditor de Integridad Financiera)
+### 7. audit-finance (Auditor de Integridad Financiera)
 
 **Modo**: `subagent` | `edit: deny` | `bash: false`
 
@@ -279,10 +322,11 @@ tech-lead
   │         ↓ (si toca cálculos monetarios)
   │   audit-finance   → Reporte de integridad (solo lectura)
   ├── 2. dev-frontend  → UI + integración de Actions + accesibilidad
-  ├── 3. dev-tester    → Tests (coverage ≥ 80%)
+  ├── 3. dev-tester    → Tests unitarios + integración (coverage ≥ 80%)
   │         ↓ (si toca auth/pagos)
   │   sec-ops         → Auditoría OWASP (solo lectura)
-  └── 4. qa-lead       → Auditoría 14 reglas + quality gates
+  ├── 4. dev-e2e       → Escenarios Gherkin + tests Playwright de los flujos afectados
+  └── 5. qa-lead       → Auditoría 14 reglas + quality gates
 ```
 
 ### Revisión de Seguridad
@@ -308,9 +352,10 @@ tech-lead
 
 ```
 tech-lead
-  ├── 1. qa-lead       → Auditoría completa (14 reglas + sonar)
-  ├── 2. sec-ops*      → Si hay cambios en auth/pagos/datos sensibles
-  └── 3. audit-finance* → Si hay cambios en cálculos monetarios/transferencias
+  ├── 1. qa-lead        → Auditoría completa (14 reglas + sonar)
+  ├── 2. dev-e2e        → Suite E2E completa en los flujos afectados
+  ├── 3. sec-ops*       → Si hay cambios en auth/pagos/datos sensibles
+  └── 4. audit-finance* → Si hay cambios en cálculos monetarios/transferencias
 ```
 
 ### Quality Gate — Criterios de Aprobación
@@ -322,6 +367,7 @@ Ningún PR se aprueba sin que `qa-lead` confirme:
 | `npm run type-check`    | Exit code 0            |
 | `npm run lint`          | Exit code 0            |
 | `npm run test:coverage` | Cobertura ≥ 80%        |
+| `npx playwright test`   | 100% en Chromium       |
 | `npm run sonar`         | BLOCKER y CRITICAL = 0 |
 
 ---

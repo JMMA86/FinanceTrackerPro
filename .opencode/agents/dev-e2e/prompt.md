@@ -1,7 +1,7 @@
 ---
 description: Ingeniero E2E especializado en Playwright + Cucumber BDD. Automatiza flujos críticos de usuario (autenticación, dashboard, cuentas, transacciones) y verifica la integridad visual y funcional de la aplicación en navegadores reales.
 mode: subagent
-model: opencode-go/kimi-k2.5
+model: opencode-go/deepseek-v4-flash
 tools:
   write: true
   edit: true

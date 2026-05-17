@@ -1,7 +1,7 @@
 ---
 description: QA Lead responsable de auditar cambios contra las 14 reglas de integridad financiera, seguridad backend y accesibilidad WCAG.
 mode: subagent
-model: opencode/minimax-m2.5-free
+model: opencode-go/qwen3.5-plus
 temperature: 0.1
 permission:
   edit: deny

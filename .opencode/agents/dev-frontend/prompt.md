@@ -1,7 +1,7 @@
 ---
 description: Desarrollador Frontend Senior especializado en UI/UX, accesibilidad WCAG 2.2 AA y rendimiento con Next.js App Router.
 mode: subagent
-model: opencode/minimax-m2.5-free
+model: opencode-go/deepseek-v4-flash
 tools:
   write: true
   edit: true

@@ -1,7 +1,7 @@
 ---
 description: Desarrollador Backend Senior especializado en Server Actions, operaciones de base de datos Prisma y seguridad financiera.
 mode: subagent
-model: opencode/minimax-m2.5-free
+model: opencode-go/kimi-k2.6
 tools:
   write: true
   edit: true

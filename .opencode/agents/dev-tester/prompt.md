@@ -1,7 +1,7 @@
 ---
 description: SDET (Ingeniero en Desarrollo de Software en Pruebas) responsable de la automatización de tests y cobertura mínima del 80%.
 mode: subagent
-model: opencode/minimax-m2.5-freeopencode/minimax-m2.5-free
+model: opencode-go/deepseek-v4-flash
 tools:
   write: true
   edit: true

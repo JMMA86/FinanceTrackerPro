@@ -36,6 +36,29 @@
     }
   },
   "mcp": {
+    "playwright": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "@playwright/mcp@latest"
+      ],
+      "timeout": 30000
+    },
+    "postgres": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "{env:DATABASE_URL}"
+      ],
+      "environment": {
+        "DATABASE_URL": "{env:DATABASE_URL}"
+      },
+      "timeout": 15000
+    },
     "sonarqube": {
       "type": "local",
       "enabled": true,

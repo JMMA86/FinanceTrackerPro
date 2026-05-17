@@ -11,9 +11,10 @@ const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123';
 /**
  * Login as the E2E test user via the login form (Desktop)
  * Uses the desktop login form (visible on screens >= 768px)
+ * Clears any existing session first to ensure fresh login.
  */
 export async function loginAsTestUser(page: Page): Promise<void> {
-  await page.goto('/es/login');
+  await clearSession(page);
   await page.waitForLoadState('networkidle');
 
   // The desktop login form is the first form on the page

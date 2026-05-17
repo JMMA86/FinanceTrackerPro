@@ -99,6 +99,7 @@ Open [http://localhost:3000](http://localhost:3000)
 - `npm run db:generate` - Generate Prisma Client
 - `npm run db:push` - Push schema (dev only - no migration history)
 - `npm run db:migrate` - Create migration (prod - traceable changes)
+- `npm run db:reset` - Delete all data, re-run migrations, and re-seed
 - `npm run db:studio` - Open Prisma Studio GUI
 
 ### Testing

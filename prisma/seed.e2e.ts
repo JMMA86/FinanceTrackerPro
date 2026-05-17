@@ -39,32 +39,69 @@ async function main() {
     where: { email: testEmail },
   });
 
-  if (existingUser) {
+  let user = existingUser;
+
+  if (!user) {
+    const passwordHash = await argon2.hash(testPassword, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+
+    user = await prisma.user.create({
+      data: {
+        email: testEmail,
+        name: 'E2E Test User',
+        passwordHash,
+        baseCurrency: 'COP',
+        language: 'SPANISH',
+        theme: 'SYSTEM',
+        baseSalaryCents: 500000000,
+      },
+    });
+
+    console.log(`✓ E2E test user created: ${user.email}`);
+  } else {
     console.log(`✓ E2E test user already exists: ${testEmail}`);
-    await prisma.$disconnect();
-    return;
   }
 
-  const passwordHash = await argon2.hash(testPassword, {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-    parallelism: 4,
-  });
+  // Create test accounts for E2E tests
+  const existingAccounts = await prisma.account.findMany({ where: { userId: user.id } });
 
-  const user = await prisma.user.create({
-    data: {
-      email: testEmail,
-      name: 'E2E Test User',
-      passwordHash,
-      baseCurrency: 'COP',
-      language: 'SPANISH',
-      theme: 'SYSTEM',
-      baseSalaryCents: 500000000,
-    },
-  });
+  if (existingAccounts.length === 0) {
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        name: 'E2E Checking Account',
+        type: 'CHECKING',
+        currency: 'COP',
+        balanceCents: 250000000,
+        idempotencyKey: crypto.randomUUID(),
+        createdBy: user.id,
+        lastModifiedBy: user.id,
+      },
+    });
 
-  console.log(`✓ E2E test user created: ${user.email}`);
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        name: 'E2E Savings Account',
+        type: 'SAVINGS',
+        currency: 'COP',
+        balanceCents: 500000000,
+        interestRateEA: 8.5,
+        idempotencyKey: crypto.randomUUID(),
+        createdBy: user.id,
+        lastModifiedBy: user.id,
+      },
+    });
+
+    console.log('✓ Test accounts created for E2E');
+  } else {
+    console.log(`✓ ${existingAccounts.length} existing test accounts found`);
+  }
+
   console.log('✅ E2E seed completed successfully!');
 }
 

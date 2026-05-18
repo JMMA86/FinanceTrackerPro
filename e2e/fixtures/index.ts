@@ -9,6 +9,20 @@ export const TEST_USER = {
   name: 'E2E Test User',
 };
 
+/** Isolated user for accounts.feature — accounts tests never touch the auth or dashboard users. */
+export const ACCOUNTS_TEST_USER = {
+  email: process.env.E2E_ACCOUNTS_USER ?? 'accounts@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Accounts E2E User',
+};
+
+/** Isolated user for dashboard.feature — this user never has accounts created, keeping $0 assertions stable. */
+export const DASHBOARD_TEST_USER = {
+  email: process.env.E2E_DASHBOARD_USER ?? 'dashboard@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Dashboard E2E User',
+};
+
 export const INVALID_CREDENTIALS = {
   email: 'nonexistent@test.com',
   password: 'WrongPass123',

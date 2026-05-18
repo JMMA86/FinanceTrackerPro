@@ -4,7 +4,8 @@ Feature: Gestión de Cuentas Bancarias
   Para organizar mi dinero y llevar un control financiero
 
   Background:
-    Given que el usuario ha iniciado sesión
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
 
   # ============================================================================
   # VISUAL / CONTENIDO

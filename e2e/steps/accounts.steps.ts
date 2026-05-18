@@ -6,6 +6,8 @@
 import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
+import { loginAs } from '../helpers/auth';
+import { ACCOUNTS_TEST_USER } from '../fixtures';
 
 // ============================================================================
 // HELPERS
@@ -13,11 +15,10 @@ import { expect, type Page } from '@playwright/test';
 
 /** Creates an account via the UI modal interaction */
 async function createTestAccount(page: Page, name: string = 'Mi Cuenta Corriente') {
-  await page.goto('/es/accounts', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
+  await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
   await page.getByRole('button', { name: /nueva cuenta/i }).first().click();
-  await page.waitForTimeout(1500);
 
   const dialog = page.locator('dialog[open]').first();
   await dialog.waitFor({ state: 'visible', timeout: 5000 });
@@ -27,17 +28,20 @@ async function createTestAccount(page: Page, name: string = 'Mi Cuenta Corriente
 
   // Click submit via Playwright
   await dialog.getByRole('button', { name: /crear cuenta/i }).click();
-  await page.waitForTimeout(5000);
+  // Wait for dialog to close (success) or error to appear
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 10000 }).catch(async () => {
+    // If dialog didn't close, wait a bit more for slow server response
+    await page.waitForTimeout(2000);
+  });
 }
 
 /** Open the create account modal from the accounts page */
 async function openCreateModal(page: Page) {
-  await page.goto('/es/accounts', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
+  await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
   // Click "Nueva Cuenta" (first one = header button)
   await page.getByRole('button', { name: /nueva cuenta/i }).first().click();
-  await page.waitForTimeout(500);
 
   // Wait for dialog to be open
   await expect(page.locator('dialog[open]').first()).toBeVisible({ timeout: 5000 });
@@ -52,10 +56,49 @@ function getOpenDialog(page: Page) {
 // GIVEN - Background & State
 // ============================================================================
 
+Given('que el usuario de cuentas ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, ACCOUNTS_TEST_USER.email, ACCOUNTS_TEST_USER.password);
+});
+
 Given('que no existen cuentas bancarias', async ({ page }) => {
-  // The E2E user has no accounts by default (seed only creates the user)
-  await page.goto('/es/accounts', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
+  await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
+  // Wait for streaming/hydration to finish so account cards are stable before we interact.
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  // After networkidle the RSC payload has been received but React may still be swapping the
+  // Suspense skeleton (animate-pulse) for the real cards. Wait for the skeleton to detach first,
+  // then let the 300ms CSS card-entry transition finish before we interact.
+  await page.locator('.animate-pulse').first().waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(350);
+
+  // Delete every account via UI so each scenario starts with a clean slate.
+  while (await page.locator('[data-account-id]').count() > 0) {
+    const firstCard = page.locator('[data-account-id] button').first();
+    await firstCard.waitFor({ state: 'visible', timeout: 5000 });
+    // Read the account name from the card's aria-label BEFORE clicking.
+    // We use it below to confirm the detail panel resolved the correct account object —
+    // force:true can fire the click while React is mid-render, causing account=null in the panel,
+    // which makes handleDelete() return early with a silent no-op.
+    const accountName = await firstCard.getAttribute('aria-label') ?? '';
+    await firstCard.click({ force: true });
+    // Wait for the account NAME (not just a generic label) to appear in the detail panel.
+    // This proves accounts.find(selectedId) returned the real account, not null.
+    if (accountName) {
+      await page.getByText(accountName, { exact: false }).first().waitFor({ state: 'visible', timeout: 8000 });
+    } else {
+      await page.getByText('Saldo actual').first().waitFor({ state: 'visible', timeout: 5000 });
+    }
+    await page.getByRole('button', { name: /^eliminar$/i }).first().click();
+    const dialog = page.locator('dialog[open]').first();
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    await dialog.locator('button').filter({ hasText: 'Eliminar' }).last().click();
+    // Wait for the account to disappear from the grid (the actual desired outcome) rather than
+    // waiting for the dialog to close. The delete + router.refresh() + animations can push the
+    // dialog.close() past the 10s window in a cold-server context.
+    await expect(page.locator('[data-account-id]')).toHaveCount(0, { timeout: 15000 });
+    // Dismiss any lingering dialog (it will close naturally but we don't need to wait for it).
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
 });
 
 Given('que el modal de creación está abierto', async ({ page }) => {
@@ -65,8 +108,7 @@ Given('que el modal de creación está abierto', async ({ page }) => {
 Given('que existe una cuenta bancaria', async ({ page }) => {
   // Create a test account first
   await createTestAccount(page, 'Cuenta de Prueba E2E');
-  await page.goto('/es/accounts', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
+  await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
 
   // Verify the account card exists
   await expect(page.locator('[data-account-id]').first()).toBeVisible({ timeout: 5000 });
@@ -77,8 +119,7 @@ Given('que existe una cuenta bancaria', async ({ page }) => {
 // ============================================================================
 
 When('navega a la página de cuentas', async ({ page }) => {
-  await page.goto('/es/accounts', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1000);
+  await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
 });
 
 // ============================================================================
@@ -92,7 +133,6 @@ When('abre el modal de nueva cuenta', async ({ page }) => {
 When('intenta enviar el formulario vacío', async ({ page }) => {
   const dialog = getOpenDialog(page);
   await dialog.getByRole('button', { name: /crear cuenta/i }).click();
-  await page.waitForTimeout(1000);
 });
 
 When('selecciona el tipo {string}', async ({ page }, typeName: string) => {
@@ -108,13 +148,11 @@ When('selecciona el tipo {string}', async ({ page }, typeName: string) => {
 
   const optionValue = typeMap[typeName] ?? typeName;
   await typeSelect.selectOption(optionValue);
-  await page.waitForTimeout(500);
 });
 
 When('ingresa {string} en el campo nombre', async ({ page }, name: string) => {
   const dialog = getOpenDialog(page);
   await dialog.locator('#acc-name').fill(name);
-  await page.waitForTimeout(200);
 });
 
 When('ingresa {string} en el campo de saldo inicial', async ({ page }, amount: string) => {
@@ -125,23 +163,19 @@ When('ingresa {string} en el campo de saldo inicial', async ({ page }, amount: s
   for (let i = 0; i < 10; i++) {
     await balanceInput.press('Backspace');
   }
-  await page.waitForTimeout(100);
   // Type each digit (FormattedNumericInput uses keyDown handler)
   for (const digit of amount) {
     await balanceInput.press(digit);
   }
-  await page.waitForTimeout(300);
 });
 
 When('cierra el modal con Cancelar', async ({ page }) => {
   const dialog = getOpenDialog(page);
   await dialog.getByRole('button', { name: /cancelar/i }).click();
-  await page.waitForTimeout(500);
 });
 
 When('presiona Escape en el modal', async ({ page }) => {
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(500);
 });
 
 When('envía el formulario de creación', async ({ page }) => {
@@ -158,7 +192,8 @@ When('envía el formulario de creación', async ({ page }) => {
       form.requestSubmit(submitBtn);
     }
   });
-  await page.waitForTimeout(5000);
+  // 60s: covers cold JIT-compile of the createBankAccount action on first call.
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 60000 });
 });
 
 // ============================================================================
@@ -168,20 +203,17 @@ When('envía el formulario de creación', async ({ page }) => {
 When('hace clic en la primera tarjeta de cuenta', async ({ page }) => {
   const card = page.locator('[data-account-id] button').first();
   await card.click();
-  await page.waitForTimeout(1500);
 });
 
 When('abre el panel de detalle de la cuenta', async ({ page }) => {
   const card = page.locator('[data-account-id] button').first();
   await card.click();
-  await page.waitForTimeout(1500);
 });
 
 When('hace clic en eliminar en el panel de detalle', async ({ page }) => {
   // The delete button in the AccountFullDetail panel has aria-label="Eliminar"
   const deleteBtn = page.getByRole('button', { name: /^eliminar$/i }).first();
   await deleteBtn.click();
-  await page.waitForTimeout(500);
 });
 
 When('confirma la eliminación de la cuenta', async ({ page }) => {
@@ -189,7 +221,8 @@ When('confirma la eliminación de la cuenta', async ({ page }) => {
   // The delete button in DeleteConfirmModal contains text "Eliminar" with Trash2 icon
   // Use filter to find the destructive button (not Cancel)
   await dialog.locator('button').filter({ hasText: 'Eliminar' }).last().click();
-  await page.waitForTimeout(3000);
+  // Wait for dialog to close and page to update
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 10000 });
 });
 
 // ============================================================================
@@ -331,12 +364,9 @@ Then('debe ver el modal de confirmación {string}', async ({ page }, title: stri
 });
 
 Then('la cuenta debe ser eliminada del grid', async ({ page }) => {
-  // Wait for the dialog to close
-  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 5000 });
   // Wait for page refresh (router.refresh() after deletion)
-  await page.waitForTimeout(2000);
   // The account card should be gone
-  await expect(page.locator('[data-account-id]')).toHaveCount(0, { timeout: 5000 });
+  await expect(page.locator('[data-account-id]')).toHaveCount(0, { timeout: 10000 });
 });
 
 // ============================================================================
@@ -366,5 +396,4 @@ Then('el skeleton de carga puede mostrarse inicialmente', async ({ page }) => {
 
 Then('eventualmente el contenido de cuentas debe cargarse', async ({ page }) => {
   await expect(page.getByRole('main')).toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(1000);
 });

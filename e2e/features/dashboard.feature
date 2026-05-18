@@ -4,7 +4,7 @@ Feature: Dashboard financiero
   Para tener una visión integral de mi situación financiera
 
   Background:
-    Given que el usuario ha iniciado sesión
+    Given que el usuario del dashboard ha iniciado sesión
 
   # ============================================================================
   # VISUAL / CONTENIDO

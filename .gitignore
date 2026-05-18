@@ -60,3 +60,4 @@ next-env.d.ts
 /test-results/
 /blob-report/
 e2e-results.json
+test-output.txt

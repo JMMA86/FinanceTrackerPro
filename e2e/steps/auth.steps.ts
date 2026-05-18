@@ -19,15 +19,14 @@ function uniqueEmail(): string {
 // ============================================================================
 
 Given('que el usuario navega a la página de login en español', async ({ page }) => {
+  // clearSession already navigates to /es/login and waits for networkidle (full hydration).
+  // A second goto would re-trigger hydration with only domcontentloaded, causing React to reset
+  // controlled input values before steps can interact with the form.
   await clearSession(page);
-  await page.goto('/es/login');
-  await page.waitForLoadState('networkidle');
 });
 
 Given('navega a la página de login en español', async ({ page }) => {
   await clearSession(page);
-  await page.goto('/es/login');
-  await page.waitForLoadState('networkidle');
 });
 
 Given('que el usuario no ha iniciado sesión', async ({ page }) => {
@@ -54,13 +53,17 @@ Given('que existe un usuario con email {string}', async ({ page }, _email: strin
 // ============================================================================
 
 When('ingresa credenciales válidas en el formulario de login desktop', async ({ page }) => {
+  // Ensure React has hydrated before filling. If the prior navigation step's networkidle
+  // cap fired too early on a busy server, clicking would trigger the native form submit
+  // instead of React's onSubmit, which posts to the Server Action URL and loses the
+  // redirect= query param on the response (resulting in /es/login? with a bare ?).
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+
   const loginForm = page.locator('form').first();
-  // Fill email - works with any language since the first form always has email and password fields
   const emailInput = loginForm.locator('input[type="email"]');
   const passwordInput = loginForm.locator('input[type="password"]');
   await emailInput.fill(TEST_USER.email);
   await passwordInput.fill(TEST_USER.password);
-  // Click the submit button (use button[type="submit"] HTML selector to avoid matching the passkey button)
   await loginForm.locator('button[type="submit"]').click();
 });
 
@@ -83,13 +86,11 @@ When('hace clic en {string} sin llenar campos', async ({ page }, buttonName: str
 });
 
 When('navega directamente a {string}', async ({ page }, path: string) => {
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
 });
 
 When('navega a {string}', async ({ page }, path: string) => {
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
 });
 
 When('hace clic en {string} en el sidebar', async ({ page }, buttonName: string) => {
@@ -129,20 +130,13 @@ When('ingresa {string} en el campo contraseña del registro desktop', async ({ p
 });
 
 When('hace clic en {string} en el registro desktop', async ({ page }, _buttonName: string) => {
-  // Wait for validation state to settle
-  await page.waitForTimeout(300);
-  // Find the submit button in the desktop register form (form that contains #password-desktop)
   const registerForm = page.locator('form').filter({ has: page.locator('#password-desktop') });
-  await registerForm.getByRole('button', { type: 'submit' }).click();
-  // Wait for the server response
-  await page.waitForTimeout(2000);
+  await registerForm.locator('button[type="submit"]').click();
 });
 
 When('intenta enviar el formulario de registro vacío', async ({ page }) => {
-  // The register submit button is disabled when form is empty
-  // So we just verify that it's disabled
   const registerForm = page.locator('form').filter({ has: page.locator('#password-desktop') });
-  await expect(registerForm.getByRole('button', { type: 'submit' })).toBeDisabled();
+  await expect(registerForm.locator('button[type="submit"]')).toBeDisabled();
 });
 
 When('escribe caracteres en el campo contraseña del registro desktop', async ({ page }) => {
@@ -157,12 +151,11 @@ When('escribe caracteres en el campo contraseña del registro desktop', async ({
 When('cambia el idioma a {string} en el selector de idioma', async ({ page }, language: string) => {
   // Click the language selector toggle button
   await page.locator('.relative .bg-slate-700').first().click();
-  await page.waitForTimeout(500);
   
   // Click the language option in the dropdown
   await page.locator('.absolute.right-0 button').filter({ hasText: language }).click();
-  await page.waitForTimeout(1000);
-  await page.waitForLoadState('networkidle');
+  // networkidle ensures the new locale page is fully hydrated before we check text content.
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 // ============================================================================
@@ -172,7 +165,6 @@ When('cambia el idioma a {string} en el selector de idioma', async ({ page }, la
 When('hace clic en {string} en el toggle mobile', async ({ page }, _linkText: string) => {
   // Mobile toggle link is at the bottom of the mobile form
   await page.locator('.md\\:hidden button').last().click();
-  await page.waitForTimeout(1000);
 });
 
 // ============================================================================
@@ -180,15 +172,16 @@ When('hace clic en {string} en el toggle mobile', async ({ page }, _linkText: st
 // ============================================================================
 
 Then('debe ser redirigido al dashboard', async ({ page }) => {
-  await expect(page).toHaveURL(/\/es\/dashboard/, { timeout: 15000 });
+  // 40s: first call to the login Server Action may need JIT-compile time.
+  await expect(page).toHaveURL(/\/es\/dashboard/, { timeout: 40000 });
 });
 
 Then('debe ser redirigido a la página de login', async ({ page }) => {
-  await expect(page).toHaveURL(/\/es\/login/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/es\/login/, { timeout: 30000 });
 });
 
 Then('debe ser redirigido a {string}', async ({ page }, path: string) => {
-  await expect(page).toHaveURL(new RegExp(path.replace(/\//g, '\\/')), { timeout: 15000 });
+  await expect(page).toHaveURL(new RegExp(path.replace(/\//g, '\\/')), { timeout: 40000 });
 });
 
 Then('debe ver un mensaje de error de login', async ({ page }) => {
@@ -198,7 +191,8 @@ Then('debe ver un mensaje de error de login', async ({ page }) => {
 
 Then('debe ver un mensaje de error en el registro', async ({ page }) => {
   // Register error: div with role="alert" and id="error-desktop"
-  await expect(page.locator('#error-desktop')).toBeVisible({ timeout: 10000 });
+  // 40s: first call to the register action needs JIT-compile time under parallel server load.
+  await expect(page.locator('#error-desktop')).toBeVisible({ timeout: 40000 });
 });
 
 Then('la validación HTML5 debe impedir el envío del formulario de login', async ({ page }) => {
@@ -222,7 +216,8 @@ Then('la validación HTML5 debe impedir el envío del formulario de registro des
 Then('debe ver un mensaje de éxito de registro en el formulario de login', async ({ page }) => {
   // After successful registration, the mode switches to login
   // and a success message is shown in a div with bg-green-900/20
-  await expect(page.locator('.bg-green-900\\/20')).toBeVisible({ timeout: 10000 });
+  // 40s: the register Server Action needs to JIT-compile on its first call.
+  await expect(page.locator('.bg-green-900\\/20')).toBeVisible({ timeout: 40000 });
 });
 
 Then('el botón de registro debe estar deshabilitado', async ({ page }) => {
@@ -273,7 +268,7 @@ Then('la URL debe contener {string}', async ({ page }, urlPart: string) => {
 });
 
 Then('debe ser redirigido al dashboard con idioma inglés', async ({ page }) => {
-  await expect(page).toHaveURL(/\/en\/dashboard/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/en\/dashboard/, { timeout: 40000 });
 });
 
 // ============================================================================

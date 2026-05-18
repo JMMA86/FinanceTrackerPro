@@ -6,8 +6,8 @@
 import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
-import { clearSession } from '../helpers/auth';
-import { TEST_USER } from '../fixtures';
+import { clearSession, loginAs } from '../helpers/auth';
+import { DASHBOARD_TEST_USER } from '../fixtures';
 
 // ============================================================================
 // HELPERS
@@ -19,24 +19,29 @@ import { TEST_USER } from '../fixtures';
  */
 async function loginAsTestUserInEnglish(page: Page): Promise<void> {
   await clearSession(page);
-  await page.goto('/en/login');
-  await page.waitForLoadState('networkidle');
-
-  // Use input[type] selectors for robustness across locales
+  await page.goto('/en/login', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   const loginForm = page.locator('form').first();
-  await loginForm.locator('input[type="email"]').fill(TEST_USER.email);
-  await loginForm.locator('input[type="password"]').fill(TEST_USER.password);
+  await loginForm.locator('input[type="email"]').fill(DASHBOARD_TEST_USER.email);
+  await loginForm.locator('input[type="password"]').fill(DASHBOARD_TEST_USER.password);
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-  await page.waitForURL(/\/en\/dashboard/, { timeout: 10000 });
+  await page.waitForURL(/\/en\/dashboard/, { timeout: 60000 });
 }
 
 // ============================================================================
 // GIVEN - Background & State
 // ============================================================================
 
+Given('que el usuario del dashboard ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, DASHBOARD_TEST_USER.email, DASHBOARD_TEST_USER.password);
+  // Ensure dashboard RSC content is fully streamed before test steps run.
+  // Without this, links like "Ver todas" may not be in the DOM yet.
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+});
+
 Given('que el usuario ha iniciado sesión en inglés', async ({ page }) => {
   await loginAsTestUserInEnglish(page);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 Given('que ve el dashboard con valores visibles', async ({ page }) => {
@@ -46,7 +51,6 @@ Given('que ve el dashboard con valores visibles', async ({ page }) => {
   );
   if (await maskBtn.isVisible().catch(() => false)) {
     await maskBtn.click();
-    await page.waitForTimeout(300);
   }
 });
 
@@ -73,7 +77,6 @@ When('hace clic en el botón de toggle de máscara', async ({ page }) => {
     'button[aria-label="Hide values"], button[aria-label="Show values"], ' +
     'button[aria-label="Ocultar valores"], button[aria-label="Mostrar valores"]'
   ).first().click();
-  await page.waitForTimeout(500);
 });
 
 When('hace clic en el botón de toggle de máscara nuevamente', async ({ page }) => {
@@ -81,7 +84,6 @@ When('hace clic en el botón de toggle de máscara nuevamente', async ({ page })
     'button[aria-label="Hide values"], button[aria-label="Show values"], ' +
     'button[aria-label="Ocultar valores"], button[aria-label="Mostrar valores"]'
   ).first().click();
-  await page.waitForTimeout(500);
 });
 
 When('hace clic en el botón de sección {string}', async ({ page }, sectionName: string) => {
@@ -89,24 +91,22 @@ When('hace clic en el botón de sección {string}', async ({ page }, sectionName
   const headerBtn = page.locator('section').filter({ hasText: sectionName }).locator('button').first();
   await headerBtn.scrollIntoViewIfNeeded();
   await headerBtn.click({ force: true });
-  await page.waitForTimeout(500);
 });
 
 When('hace clic en el botón de sección {string} nuevamente', async ({ page }, sectionName: string) => {
   const headerBtn = page.locator('section').filter({ hasText: sectionName }).locator('button').first();
   await headerBtn.scrollIntoViewIfNeeded();
   await headerBtn.click({ force: true });
-  await page.waitForTimeout(500);
 });
 
 When('hace clic en el enlace {string} de Transacciones Recientes', async ({ page }, linkText: string) => {
   await page.getByRole('link', { name: new RegExp(linkText, 'i') }).click();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 When('hace clic en el enlace {string} del sidebar', async ({ page }, linkName: string) => {
   await page.locator('aside').getByRole('link', { name: new RegExp(`^${linkName}$`, 'i') }).click();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
 
 // ============================================================================
@@ -226,8 +226,8 @@ Then('los valores monetarios deben mostrar {string}', async ({ page }, _maskedVa
 });
 
 Then('los valores monetarios deben volver a mostrar valores numéricos', async ({ page }) => {
-  await expect(page.getByText('$0').first()).toBeVisible({ timeout: 3000 });
-  await expect(page.locator('p:has-text("***")')).toHaveCount(0, { timeout: 3000 });
+  await expect(page.locator('p:has-text("***")')).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByText('$0').first()).toBeVisible({ timeout: 5000 });
 });
 
 // ============================================================================

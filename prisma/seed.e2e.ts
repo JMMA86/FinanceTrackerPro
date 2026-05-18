@@ -27,80 +27,53 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+const sharedPassword = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
+
+async function upsertUser(email: string, name: string): Promise<void> {
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`✓ ${name} already exists: ${email}`);
+    return;
+  }
+  // Minimal parameters for E2E test users — security is irrelevant here and
+  // production-grade settings (memoryCost: 65536) cause 30-40s login times when
+  // 3 parallel workers all verify passwords simultaneously on the same machine.
+  const passwordHash = await argon2.hash(sharedPassword, {
+    type: argon2.argon2id,
+    memoryCost: 4096,
+    timeCost: 1,
+    parallelism: 1,
+  });
+  await prisma.user.create({
+    data: {
+      email,
+      name,
+      passwordHash,
+      baseCurrency: 'COP',
+      language: 'SPANISH',
+      theme: 'SYSTEM',
+      baseSalaryCents: 500000000,
+    },
+  });
+  console.log(`✓ ${name} created: ${email}`);
+}
+
 async function main() {
   console.log('🌱 Starting E2E seed...');
 
-  // Create test user with known credentials for E2E tests
-  const testEmail = process.env.E2E_TEST_USER || 'e2e@financetrackerpro.com';
-  const testPassword = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
-
-  // Check if user already exists
-  const existingUser = await prisma.user.findUnique({
-    where: { email: testEmail },
-  });
-
-  let user = existingUser;
-
-  if (!user) {
-    const passwordHash = await argon2.hash(testPassword, {
-      type: argon2.argon2id,
-      memoryCost: 65536,
-      timeCost: 3,
-      parallelism: 4,
-    });
-
-    user = await prisma.user.create({
-      data: {
-        email: testEmail,
-        name: 'E2E Test User',
-        passwordHash,
-        baseCurrency: 'COP',
-        language: 'SPANISH',
-        theme: 'SYSTEM',
-        baseSalaryCents: 500000000,
-      },
-    });
-
-    console.log(`✓ E2E test user created: ${user.email}`);
-  } else {
-    console.log(`✓ E2E test user already exists: ${testEmail}`);
-  }
-
-  // Create test accounts for E2E tests
-  const existingAccounts = await prisma.account.findMany({ where: { userId: user.id } });
-
-  if (existingAccounts.length === 0) {
-    await prisma.account.create({
-      data: {
-        userId: user.id,
-        name: 'E2E Checking Account',
-        type: 'CHECKING',
-        currency: 'COP',
-        balanceCents: 250000000,
-        idempotencyKey: crypto.randomUUID(),
-        createdBy: user.id,
-        lastModifiedBy: user.id,
-      },
-    });
-
-    await prisma.account.create({
-      data: {
-        userId: user.id,
-        name: 'E2E Savings Account',
-        type: 'SAVINGS',
-        currency: 'COP',
-        balanceCents: 500000000,
-        interestRateEA: 8.5,
-        idempotencyKey: crypto.randomUUID(),
-        createdBy: user.id,
-        lastModifiedBy: user.id,
-      },
-    });
-
-    console.log('✓ Test accounts created for E2E');
-  } else {
-    console.log(`✓ ${existingAccounts.length} existing test accounts found`);
-  }
+  // Three isolated users — one per feature file — so parallel workers never share account state.
+  await upsertUser(
+    process.env.E2E_TEST_USER || 'e2e@financetrackerpro.com',
+    'E2E Test User',          // auth.feature
+  );
+  await upsertUser(
+    process.env.E2E_ACCOUNTS_USER || 'accounts@e2e.financetrackerpro.com',
+    'Accounts E2E User',      // accounts.feature
+  );
+  await upsertUser(
+    process.env.E2E_DASHBOARD_USER || 'dashboard@e2e.financetrackerpro.com',
+    'Dashboard E2E User',     // dashboard.feature
+  );
 
   console.log('✅ E2E seed completed successfully!');
 }

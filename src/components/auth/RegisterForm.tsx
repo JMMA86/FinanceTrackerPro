@@ -49,9 +49,7 @@ export default function RegisterForm({
   const inputBgClass = isMobile
     ? 'bg-gray-700/70 border-gray-600'
     : 'bg-gray-700 border-gray-600';
-  const checklistBgClass = isMobile
-    ? 'bg-gray-700/50 border-gray-600'
-    : 'bg-gray-700/50 border-gray-600';
+  const checklistBgClass = 'bg-gray-700/50 border-gray-600';
   const errorBgClass = isMobile ? 'bg-red-900/30' : 'bg-red-900/20';
 
   const passwordRequirements: PasswordRequirement[] = [

@@ -2,26 +2,45 @@
  * Prisma Seed Script
  * Generates test data for FinanceTrackerPro
  *
- * Run: npx tsx prisma/seed.ts
+ * Run: npm run db:seed
+ * Credentials: demo@financetracker.com / Demo123@
  */
 
+import dotenv from 'dotenv';
+import dotenvExpand from 'dotenv-expand';
+dotenvExpand.expand(dotenv.config({ override: true }));
+
+import * as argon2 from 'argon2';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { Decimal } from 'decimal.js';
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
+const DEMO_PASSWORD = 'Demo123@';
 
 async function main() {
   console.log('🌱 Starting database seed...');
+
+  const passwordHash = await argon2.hash(DEMO_PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4,
+  });
 
   // 1. Create test user
   console.log('Creating test user...');
   const user = await prisma.user.upsert({
     where: { email: 'demo@financetracker.com' },
-    update: {},
+    update: { passwordHash },
     create: {
       email: 'demo@financetracker.com',
       name: 'Juan Manuel Demo',
-      passwordHash: '$2a$10$demoHashForTestingPurposes', // Not a real hash
+      passwordHash,
       baseSalaryCents: 500000000, // $5,000,000 COP
       baseCurrency: 'COP',
       language: 'SPANISH',
@@ -361,4 +380,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

@@ -12,12 +12,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { PrismaClient , Currency, AccountType, Language, Theme } from '@prisma/client';
+import '@/lib/env';
+import { PrismaClient, Currency, AccountType, Language, Theme } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
-
-const TEST_DB_URL = 'postgresql://postgres:admin@localhost:5432/postgres';
+const TEST_DB_URL = process.env.DATABASE_URL!;
 const TEST_USER_ID = 'test-user-integration-' + Date.now();
 const TEST_USER_ID_2 = 'test-user-integration-2-' + Date.now();
 

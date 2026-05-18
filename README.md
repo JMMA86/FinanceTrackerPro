@@ -44,54 +44,47 @@ Create environment file from `.env.example` and fill the required values:
 cp .env.example .env
 ```
 
-Required variables (local Postgres):
+Fill in your credentials — defaults for local Docker are already in `.env.example`:
 
 ```env
-POSTGRES_HOST=
-POSTGRES_PORT=
-POSTGRES_USER=
-POSTGRES_PASSWORD=
-POSTGRES_DB=
-POSTGRES_SCHEMA=
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=<your_user>
+POSTGRES_PASSWORD=<your_password>
+POSTGRES_DB=<your_db_name>
+POSTGRES_SCHEMA=public
 DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
+JWT_SECRET=<min_32_chars>
 ```
 
-Optional variables:
-
-```env
-SONAR_TOKEN=
-```
-
-For E2E testing, create a separate `.env.e2e` file pointing to the isolated E2E schema:
+For E2E testing, create `.env.e2e` from the example (all credentials are pre-filled for the local Docker setup):
 
 ```bash
-cp .env.example .env.e2e
+cp .env.e2e.example .env.e2e
 ```
 
-Then set `POSTGRES_SCHEMA=e2e` in `.env.e2e` along with E2E test credentials:
-
-```env
-POSTGRES_SCHEMA=e2e
-E2E_TEST_USER=e2e@financetrackerpro.com
-E2E_TEST_PASSWORD=E2ePassword123
-BASE_URL=http://localhost:3000
-```
+`.env.e2e` points to the isolated E2E database (`financetracker-postgres-e2e` on port **5433**) — a completely separate Docker container from dev.
 
 You do not need PostgreSQL installed locally; use Docker Compose to run it.
 
-Start local Postgres (Docker Compose):
+Start databases (Docker Compose):
 
 ```bash
+# Dev database only
+docker-compose -f docker-compose.postgres.yml up -d postgres
+
+# E2E database only
+docker-compose -f docker-compose.postgres.yml up -d postgres-e2e
+
+# Both at once
 docker-compose -f docker-compose.postgres.yml up -d
 ```
 
-Setup database:
+Set up the dev database (run once after first `docker-compose up`):
 
 ```bash
-npm run db:push        # Dev: Quick schema sync
-npm run db:migrate     # Prod: Traceable migrations
+npm run db:migrate     # Apply all migrations to dev database (requires interactive terminal)
 npm run db:generate    # Generate Prisma Client
-npm run db:setup:e2e   # E2E: Apply migrations to isolated e2e schema
 ```
 
 Install Playwright browsers (first time only):
@@ -119,12 +112,14 @@ Open [http://localhost:3000](http://localhost:3000)
 ### Database
 
 - `npm run db:generate` - Generate Prisma Client
-- `npm run db:push` - Push schema (dev only - no migration history)
-- `npm run db:migrate` - Create migration (prod - traceable changes)
-- `npm run db:reset` - Delete all data, re-run migrations, and re-seed
-- `npm run db:setup:e2e` - Apply migrations to the isolated E2E schema (reads `.env.e2e`)
-- `npm run db:reset:e2e` - Reset only the E2E schema without touching development data
-- `npm run db:studio` - Open Prisma Studio GUI
+- `npm run db:push` - Push current schema directly (dev only, no migration history)
+- `npm run db:migrate` - Create a new migration and apply it (dev, interactive)
+- `npm run db:reset` - Wipe dev database, re-run all migrations
+- `npm run db:setup:e2e` - Apply pending migrations to the E2E database (reads `.env.e2e`)
+- `npm run db:reset:e2e` - Wipe and re-migrate the E2E database (dev database untouched)
+- `npm run db:seed:e2e` - Seed the E2E database with test user and accounts (reads `.env.e2e`)
+- `npm run db:studio` - Open Prisma Studio for the **dev** database
+- `npm run db:studio:e2e` - Open Prisma Studio for the **E2E** database (reads `.env.e2e`)
 
 ### Testing
 
@@ -138,12 +133,18 @@ Open [http://localhost:3000](http://localhost:3000)
 **Setup (first time only):**
 
 ```bash
-npm install -D playwright-bdd   # Install playwright-bdd
-npx playwright install           # Install browser binaries
-npm run db:setup:e2e             # Apply migrations to isolated e2e schema
+npm install -D playwright-bdd                                       # Install playwright-bdd
+npx playwright install                                              # Install browser binaries
+docker-compose -f docker-compose.postgres.yml up -d postgres-e2e   # Start E2E database
 ```
 
 **Run E2E tests:**
+
+> **Stop any running `npm run dev` before running E2E tests.** Playwright starts its own dev server on port 3000 pointed at the E2E database. If port 3000 is already in use, tests will fail.
+
+> **Always run `npx bddgen` before `npx playwright test`** — it compiles `.feature` Gherkin files into Playwright test specs.
+
+> The E2E database is **automatically wiped, re-migrated and re-seeded** by `globalSetup` (`e2e/global-setup.ts`) before each test run. No manual reset needed.
 
 ```bash
 # CLI — headless (CI mode)
@@ -164,8 +165,6 @@ npx playwright test --ui
 # Open HTML report after running tests
 npx playwright show-report
 ```
-
-> **Always run `npx bddgen` before `npx playwright test`** — it compiles `.feature` Gherkin files into Playwright test specs.
 
 ### Code Quality
 

@@ -3,8 +3,8 @@ import { defineBddConfig } from 'playwright-bdd';
 import * as dotenv from 'dotenv';
 import * as dotenvExpand from 'dotenv-expand';
 
-// Load .env.e2e for E2E tests
-const env = dotenv.config({ path: '.env.e2e' });
+// Load .env.e2e with override:true so stale shell env vars never pollute expansion.
+const env = dotenv.config({ path: '.env.e2e', override: true });
 if (env.error) {
   console.warn('.env.e2e not found. Using environment variables directly.');
 } else {
@@ -18,6 +18,7 @@ const testDir = defineBddConfig({
 
 export default defineConfig({
   testDir,
+  globalSetup: './e2e/global-setup.ts',
   timeout: 30_000,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -41,7 +42,8 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    // Never reuse an existing server — it may be pointing at the dev database.
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       DATABASE_URL: process.env.DATABASE_URL!,

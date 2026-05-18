@@ -1,8 +1,8 @@
 /**
  * E2E Test Seed Script
- * Creates test data in the isolated "e2e" schema
+ * Creates test data in the isolated E2E database (financetracker-postgres-e2e)
  *
- * Run: DATABASE_URL="postgresql://postgres:admin@localhost:5432/postgres?schema=e2e" npx tsx prisma/seed.e2e.ts
+ * Run via: npm run db:seed:e2e
  */
 
 import { PrismaClient } from '@prisma/client';

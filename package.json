@@ -20,10 +20,12 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "db:studio:e2e": "dotenv --override -e .env.e2e -- prisma studio --port 5556",
     "db:reset": "prisma migrate reset",
-    "db:setup:e2e": "dotenv -e .env.e2e -- prisma migrate deploy",
-    "db:reset:e2e": "dotenv -e .env.e2e -- prisma migrate reset --force",
+    "db:setup:e2e": "dotenv --override -e .env.e2e -- prisma migrate deploy",
+    "db:reset:e2e": "dotenv --override -e .env.e2e -- prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:e2e": "dotenv --override -e .env.e2e -- tsx prisma/seed.e2e.ts",
     "prepare": "husky"
   },
   "dependencies": {

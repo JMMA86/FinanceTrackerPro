@@ -143,7 +143,7 @@ npm run test:coverage
 - Escribir escenarios en Gherkin (`.feature` files) legibles por todo el equipo
 - Implementar step definitions en TypeScript con `playwright-bdd`
 - Usar el **MCP de Playwright** para explorar flujos manualmente y convertirlos en tests automatizados (ciclo obligatorio: explorar → anotar en Gherkin → implementar → verificar)
-- Garantizar aislamiento de datos usando el schema PostgreSQL `e2e` (nunca el schema de desarrollo)
+- Garantizar aislamiento de datos usando la base de datos E2E dedicada (`financetracker-postgres-e2e`, puerto 5433, vía `.env.e2e`) — nunca la base de datos de desarrollo
 - Detectar regresiones visuales, problemas de navegación y errores de servidor no capturados por tests unitarios
 
 **Regla de Oro**:
@@ -153,7 +153,7 @@ Cada flujo explorado con el MCP **debe** producir un `.feature` file + step defi
 **Tech Stack**:
 
 - Playwright + `playwright-bdd` + Cucumber / Gherkin
-- Schema PostgreSQL aislado (`?schema=e2e` vía `.env.e2e`)
+- Base de datos PostgreSQL aislada (`financetracker-postgres-e2e` en puerto 5433 vía `.env.e2e`)
 - Chromium, Firefox, WebKit, Pixel 7 (mobile)
 
 **Comandos obligatorios**:

@@ -1,561 +1,299 @@
 # FinanceTrackerPro
 
-Enterprise-grade financial management system with **ACID transactions**, **high-precision decimal calculations**, and **audit trail** for tracking banks, cash, loans, and investments.
+Enterprise-grade financial management system with **ACID transactions**, **high-precision decimal calculations**, and an **immutable audit trail** for multi-currency asset tracking.
 
-## Core Features
+![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-%23000000?logo=nextdotjs)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-%232D3748?logo=prisma)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-%2338B2AC?logo=tailwindcss)
+![SonarQube](https://img.shields.io/badge/SonarQube-Quality%20Gate-005A9C?logo=sonarqube)
+![Coverage](https://img.shields.io/badge/Coverage-%3E%3D80%25-green)
 
-### Financial Precision
+---
 
-- ✅ **Decimal.js precision** - Banker's rounding (ROUND_HALF_EVEN)
-- ✅ **Multi-currency support** - ISO 4217 codes with conversion tracking
-- ✅ **Exchange rate audit** - Preserves original amount + rate for every conversion
+## 🏗️ Core Architecture Principles
 
-### Banking-Grade Integrity
+To guarantee absolute financial integrity, FinanceTrackerPro adheres to strict banking-grade constraints:
 
-- ✅ **Idempotency** - Network retry protection via UUID keys
-- ✅ **Source of Truth** - Balance reconciliation from transaction history
-- ✅ **Atomic transfers** - Prisma transactions (ACID compliant)
+1. **Money as Integers:** All monetary values are processed and stored as **integer cents** (e.g., `$10.00` = `1000`) to eliminate IEEE 754 floating-point rounding errors.
+2. **High-Precision Calculations:** Complex math (conversions, interest) is handled via **Decimal.js** utilizing Banker's Rounding (`ROUND_HALF_EVEN`).
+3. **Single Source of Truth:** The transaction history is the **only** immutable source of truth. The `account.balanceCents` field acts strictly as a transaction-isolated cache optimized for read performance.
+4. **Double-Entry Accounting:** Internal transfers write symmetric `TRANSFER_OUT` (negative) and `TRANSFER_IN` (positive) entries wrapped in an atomic Prisma transaction (`$transaction`). Both share a unique `transferId`.
+5. **Soft Deletes Only:** Financial records are never physically purged. Deletions use the `deletedAt` timestamp to maintain historical audit continuity.
 
-### Security & Audit
+> See [`CLAUDE.md`](CLAUDE.md) for all 14 Financial Integrity Rules and Banking-Grade Integrity Pillars enforced across the codebase.
 
-- ✅ **Soft deletes** - Never lose financial data
-- ✅ **Extended audit** - IP address, user agent, timestamps
-- ✅ **Server-side validation** - Zero trust architecture
-- ✅ **80% test coverage** - Financial calculations tested
+---
 
-## Getting Started
+## ⚡ Quick Start
 
-### Prerequisites
+Get your local development environment up and running in under two minutes.
 
-- Node.js 20+
-- Docker Desktop (for local Postgres)
-
-### Installation
-
-Install dependencies:
+### 1. Clone & Install Dependencies
 
 ```bash
+git clone https://github.com/JMMA86/financetrackerpro.git
+cd financetrackerpro
 npm install
-```
-
-Create environment file from `.env.example` and fill the required values:
-
-```bash
-cp .env.example .env
-```
-
-Fill in your credentials — defaults for local Docker are already in `.env.example`:
-
-```env
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=<your_user>
-POSTGRES_PASSWORD=<your_password>
-POSTGRES_DB=<your_db_name>
-POSTGRES_SCHEMA=public
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
-JWT_SECRET=<min_32_chars>
-```
-
-For E2E testing, create `.env.e2e` from the example (all credentials are pre-filled for the local Docker setup):
-
-```bash
-cp .env.e2e.example .env.e2e
-```
-
-`.env.e2e` points to the isolated E2E database (`financetracker-postgres-e2e` on port **5433**) — a completely separate Docker container from dev.
-
-You do not need PostgreSQL installed locally; use Docker Compose to run it.
-
-Start databases (Docker Compose):
-
-```bash
-# Dev database only
-docker-compose -f docker-compose.postgres.yml up -d postgres
-
-# E2E database only
-docker-compose -f docker-compose.postgres.yml up -d postgres-e2e
-
-# Both at once
-docker-compose -f docker-compose.postgres.yml up -d
-```
-
-Set up the dev database (run once after first `docker-compose up`):
-
-```bash
-npm run db:migrate     # Apply all migrations to dev database (requires interactive terminal)
-npm run db:generate    # Generate Prisma Client
-```
-
-Install Playwright browsers (first time only):
-
-```bash
 npx playwright install
 ```
 
-Run development server:
+### 2. Configure Environment Variables
+
+Copy the pre-filled local Docker configurations:
+
+```bash
+cp .env.example .env          # Dev database (port 5432)
+cp .env.e2e.example .env.e2e  # E2E database (port 5433) — credentials pre-filled
+```
+
+Fill in your credentials in `.env`:
+
+```env
+POSTGRES_USER=<your_user>
+POSTGRES_PASSWORD=<your_password>
+POSTGRES_DB=<your_db_name>        # e.g. financetracker-postgres
+JWT_SECRET=<min_32_chars_secret>
+```
+
+> `.env.e2e` is pre-filled for the local Docker setup. Copy and use as-is.
+
+### 3. Spin Up Infrastructure & Initialize
+
+```bash
+# Start both Postgres containers (dev on 5432, E2E on 5433)
+docker-compose -f docker-compose.postgres.yml up -d
+
+# Apply migrations to dev database (requires interactive terminal)
+npm run db:migrate
+
+# Generate Prisma Client
+npm run db:generate
+```
+
+> The E2E database is initialized automatically by `globalSetup` on the first `npx playwright test` run.
+
+### 4. Run the Application
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
 
-## Available Scripts
+---
 
-### Development
+## 🗄️ Database Architecture
 
-- `npm run dev` - Start dev server
-- `npm run build` - Build production bundle
-- `npm run start` - Start production server
+FinanceTrackerPro uses **two fully isolated PostgreSQL containers** — dev data never leaks into tests.
 
-### Database
+| Container                     | Host Port | Database                      | Purpose                  |
+| ----------------------------- | --------- | ----------------------------- | ------------------------ |
+| `financetracker-postgres`     | `5432`    | Configurable via `.env`       | Development & production |
+| `financetracker-postgres-e2e` | `5433`    | `financetracker-postgres-e2e` | E2E tests only           |
 
-- `npm run db:generate` - Generate Prisma Client
-- `npm run db:push` - Push current schema directly (dev only, no migration history)
-- `npm run db:migrate` - Create a new migration and apply it (dev, interactive)
-- `npm run db:reset` - Wipe dev database, re-run all migrations
-- `npm run db:setup:e2e` - Apply pending migrations to the E2E database (reads `.env.e2e`)
-- `npm run db:reset:e2e` - Wipe and re-migrate the E2E database (dev database untouched)
-- `npm run db:seed:e2e` - Seed the E2E database with test user and accounts (reads `.env.e2e`)
-- `npm run db:studio` - Open Prisma Studio for the **dev** database
-- `npm run db:studio:e2e` - Open Prisma Studio for the **E2E** database (reads `.env.e2e`)
+Both use the `public` schema. There is no schema-based isolation — the E2E container is a fully independent PostgreSQL instance.
 
-### Testing
-
-- `npm test` - Run unit/integration tests (CI mode)
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:ui` - Run tests with Vitest UI
-- `npm run test:coverage` - Coverage report (80% minimum)
-
-### E2E Testing (Playwright + Cucumber BDD)
-
-**Setup (first time only):**
+**Prisma Studio access:**
 
 ```bash
-npm install -D playwright-bdd                                       # Install playwright-bdd
-npx playwright install                                              # Install browser binaries
-docker-compose -f docker-compose.postgres.yml up -d postgres-e2e   # Start E2E database
+npm run db:studio        # Dev database  → http://localhost:5555
+npm run db:studio:e2e    # E2E database  → http://localhost:5556
 ```
 
-**Run E2E tests:**
+> See [`DATABASE.md`](DATABASE.md) for the complete entity relationship diagram, double-entry bookkeeping implementation, reconciliation logic, and query examples.
 
-> **Stop any running `npm run dev` before running E2E tests.** Playwright starts its own dev server on port 3000 pointed at the E2E database. If port 3000 is already in use, tests will fail.
+---
 
-> **Always run `npx bddgen` before `npx playwright test`** — it compiles `.feature` Gherkin files into Playwright test specs.
+## 🛠️ CLI Reference
 
-> The E2E database is **automatically wiped, re-migrated and re-seeded** by `globalSetup` (`e2e/global-setup.ts`) before each test run. No manual reset needed.
+### Database Management
+
+| Command                 | Environment | Description                                               |
+| ----------------------- | ----------- | --------------------------------------------------------- |
+| `npm run db:generate`   | Dev / E2E   | Generates the type-safe Prisma Client.                    |
+| `npm run db:migrate`    | Dev         | Creates a new migration and applies it (interactive).     |
+| `npm run db:push`       | Dev         | Directly pushes schema changes without migration history. |
+| `npm run db:reset`      | Dev         | Wipes the dev database and re-runs all migrations.        |
+| `npm run db:setup:e2e`  | E2E         | Applies pending migrations to the E2E database.           |
+| `npm run db:reset:e2e`  | E2E         | Wipes and re-migrates the E2E database.                   |
+| `npm run db:seed:e2e`   | E2E         | Seeds the E2E database with test user and accounts.       |
+| `npm run db:studio`     | Dev         | Opens Prisma Studio for the dev database (port 5555).     |
+| `npm run db:studio:e2e` | E2E         | Opens Prisma Studio for the E2E database (port 5556).     |
+
+### Quality Assurance & Testing
+
+| Command                 | Scope              | Description                                                |
+| ----------------------- | ------------------ | ---------------------------------------------------------- |
+| `npm test`              | Unit / Integration | Runs tests in headless CI mode.                            |
+| `npm run test:watch`    | Unit / Integration | Launches interactive Vitest watch runner.                  |
+| `npm run test:ui`       | Unit / Integration | Opens the Vitest graphical interface.                      |
+| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **80%** global floor). |
+| `npm run lint`          | Code Style         | Validates code standards via ESLint with auto-fix.         |
+| `npm run format:check`  | Code Style         | Verifies formatting via Prettier without writing.          |
+
+---
+
+## 🧪 Testing Workflows
+
+### End-to-End (Playwright + Cucumber BDD)
+
+> ⚠️ **Important:** Shut down any active `npm run dev` before launching E2E tests. Playwright mounts its own development server on port `3000` pointed at the isolated E2E database (port `5433`).
+
+The E2E database is **automatically wiped, re-migrated, and re-seeded** before each test run via `e2e/global-setup.ts`. No manual reset needed.
 
 ```bash
-# CLI — headless (CI mode)
-npx bddgen; npx playwright test
+# Always compile Gherkin .feature files into spec runners first
+npx bddgen
 
-# CLI — headed (see browser while running) -- (recommended)
-npx bddgen; npx playwright test --headed
+# Headless (CI mode)
+npx playwright test
 
-# CLI — run a specific feature
-npx bddgen; npx playwright test --grep "Autenticación"
+# Headed mode (visual browser walkthrough)
+npx playwright test --headed
 
-# CLI — debug mode (step-by-step with Playwright Inspector)
-npx bddgen; npx playwright test --debug
-
-# Frontend — open interactive UI to pick and run individual tests
+# Interactive Playwright UI
 npx playwright test --ui
 
-# Open HTML report after running tests
+# Target specific feature by string match
+npx playwright test --grep "Autenticación"
+
+# Step-by-step debug
+npx playwright test --debug
+
+# View last test report
 npx playwright show-report
 ```
 
-### Code Quality
-
-- `npm run lint` - ESLint with auto-fix
-- `npm run format` - Prettier format all files
-- `npm run format:check` - Check formatting
-
-### SonarQube Analysis
-
-- `npm run sonar` - Run sonar-scanner (`SONAR_TOKEN` must be set in the OS environment)
-- `npm run sonar:check` - Verify SonarQube server is running
-
-### Git Hooks
-
-Pre-commit hook (Husky + lint-staged):
-
-- ESLint on staged `.js`, `.jsx`, `.ts`, `.tsx`
-- Prettier on all staged files
-
-## SonarQube Setup
-
-SonarQube provides static code analysis for code quality, security vulnerabilities, and technical debt detection. Results are accessed via the **SonarQube MCP server** configured in `opencode.jsonc` — no intermediate JSON file is generated.
-
-### Local Setup
-
-1. **Windows users**: Set vm.max_map_count in WSL2 (required for Elasticsearch):
+**First-time E2E setup:**
 
 ```bash
-wsl -d docker-desktop sysctl -w vm.max_map_count=262144
+docker-compose -f docker-compose.postgres.yml up -d postgres-e2e
+npx bddgen; npx playwright test
 ```
 
-2. Start SonarQube server (Docker Compose):
+### Static Analysis via SonarQube
+
+SonarQube handles full-scope code safety gates through the native **SonarQube MCP Server** (`@sonarqube/mcp-server`) configured in `opencode.jsonc`.
 
 ```bash
+# 1. Start SonarQube container
 docker-compose -f docker-compose.sonarqube.yml up -d
-```
 
-3. Verify server is running:
-
-```bash
-npm run sonar:check
-```
-
-4. Access SonarQube UI:
-   - URL: http://localhost:9000
-   - Default credentials: `admin` / `admin`
-   - Change password on first login
-
-5. Generate authentication token:
-   - Go to: User menu → My Account → Security → Generate Tokens
-   - Name: `financetrackerpro`
-   - Type: User Token
-   - Copy token for next step
-
-6. Set the token in the OS environment:
-
-```powershell
-# PowerShell — add to your profile for persistence
-$env:SONAR_TOKEN = "squ_your_token_here"
-```
-
-> `sonar-scanner` 5.x reads `SONAR_TOKEN` natively from the OS environment. The MCP server in `opencode.jsonc` uses the same variable (`{env:SONAR_TOKEN}`). No `.env` file is needed for the scanner. All other settings (`sonar.host.url`, `sonar.projectKey`, etc.) are in `sonar-project.properties`.
-
-7. Run analysis:
-
-```bash
-npm run sonar
-```
-
-8. View results:
-   - Web UI: http://localhost:9000/dashboard?id=financetrackerpro
-   - Via MCP tools in OpenCode (agents query issues, quality gate, and metrics directly)
-
-### MCP Integration
-
-The SonarQube MCP server (`@sonarqube/mcp-server`) is pre-configured in `opencode.jsonc`. It connects to the local SonarQube instance and exposes tools that agents use to:
-
-- Check Quality Gate status
-- Search issues by severity, type, or rule
-- Query coverage and duplication metrics
-- Review Security Hotspots
-
-This replaces the previous approach of fetching issues to `.opencode/sonar-issues.json`. Agents interact with SonarQube results in real time through MCP.
-
-### Configuration
-
-- **Project config**: `sonar-project.properties`
-- **Docker setup**: `docker-compose.sonarqube.yml`
-- **Coverage path**: `coverage/lcov.info`
-- **MCP config**: `opencode.jsonc` → `mcp.sonarqube`
-
-### Quality Gates
-
-Default quality gate enforces:
-
-- **Coverage**: 80% minimum (enforced via Vitest)
-- **Bugs**: Zero tolerance (blocks merge)
-- **Vulnerabilities**: Zero tolerance (blocks merge)
-- **Security Hotspots**: Manual review required
-- **Cognitive Complexity**: Max 15 per function
-- **Code Duplication**: Max 3% across project
-- **TypeScript Strictness**: Zero `any` types in production code
-
-**Merge blocked if**:
-
-- Quality Gate status is `ERROR`
-- Any BLOCKER or CRITICAL issues exist
-- Coverage on new code drops below 80%
-- New security vulnerabilities introduced
-
-### CI/CD Integration
-
-For production CI/CD:
-
-1. Set environment variables:
-
-   ```bash
-   SONAR_HOST_URL=https://sonarqube.yourdomain.com
-   SONAR_TOKEN=your_production_token
-   ```
-
-2. Add to CI pipeline (GitHub Actions example):
-
-```yaml
-# .github/workflows/quality.yml
-- name: Run Tests with Coverage
-  run: npm run test:coverage
-
-- name: SonarQube Analysis
-  run: npm run sonar
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-- name: Check Quality Gate
-  run: |
-    STATUS=$(curl -s -u $SONAR_TOKEN: \
-      "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=financetrackerpro" \
-      | jq -r '.projectStatus.status')
-    if [ "$STATUS" != "OK" ]; then
-      echo "❌ Quality gate failed: $STATUS"
-      exit 1
-    fi
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-```
-
-3. Configure quality gate in SonarQube UI to block PRs with issues
-
-### Running Analysis Workflow
-
-```bash
-# 1. Verify SonarQube is running
+# 2. Verify connectivity
 npm run sonar:check
 
-# 2. Run tests with coverage (generates lcov.info)
+# 3. Generate coverage reports (required for Quality Gate)
 npm run test:coverage
 
-# 3. Trigger scanner analysis
+# 4. Trigger analysis (requires OS-level $env:SONAR_TOKEN)
 npm run sonar
-
-# 4. Results available in:
-#    - SonarQube UI: http://localhost:9000/dashboard?id=financetrackerpro
-#    - OpenCode agents: via MCP SonarQube tools
 ```
 
-**Severity levels**:
+- **Web Dashboard:** [http://localhost:9000/dashboard?id=financetrackerpro](http://localhost:9000/dashboard?id=financetrackerpro)
+- **Default credentials:** `admin` / `admin` _(password change forced on first login)_
 
-- **BLOCKER**: Merge blocked (security vulnerabilities)
-- **CRITICAL**: Review required (bugs, type safety)
-- **MAJOR**: Should be fixed (code smells)
-- **MINOR**: Optional improvement
-- **INFO**: Informational only
+**Quality Gate blocks merge if:**
 
-**Issue types**:
+- Quality Gate status is `ERROR`
+- Coverage drops below `80%` on new code
+- TypeScript strict `any` count rises above zero
+- Any `BLOCKER` or `CRITICAL` vulnerability is detected
 
-- **BUG**: Runtime error risk
-- **VULNERABILITY**: Security risk
-- **CODE_SMELL**: Maintainability issue
-- **SECURITY_HOTSPOT**: Manual security review needed
+---
 
-### Database Connection Test
+## 🤖 Agent System
 
-Validate database connectivity:
+FinanceTrackerPro uses a **hierarchical agent orchestration model** for AI-assisted development. A single primary agent (`tech-lead`) coordinates all work and delegates to specialized subagents.
 
-```bash
-# Check if app can reach database
-npx dotenv -e .env -- tsx src/lib/db-check.ts
+```
+tech-lead (primary — orchestrator)
+  ├── dev-backend    → Server Actions, Prisma, Zod validation
+  ├── dev-frontend   → Next.js UI, Tailwind, accessibility
+  ├── dev-tester     → Vitest unit/integration, coverage ≥ 80%
+  ├── dev-e2e        → Playwright + Cucumber BDD, isolated E2E DB
+  ├── qa-lead        → 14 financial integrity rules, SonarQube gates
+  ├── sec-ops        → OWASP Top 10 audit, dependency scan
+  └── audit-finance  → Decimal.js usage, ledger integrity (read-only)
 ```
 
-This queries user, account, and transaction counts via Prisma.
+> See [`AGENTS.md`](AGENTS.md) for full agent responsibilities, workflows, and quality gate criteria.
 
-## Tech Stack
+---
 
-### Core
-
-- **Framework**: Next.js 16 + React 19 (App Router)
-- **Language**: TypeScript 5 (strict mode)
-- **Database**: PostgreSQL + Prisma ORM
-
-### Financial Precision
-
-- **Calculations**: Decimal.js (20-digit precision, Banker's rounding)
-- **Storage**: Integer cents (no float precision issues)
-- **Currency**: Multi-currency with ISO 4217 codes
-
-### Validation & Security
-
-- **Validation**: Zod (server-side + client hints)
-- **Server Actions**: `server-only` package
-- **ACID Transactions**: Prisma `$transaction`
-
-### State & Styling
-
-- **State**: Zustand (UI state only - NO business logic)
-- **Styling**: Tailwind CSS 4
-
-### Quality & Testing
-
-- **Unit/Integration Testing**: Vitest + React Testing Library
-- **E2E Testing**: Playwright + `playwright-bdd` + Cucumber (Gherkin `.feature` files)
-- **Coverage**: 80% minimum enforced
-- **Linting**: ESLint + TypeScript ESLint
-- **Formatting**: Prettier
-- **Git Hooks**: Husky + lint-staged
-- **Static Analysis**: SonarQube (code quality, security, coverage)
-- **Logging**: Pino (structured JSON in production)
-
-## Project Structure
+## 🗂️ Directory Layout
 
 ```
 src/
-├── actions/          # Server Actions (validated mutations)
-│   ├── account.actions.ts
-│   └── transfer.actions.ts
-├── app/              # Next.js App Router (pages)
-├── components/
-│   └── ui/           # Reusable UI components
-├── db/
-│   └── seed/         # Database seed scripts
-├── hooks/            # Custom React hooks
-├── lib/
-│   ├── db/           # Prisma client + schema
-│   │   ├── index.ts      # Singleton client
-│   │   └── schema.prisma # Database schema
-│   ├── money.ts      # Decimal.js financial utils
-│   └── validations/  # Zod schemas
-│       └── finance.ts
-├── services/         # Business logic (server-only)
-│   └── financial.service.ts
-├── store/            # Zustand stores (UI state only)
-│   ├── useAccountStore.ts
-│   └── useTransactionStore.ts
-├── types/            # TypeScript definitions
-│   └── finance.d.ts
-├── utils/            # Pure helper functions
-│   └── formatCurrency.ts
-└── __tests__/        # Test files (co-located)
-    └── unit/
+├── actions/          # Server Actions (Zod-validated mutation layer)
+├── app/              # Next.js App Router (pages & layouts)
+├── components/       # Component library
+│   └── ui/           # Atomic reusable presentation elements
+├── db/               # Database seed scripts
+├── hooks/            # Encapsulated stateful React UI hooks
+├── lib/              # Core singletons & framework setup
+│   ├── db/           # Prisma Client instantiation & schema
+│   ├── money.ts      # Decimal.js financial arithmetic wrappers
+│   └── validations/  # Centralized Zod schema models
+├── services/         # Pure business logic (server-only)
+├── store/            # UI state machines via Zustand (no business logic)
+├── types/            # Global TypeScript type declarations
+└── utils/            # Stateless pure functional helpers
 
-e2e/                  # Playwright E2E tests (Cucumber BDD)
-├── features/         # Gherkin .feature files (human-readable scenarios)
-│   ├── auth.feature
-│   ├── dashboard.feature
-│   ├── accounts.feature
-│   └── transactions.feature
-├── steps/            # Step definitions (TypeScript)
-│   ├── auth.steps.ts
-│   ├── dashboard.steps.ts
-│   ├── accounts.steps.ts
-│   ├── transactions.steps.ts
-│   └── common.steps.ts
-├── helpers/
-│   └── auth.ts       # Shared login helper
-└── fixtures/
-    └── index.ts      # Playwright fixtures
+e2e/                  # Playwright BDD suite
+├── features/         # Gherkin Cucumber business criteria (.feature)
+├── steps/            # TypeScript BDD step definitions
+├── helpers/          # Shared auth and navigation helpers
+├── fixtures/         # Test data constants
+└── global-setup.ts   # Auto reset + seed E2E DB before each run
 ```
 
-## Database Architecture
+---
 
-See [DATABASE.md](DATABASE.md) for complete entity relationship diagram, reconciliation logic, query examples, and architecture details.
+## 🔒 CI/CD Pipeline
 
-### Double-Entry Bookkeeping
+```yaml
+# .github/workflows/quality.yml
+name: Quality Gate Suite
+on: [pull_request, push]
 
-**Transfer Logic**: Transfers implemented using double-entry accounting principles.
+jobs:
+  verify-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-When transferring money between accounts:
+      - run: npm ci
 
-1. **Transaction 1** (Source Account):
-   - Type: `TRANSFER_OUT`
-   - Amount: Negative (debit)
-   - Account: Source
+      - name: Lint & Format
+        run: |
+          npm run lint
+          npm run format:check
 
-2. **Transaction 2** (Destination Account):
-   - Type: `TRANSFER_IN`
-   - Amount: Positive (credit)
-   - Account: Destination
+      - name: Coverage
+        run: npm run test:coverage
 
-Both transactions share same `transferId` (UUID) for audit trail. This ensures:
+      - name: SonarQube Analysis
+        run: npm run sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-- ✅ Balance integrity (sum always zero across paired transactions)
-- ✅ Audit trail (both entries linked)
-- ✅ Reconciliation accuracy (each account has complete history)
-- ✅ Rollback safety (delete both or neither)
-
-**Example**:
-
-```typescript
-// Transfer $100 from Savings to Investment
-const transferId = crypto.randomUUID();
-
-// Debit source (TRANSFER_OUT)
-await prisma.transaction.create({
-  data: {
-    accountId: savingsId,
-    type: 'TRANSFER_OUT',
-    amountCents: -10000, // Negative
-    transferId,
-    transferToAccountId: investmentId,
-  },
-});
-
-// Credit destination (TRANSFER_IN)
-await prisma.transaction.create({
-  data: {
-    accountId: investmentId,
-    type: 'TRANSFER_IN',
-    amountCents: 10000, // Positive
-    transferId,
-    transferFromAccountId: savingsId,
-  },
-});
+      - name: Quality Gate Check
+        run: |
+          STATUS=$(curl -s -u $SONAR_TOKEN: \
+            "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=financetrackerpro" \
+            | jq -r '.projectStatus.status')
+          if [ "$STATUS" != "OK" ]; then
+            echo "❌ Quality gate failed: $STATUS"
+            exit 1
+          fi
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 ```
-
-### Precision & Rounding
-
-All monetary calculations use:
-
-- **Storage**: Integer cents (no floats)
-- **Calculations**: Decimal.js with Banker's rounding
-- **Exchange rates**: `Decimal(20, 8)` precision
-- **Interest rates**: `Decimal(20, 8)` for compound interest accuracy
-
-## Architecture Rules
-
-See `CLAUDE.md` for complete financial integrity rules.
-
-### Key Principles
-
-1. **Money = Integers (cents)** - Store as cents, calculate with Decimal.js
-2. **Multi-currency by design** - Every amount has ISO 4217 currency code
-3. **Atomic transactions** - Use `prisma.$transaction()` for transfers
-4. **Soft deletes only** - Financial records never physically deleted
-5. **Server-side validation** - Never trust client input
-6. **Banker's rounding** - IEEE 754 ROUND_HALF_EVEN standard
-7. **Audit trail** - Track `createdBy`, `lastModifiedBy`, `deletedAt`
-
-### Example: Atomic Transfer
-
-```typescript
-// src/actions/transfer.actions.ts
-await prisma.$transaction(async (tx) => {
-  // Deduct from source
-  await tx.account.update({
-    where: { id: fromId },
-    data: { balanceCents: subtract(balance, amount) },
-  });
-
-  // Add to destination
-  await tx.account.update({
-    where: { id: toId },
-    data: { balanceCents: add(balance, amount) },
-  });
-
-  // Audit trail
-  await tx.transfer.create({ data: transferRecord });
-});
-```
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

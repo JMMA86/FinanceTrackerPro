@@ -14,6 +14,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "npx bddgen && npx playwright test",
+    "test:e2e:ui": "npx bddgen && npx playwright test --ui",
     "sonar": "npx dotenv -e .env -- npx sonar-scanner",
     "sonar:check": "npx dotenv -e .env -- powershell -Command \"try { $r = Invoke-RestMethod http://localhost:9000/api/system/status -TimeoutSec 2; Write-Host 'SonarQube:' $r.status -ForegroundColor Green } catch { Write-Host 'SonarQube not running' -ForegroundColor Red; exit 1 }\"",
     "db:generate": "prisma generate",

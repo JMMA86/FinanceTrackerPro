@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { navigationItems } from '@/config/navigation';
 import { logoutAction } from '@/actions/auth.actions';
 import { useState, useEffect, useLayoutEffect } from 'react';
@@ -79,14 +79,19 @@ export function DashboardSidebar({
         onClick={toggleSidebar}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-expanded={!collapsed}
-        className="hidden md:flex fixed top-20 w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full items-center justify-center transition-all duration-300 border border-white/10 z-[70] cursor-pointer hover:scale-110 active:scale-95"
-        style={{ left: `calc(${cssWidth} - 0.75rem)` }}
+        className="hidden md:flex fixed top-20 w-6 h-6 rounded-full items-center justify-center transition-all duration-200 z-[70] cursor-pointer hover:scale-110 active:scale-95"
+        style={{
+          left: `calc(${cssWidth} - 0.75rem)`,
+          background: 'linear-gradient(135deg, rgba(47,124,246,0.9), rgba(37,95,190,0.9))',
+          border: '1px solid rgba(115,168,255,0.3)',
+          boxShadow: '0 0 10px rgba(47,124,246,0.4), 0 2px 4px rgba(0,0,0,0.4)',
+        }}
       >
-        <span className="block transition-transform duration-300">
+        <span className="block transition-transform duration-200">
           {collapsed ? (
-            <ChevronRight className="w-4 h-4 text-gray-300" />
+            <ChevronRight className="w-3.5 h-3.5 text-white" />
           ) : (
-            <ChevronLeft className="w-4 h-4 text-gray-300" />
+            <ChevronLeft className="w-3.5 h-3.5 text-white" />
           )}
         </span>
       </button>
@@ -161,8 +166,7 @@ export function DashboardSidebar({
                     <Icon
                       className={`w-5 h-5 transition-all duration-200 ${isActive ? 'text-blue-400 drop-shadow-lg' : 'text-gray-400 group-hover:text-white'}`}
                     />
-                    <span className="absolute -top-1 -right-1 w-1.5 h-1 rounded-full bg-blue-400/0 group-hover:bg-blue-400 group-hover:animate-ping transition-all duration-200" />
-                  </span>
+                    </span>
 
                   <span
                     className={`text-sm font-medium whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
@@ -200,7 +204,10 @@ export function DashboardSidebar({
               disabled:opacity-50 disabled:cursor-not-allowed
             "
             >
-              <LogOut className="w-5 h-5" />
+              {loggingOut
+                ? <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                : <LogOut className="w-5 h-5 flex-shrink-0" />
+              }
               <span
                 className={`transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
               >

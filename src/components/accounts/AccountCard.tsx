@@ -133,24 +133,37 @@ export function AccountCard({
         className={[
           'w-full text-left rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
           'transition-all duration-300 ease-out',
-          isAnySelected ? 'opacity-40 scale-[0.97]' : 'hover:scale-[1.02] hover:brightness-105',
+          isAnySelected ? 'opacity-40 scale-[0.97]' : 'hover:scale-[1.02] hover:shadow-2xl',
         ].join(' ')}
       >
         <div
           className="relative w-full rounded-2xl shadow-xl overflow-hidden"
           style={{ aspectRatio: '1.586', ...getCardBackground(account) }}
         >
+          {/* Subtle light sweep on hover */}
+          <div
+            className="absolute inset-0 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+            style={{
+              background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)',
+            }}
+            aria-hidden="true"
+          />
+
           <div
             className={`relative z-10 flex flex-col justify-between p-5 h-full ${textColor}`}
             style={{ textShadow: shadow }}
           >
             <div className="flex items-start justify-between">
+              {/* Chip with shimmer highlight */}
               <svg width="40" height="28" viewBox="0 0 40 28" fill="none" aria-hidden="true">
-                <rect width="40" height="28" rx="4" fill="#D4AF37" opacity="0.9"/>
-                <rect x="0" y="9" width="40" height="10" fill="#B8960C" opacity="0.6"/>
-                <rect x="13" y="0" width="14" height="28" fill="#B8960C" opacity="0.4"/>
+                <rect width="40" height="28" rx="4" fill="#c9a84c" opacity="0.85"/>
+                <rect x="0" y="10" width="40" height="8" fill="#8a6b1e" opacity="0.55"/>
+                <rect x="13" y="0" width="14" height="28" fill="#8a6b1e" opacity="0.35"/>
+                <rect x="13" y="10" width="14" height="8" rx="1" fill="#8a6b1e" opacity="0.5"/>
+                {/* Highlight sheen */}
+                <rect x="2" y="2" width="36" height="5" rx="2" fill="white" opacity="0.15"/>
               </svg>
-              <span className={`text-[10px] font-semibold uppercase tracking-wider ${badgeBg} px-2 py-0.5 rounded-full`}>
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${badgeBg} px-2 py-0.5 rounded-md`}>
                 {TYPE_LABELS[account.type] ?? account.type}
               </span>
             </div>

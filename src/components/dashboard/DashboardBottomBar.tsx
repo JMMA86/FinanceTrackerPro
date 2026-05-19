@@ -19,29 +19,31 @@ export function DashboardBottomBar({ lang, navigationLabels }: Readonly<Dashboar
       style={{
         backgroundColor: 'color-mix(in srgb, var(--app-bg-mid) 78%, transparent)',
         borderColor: 'rgba(255, 255, 255, 0.10)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <div className="flex justify-around items-center h-16 px-2">
+      <div className="flex justify-around items-center h-16 px-1">
         {mobileNavigationItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname.endsWith(item.href);
+          const label = navigationLabels[item.nameKey] || item.nameKey;
 
           return (
             <Link
               key={item.href}
               href={`/${lang}${item.href}`}
               className={`
-                group relative flex items-center justify-center w-12 h-12 rounded-xl
+                group relative flex flex-col items-center justify-center gap-1
+                w-14 h-full rounded-xl
                 transition-all duration-200
-                ${isActive ? 'text-white' : 'text-gray-400 hover:text-gray-300'}
+                ${isActive ? 'text-white' : 'text-gray-500 hover:text-gray-300'}
               `}
               title={navigationLabels[item.descKey] || item.descKey}
               aria-current={isActive ? 'page' : undefined}
             >
-              {/* Active indicator - top bar */}
               {isActive && (
-                <span 
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
+                <span
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full"
                   style={{
                     background: 'linear-gradient(90deg, transparent, #60a5fa, transparent)',
                     boxShadow: '0 0 8px rgba(59, 130, 246, 0.6)',
@@ -50,21 +52,21 @@ export function DashboardBottomBar({ lang, navigationLabels }: Readonly<Dashboar
                 />
               )}
 
-              {/* Icon with scale animation */}
-              <Icon 
-                className={`w-6 h-6 transition-all duration-200 ${isActive ? 'text-blue-400 scale-110 drop-shadow-lg' : 'group-hover:scale-105'}`} 
-              />
-
-              {/* Active glow background */}
               {isActive && (
-                <span 
-                  className="absolute inset-0 rounded-xl bg-theme-primary/20"
-                  style={{
-                    boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)',
-                  }}
+                <span
+                  className="absolute inset-1 rounded-xl bg-blue-500/10"
                   aria-hidden="true"
                 />
               )}
+
+              <Icon
+                className={`relative z-10 w-5 h-5 transition-all duration-200 ${isActive ? 'text-blue-400' : 'group-hover:text-gray-200'}`}
+              />
+              <span
+                className={`relative z-10 text-[10px] font-medium leading-none transition-colors duration-200 ${isActive ? 'text-blue-300' : 'text-gray-500 group-hover:text-gray-300'}`}
+              >
+                {label}
+              </span>
             </Link>
           );
         })}

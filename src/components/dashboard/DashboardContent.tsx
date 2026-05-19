@@ -6,10 +6,10 @@ import {
   Wallet,
   PiggyBank,
   TrendingUp,
+  TrendingDown,
   CreditCard,
   DollarSign,
   Target,
-  ArrowUpDown,
   PieChart,
   AlertCircle,
   Banknote,
@@ -151,8 +151,8 @@ function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onTo
             </p>
 {subValue && (
               <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg backdrop-blur-sm ${trendStyles}`}>
-                {trend === 'up' && <ArrowUpDown className="w-3 h-3 sm:w-4 sm:h-4 rotate-180" />}
-                {trend === 'down' && <ArrowUpDown className="w-3 h-3 sm:w-4 sm:h-4" />}
+                {trend === 'up' && <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />}
+                {trend === 'down' && <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />}
                 <span className="text-xs sm:text-sm font-semibold">{subValue}</span>
               </div>
             )}
@@ -227,8 +227,8 @@ function MetricCard({ label, value, subValue, category, icon, trend, sparklineDa
 
           {subValue && (
             <div className={`inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 rounded text-[10px] sm:text-xs font-semibold bg-${trendColor}-500/12 text-${trendColor}-300`}>
-              {trend === 'up' && <ArrowUpDown className="w-2.5 h-2.5 sm:w-3 sm:h-3 rotate-180" />}
-              {trend === 'down' && <ArrowUpDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
+              {trend === 'up' && <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
+              {trend === 'down' && <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               {trend === 'neutral' && <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />}
               <span>{subValue}</span>
             </div>
@@ -512,7 +512,7 @@ export function DashboardContent({ metrics, lang, dashboard }: DashboardContentP
           icon={<PieChart className="w-5 h-5" />}
         />
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3 app-shell rounded-2xl p-6 flex items-center justify-center min-h-[340px] border border-slate-700/30">
+          <div className="lg:col-span-3 app-shell rounded-2xl p-6 flex items-center justify-center min-h-[340px] border border-white/[0.08]">
             {netWorthDistribution.length > 0 ? (
               <PieChartComponent data={netWorthDistribution} size={280} />
             ) : (
@@ -526,7 +526,7 @@ export function DashboardContent({ metrics, lang, dashboard }: DashboardContentP
 
           <div className="lg:col-span-2 space-y-3">
             {netWorthDistribution.length > 0 && (
-              <div className="app-shell rounded-2xl p-4 border border-slate-700/30">
+              <div className="app-shell rounded-2xl p-4 border border-white/[0.08]">
                 <h4 className="text-xs font-semibold text-slate-400 mb-4 uppercase tracking-widest">
                   {t('byCategory')}
                 </h4>
@@ -571,7 +571,7 @@ export function DashboardContent({ metrics, lang, dashboard }: DashboardContentP
             </Link>
           }
         />
-        <div className="app-shell rounded-2xl p-6 border border-slate-700/30">
+        <div className="app-shell rounded-2xl p-6 border border-white/[0.08]">
           {metrics.recentTransactions.length > 0 ? (
             <TransactionList transactions={metrics.recentTransactions} />
           ) : (

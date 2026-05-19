@@ -6,7 +6,7 @@ import { changeLanguageAction } from '@/actions/language.actions';
 import { logoutAction } from '@/actions/auth.actions';
 import { get, SUPPORTED_LOCALES } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
-import { Globe, LogOut } from 'lucide-react';
+import { Globe, LogOut, CheckCircle, Loader2 } from 'lucide-react';
 
 interface SettingsClientProps {
   lang: Locale;
@@ -74,33 +74,17 @@ export default function SettingsClient({
                     key={locale}
                     onClick={() => handleLanguageChange(locale)}
                     disabled={changing || locale === lang}
-                    className={`
-                      px-6 py-3 rounded-xl font-medium transition-all
-                      ${
-                        locale === lang
-                          ? 'bg-indigo-500 text-white cursor-default'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
+                    className={[
+                      'px-6 py-3 rounded-xl font-medium transition-all duration-200',
+                      locale === lang
+                        ? 'bg-indigo-500/20 text-indigo-300 ring-2 ring-indigo-400/50 cursor-default'
+                        : 'bg-white/[0.06] text-slate-300 hover:bg-white/[0.10] hover:text-white border border-white/[0.08]',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                    ].join(' ')}
                   >
                     {changing && locale !== lang ? (
                       <span className="flex items-center gap-2">
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
+                        <Loader2 className="animate-spin h-4 w-4" />
                         {languageLabels[locale]}
                       </span>
                     ) : (
@@ -111,10 +95,9 @@ export default function SettingsClient({
               </div>
 
               {success && (
-                <div className="bg-green-900/20 border border-green-800 rounded-xl p-3">
-                  <p className="text-sm text-green-200 font-medium">
-                    {success}
-                  </p>
+                <div className="flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-4 py-3">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <p className="text-sm text-emerald-300 font-medium">{success}</p>
                 </div>
               )}
             </div>
@@ -148,21 +131,7 @@ export default function SettingsClient({
             >
               {loggingOut ? (
                 <>
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <Loader2 className="animate-spin h-5 w-5" />
                   {get(settings, 'account.loggingOut')}
                 </>
               ) : (

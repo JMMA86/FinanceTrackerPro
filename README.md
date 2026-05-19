@@ -124,14 +124,16 @@ npm run db:studio:e2e    # E2E database  → http://localhost:5556
 
 ### Quality Assurance & Testing
 
-| Command                 | Scope              | Description                                                |
-| ----------------------- | ------------------ | ---------------------------------------------------------- |
-| `npm test`              | Unit / Integration | Runs tests in headless CI mode.                            |
-| `npm run test:watch`    | Unit / Integration | Launches interactive Vitest watch runner.                  |
-| `npm run test:ui`       | Unit / Integration | Opens the Vitest graphical interface.                      |
-| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **80%** global floor). |
-| `npm run lint`          | Code Style         | Validates code standards via ESLint with auto-fix.         |
-| `npm run format:check`  | Code Style         | Verifies formatting via Prettier without writing.          |
+| Command                 | Scope              | Description                                                            |
+| ----------------------- | ------------------ | ---------------------------------------------------------------------- |
+| `npm test`              | Unit / Integration | Runs tests in headless CI mode.                                        |
+| `npm run test:watch`    | Unit / Integration | Launches interactive Vitest watch runner.                              |
+| `npm run test:ui`       | Unit / Integration | Opens the Vitest graphical interface.                                  |
+| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **80%** global floor).             |
+| `npm run test:e2e`      | E2E                | Compiles Gherkin features and runs the full Playwright suite headless. |
+| `npm run test:e2e:ui`   | E2E                | Compiles Gherkin features and opens the Playwright interactive UI.     |
+| `npm run lint`          | Code Style         | Validates code standards via ESLint with auto-fix.                     |
+| `npm run format:check`  | Code Style         | Verifies formatting via Prettier without writing.                      |
 
 ---
 
@@ -144,23 +146,20 @@ npm run db:studio:e2e    # E2E database  → http://localhost:5556
 The E2E database is **automatically wiped, re-migrated, and re-seeded** before each test run via `e2e/global-setup.ts`. No manual reset needed.
 
 ```bash
-# Always compile Gherkin .feature files into spec runners first
-npx bddgen
+# Headless (CI mode) — compiles features + runs suite
+npm run test:e2e
 
-# Headless (CI mode)
-npx playwright test
+# Interactive Playwright UI — compiles features + opens UI runner
+npm run test:e2e:ui
 
 # Headed mode (visual browser walkthrough)
-npx playwright test --headed
-
-# Interactive Playwright UI
-npx playwright test --ui
+npx bddgen && npx playwright test --headed
 
 # Target specific feature by string match
-npx playwright test --grep "Autenticación"
+npx bddgen && npx playwright test --grep "Autenticación"
 
 # Step-by-step debug
-npx playwright test --debug
+npx bddgen && npx playwright test --debug
 
 # View last test report
 npx playwright show-report
@@ -170,7 +169,7 @@ npx playwright show-report
 
 ```bash
 docker-compose -f docker-compose.postgres.yml up -d postgres-e2e
-npx bddgen; npx playwright test
+npm run test:e2e
 ```
 
 ### Static Analysis via SonarQube

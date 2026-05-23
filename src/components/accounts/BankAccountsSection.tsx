@@ -109,15 +109,15 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
     <>
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-xl font-semibold text-white">
             {get(dictionary, 'sections.bank')}
           </h2>
           <button
             type="button"
             onClick={() => openModal('create-account')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
               {get(dictionary, 'addAccount')}
           </button>
         </div>

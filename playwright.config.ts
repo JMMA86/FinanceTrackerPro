@@ -19,12 +19,14 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
   globalSetup: './e2e/global-setup.ts',
-  // 150s: 3 parallel workers hit different cold routes simultaneously; the server must JIT-compile
-  // each route for the first time, which can take 70-90s. The timeout also covers the browser
-  // context teardown after a timeout (which inherits the same budget).
-  timeout: 150_000,
+  // 180s: covers cold JIT-compile of Server Actions, database operations, and browser context teardown.
+  // With 2 workers on local machines, each test averages 1-2m including navigation + assertions.
+  timeout: 180_000,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Limit workers to 2 on local machines to prevent resource contention.
+  // 4+ workers cause cascading timeouts (browser context saturation, server overload).
+  // In CI, use 1 worker for reliability.
+  workers: process.env.CI ? 1 : 2,
   reporter: [
     ['html', { open: 'never' }],
     ['list'],

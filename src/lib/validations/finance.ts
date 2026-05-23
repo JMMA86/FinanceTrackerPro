@@ -134,54 +134,63 @@ export const CreateAccountSchema = z.object({
 export type CreateAccountInput = z.infer<typeof CreateAccountSchema>;
 
 /**
+ * Base create transaction object schema (without refinements)
+ * Used by CreateTransactionActionSchema which needs .omit() before .refine()
+ */
+const CreateTransactionObj = z.object({
+  idempotencyKey: UUIDv4Schema,
+  userId: CUIDSchema,
+  accountId: CUIDSchema,
+  type: TransactionTypeSchema,
+  amountCents: z
+    .number()
+    .int('Amount must be an integer')
+    .min(-MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit')
+    .max(MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit'),
+  currency: CurrencySchema,
+  description: z.string().max(500).optional(),
+  date: z.coerce.date().optional(),
+
+  // Currency conversion (optional)
+  originalAmountCents: z
+    .number()
+    .int('Original amount must be an integer')
+    .min(-MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
+    .max(MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
+    .optional(),
+  originalCurrency: CurrencySchema.optional(),
+  exchangeRate: z.number().positive().max(1000).optional(),
+
+  // Category
+  categoryId: CUIDSchema.optional(),
+});
+
+/**
  * Create transaction validation schema
  * SECURITY: Includes integer overflow protection
  */
-export const CreateTransactionSchema = z
-  .object({
-    idempotencyKey: UUIDv4Schema,
-    userId: CUIDSchema,
-    accountId: CUIDSchema,
-    type: TransactionTypeSchema,
-    amountCents: z
-      .number()
-      .int('Amount must be an integer')
-      .min(-MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit')
-      .max(MAX_SAFE_CENTS, 'Amount magnitude exceeds safe limit'),
-    currency: CurrencySchema,
-    description: z.string().max(500).optional(),
-    date: z.coerce.date().optional(),
-
-    // Currency conversion (optional)
-    originalAmountCents: z
-      .number()
-      .int('Original amount must be an integer')
-      .min(-MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
-      .max(MAX_SAFE_CENTS, 'Original amount magnitude exceeds safe limit')
-      .optional(),
-    originalCurrency: CurrencySchema.optional(),
-    exchangeRate: z.number().positive().max(1000).optional(),
-
-    // Category
-    categoryId: CUIDSchema.optional(),
-  })
-  .refine(
-    (data) => {
-      // For TRANSFER_OUT, amount must be negative
-      if (data.type === 'TRANSFER_OUT' && data.amountCents >= 0) {
-        return false;
-      }
-      // For TRANSFER_IN, amount must be positive
-      if (data.type === 'TRANSFER_IN' && data.amountCents <= 0) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: 'Transfer amounts must have correct sign (negative for OUT, positive for IN)',
-      path: ['amountCents'],
+export const CreateTransactionSchema = CreateTransactionObj.refine(
+  (data) => {
+    // For TRANSFER_OUT, amount must be negative
+    if (data.type === 'TRANSFER_OUT' && data.amountCents >= 0) {
+      return false;
     }
-  );
+    // For TRANSFER_IN, amount must be positive
+    if (data.type === 'TRANSFER_IN' && data.amountCents <= 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Transfer amounts must have correct sign (negative for OUT, positive for IN)',
+    path: ['amountCents'],
+  }
+);
+
+/**
+ * Base object schema without refinements (for .omit() compatibility)
+ */
+export { CreateTransactionObj as CreateTransactionSchemaBase };
 
 export type CreateTransactionInput = z.infer<typeof CreateTransactionSchema>;
 

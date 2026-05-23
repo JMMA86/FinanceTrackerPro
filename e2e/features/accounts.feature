@@ -3,22 +3,22 @@ Feature: Gestión de Cuentas Bancarias
   Quiero gestionar mis cuentas bancarias
   Para organizar mi dinero y llevar un control financiero
 
-  Background:
-    Given que el usuario de cuentas ha iniciado sesión
-    And que no existen cuentas bancarias
-
   # ============================================================================
   # VISUAL / CONTENIDO
   # ============================================================================
 
   @accounts @visual @happy-path
   Scenario: Página de cuentas carga con header y botón de nueva cuenta
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     Then debe ver el título de sección "Cuentas de Banco"
     And debe ver el botón "Nueva Cuenta" en el encabezado
 
   @accounts @visual @empty-state
   Scenario: Estado vacío se muestra cuando no hay cuentas
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     Then debe ver el mensaje de empty state "Sin cuentas bancarias"
     And debe ver el botón "Nueva Cuenta" en el empty state
@@ -26,12 +26,16 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @visual
   Scenario: Secciones placeholder de Inversiones y Tarjetas son visibles
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     Then debe ver la sección "Cuentas de Inversión" con label "En desarrollo"
     And debe ver la sección "Tarjetas de Crédito" con label "En desarrollo"
 
   @accounts @visual @navigation
   Scenario: Sidebar marca Cuentas como activo
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     Then el enlace "Cuentas" en el sidebar debe estar marcado como activo
 
@@ -41,6 +45,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @modal @create
   Scenario: Modal de crear cuenta se abre al hacer clic en Nueva Cuenta
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     And abre el modal de nueva cuenta
     Then debe ver el modal de creación con título "Nueva Cuenta"
@@ -53,6 +59,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @modal @validation
   Scenario: Formulario de crear cuenta valida campos requeridos
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que el modal de creación está abierto
     When intenta enviar el formulario vacío
     Then debe ver errores de validación en el modal
@@ -60,6 +68,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @modal @create
   Scenario: Seleccionar tipo SAVINGS muestra campo de tasa de interés
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que el modal de creación está abierto
     When selecciona el tipo "Cuenta de Ahorros"
     Then debe ver el campo de tasa de interés visible
@@ -68,12 +78,16 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @modal @close
   Scenario: Modal se cierra con botón Cancelar
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que el modal de creación está abierto
     When cierra el modal con Cancelar
     Then el modal debe estar cerrado
 
   @accounts @modal @close
   Scenario: Modal se cierra con tecla Escape
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que el modal de creación está abierto
     When presiona Escape en el modal
     Then el modal debe estar cerrado
@@ -84,6 +98,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @create @happy-path
   Scenario: Crear cuenta exitosa con datos válidos
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que el modal de creación está abierto
     When ingresa "Mi Cuenta Corriente" en el campo nombre
     And selecciona el tipo "Cuenta Corriente"
@@ -98,6 +114,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @delete
   Scenario: Eliminar cuenta desde el panel de detalle
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que existe una cuenta bancaria
     When abre el panel de detalle de la cuenta
     Then debe ver el panel de detalle con la información de la cuenta
@@ -112,6 +130,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @accounts @loading @skeleton
   Scenario: Loading skeleton se muestra durante la carga inicial
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     When navega a la página de cuentas
     Then el skeleton de carga puede mostrarse inicialmente
     And eventualmente el contenido de cuentas debe cargarse
@@ -122,6 +142,8 @@ Feature: Gestión de Cuentas Bancarias
 
   @mobile @accounts
   Scenario: Página de cuentas es responsive en viewport móvil
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
     Given que la pantalla es móvil 390x844
     When navega a la página de cuentas
     Then la página de cuentas debe mostrarse correctamente en mobile

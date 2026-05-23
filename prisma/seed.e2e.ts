@@ -29,22 +29,19 @@ const prisma = new PrismaClient({ adapter });
 
 const sharedPassword = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
 
-async function upsertUser(email: string, name: string): Promise<void> {
+async function upsertUserAndGet(email: string, name: string) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`✓ ${name} already exists: ${email}`);
-    return;
+    return existing;
   }
-  // Minimal parameters for E2E test users — security is irrelevant here and
-  // production-grade settings (memoryCost: 65536) cause 30-40s login times when
-  // 3 parallel workers all verify passwords simultaneously on the same machine.
   const passwordHash = await argon2.hash(sharedPassword, {
     type: argon2.argon2id,
     memoryCost: 4096,
     timeCost: 1,
     parallelism: 1,
   });
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email,
       name,
@@ -56,24 +53,100 @@ async function upsertUser(email: string, name: string): Promise<void> {
     },
   });
   console.log(`✓ ${name} created: ${email}`);
+  return user;
 }
 
 async function main() {
   console.log('🌱 Starting E2E seed...');
 
   // Three isolated users — one per feature file — so parallel workers never share account state.
-  await upsertUser(
+  await upsertUserAndGet(
     process.env.E2E_TEST_USER || 'e2e@financetrackerpro.com',
     'E2E Test User',          // auth.feature
   );
-  await upsertUser(
+  await upsertUserAndGet(
     process.env.E2E_ACCOUNTS_USER || 'accounts@e2e.financetrackerpro.com',
     'Accounts E2E User',      // accounts.feature
   );
-  await upsertUser(
+  await upsertUserAndGet(
     process.env.E2E_DASHBOARD_USER || 'dashboard@e2e.financetrackerpro.com',
     'Dashboard E2E User',     // dashboard.feature
   );
+
+  // Transactions E2E user with pre-seeded accounts and transactions
+  const txUserEmail = process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com';
+  const txUser = await upsertUserAndGet(txUserEmail, 'Transactions E2E User');
+
+  // Create accounts for transactions user
+  const cashAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-tx-cash-account' },
+    create: {
+      idempotencyKey: 'e2e-tx-cash-account',
+      userId: txUser.id,
+      name: 'Efectivo',
+      type: 'CASH',
+      currency: 'COP',
+      balanceCents: 50000000, // $500,000 COP
+      createdBy: txUser.id,
+      lastModifiedBy: txUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const savingsAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-tx-savings-account' },
+    create: {
+      idempotencyKey: 'e2e-tx-savings-account',
+      userId: txUser.id,
+      name: 'Bancolombia Ahorros',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 150000000, // $1,500,000 COP
+      createdBy: txUser.id,
+      lastModifiedBy: txUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Create 20 transactions for pagination tests (10 income + 10 expense)
+  const now = new Date();
+  for (let i = 0; i < 10; i++) {
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: `e2e-tx-income-${i}`,
+        userId: txUser.id,
+        accountId: i % 2 === 0 ? cashAccount.id : savingsAccount.id,
+        type: 'INCOME',
+        amountCents: 500000 + (i * 100000), // 500,000 to 1,400,000
+        currency: 'COP',
+        description: `Ingreso de nómina ${i + 1}`,
+        date: new Date(now.getTime() - (i * 86400000)),
+        createdBy: txUser.id,
+        lastModifiedBy: txUser.id,
+        isActive: true,
+      },
+    });
+
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: `e2e-tx-expense-${i}`,
+        userId: txUser.id,
+        accountId: i % 2 === 0 ? cashAccount.id : savingsAccount.id,
+        type: 'EXPENSE',
+        amountCents: -(200000 + (i * 50000)), // -200,000 to -650,000
+        currency: 'COP',
+        description: `Gasto de supermercado ${i + 1}`,
+        date: new Date(now.getTime() - (i * 86400000)),
+        createdBy: txUser.id,
+        lastModifiedBy: txUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  console.log('✓ Transactions user seeded with 2 accounts and 20 transactions');
 
   console.log('✅ E2E seed completed successfully!');
 }

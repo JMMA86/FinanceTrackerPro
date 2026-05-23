@@ -3,20 +3,19 @@ Feature: Autenticación de usuarios
   Quiero iniciar sesión y registrarme de forma segura
   Para acceder a mi información financiera protegida
 
-  Background:
-    Given que el usuario navega a la página de login en español
-
   # ============================================================================
   # LOGIN FLOWS
   # ============================================================================
 
   @login @happy-path
   Scenario: Login exitoso redirige al dashboard
+    Given que el usuario navega a la página de login en español
     When ingresa credenciales válidas en el formulario de login desktop
     Then debe ser redirigido al dashboard
 
   @login @error
   Scenario: Login con credenciales inválidas muestra error
+    Given que el usuario navega a la página de login en español
     When ingresa el email "inexistente@test.com" en el login desktop
     And ingresa la contraseña "WrongPass123" en el login desktop
     And hace clic en "Iniciar Sesión"
@@ -24,23 +23,27 @@ Feature: Autenticación de usuarios
 
   @login @validation
   Scenario: Login con campos vacíos muestra validación HTML5
+    Given que el usuario navega a la página de login en español
     When hace clic en "Iniciar Sesión" sin llenar campos
     Then la validación HTML5 debe impedir el envío del formulario de login
 
   @login @auth
   Scenario: Usuario no autenticado accede al dashboard
+    Given que el usuario navega a la página de login en español
     Given que el usuario no ha iniciado sesión
     When navega directamente a "/es/dashboard"
     Then debe ser redirigido a la página de login
 
   @login @logout
   Scenario: Logout desde el dashboard redirige al login
+    Given que el usuario navega a la página de login en español
     Given que el usuario ha iniciado sesión
     When hace clic en "Cerrar Sesión" en el sidebar
     Then debe ser redirigido a la página de login
 
   @login @redirect
   Scenario: Login con redirect en URL redirige al path correcto
+    Given que el usuario navega a la página de login en español
     When navega a "/es/login?redirect=/es/accounts"
     And ingresa credenciales válidas en el formulario de login desktop
     Then debe ser redirigido a "/es/accounts"
@@ -51,6 +54,7 @@ Feature: Autenticación de usuarios
 
   @register @happy-path
   Scenario: Registro exitoso muestra mensaje de éxito en login
+    Given que el usuario navega a la página de login en español
     When cambia a modo registro en desktop
     And ingresa "Nuevo Usuario" en el campo nombre del registro desktop
     And ingresa un email único en el registro desktop
@@ -60,6 +64,7 @@ Feature: Autenticación de usuarios
 
   @register @error
   Scenario: Registro con email duplicado muestra error
+    Given que el usuario navega a la página de login en español
     Given que existe un usuario con email "e2e@financetrackerpro.com"
     When cambia a modo registro en desktop
     And ingresa "Test User" en el campo nombre del registro desktop
@@ -70,6 +75,7 @@ Feature: Autenticación de usuarios
 
   @register @validation
   Scenario: Botón de registro deshabilitado hasta cumplir requisitos de contraseña
+    Given que el usuario navega a la página de login en español
     When cambia a modo registro en desktop
     Then el botón de registro debe estar deshabilitado
     When ingresa "Test User" en el campo nombre del registro desktop
@@ -81,6 +87,7 @@ Feature: Autenticación de usuarios
 
   @register @validation
   Scenario: Checklist de requisitos de contraseña se actualiza en tiempo real
+    Given que el usuario navega a la página de login en español
     When cambia a modo registro en desktop
     And escribe caracteres en el campo contraseña del registro desktop
     Then los 4 requisitos de contraseña deben mostrarse sin cumplir
@@ -89,6 +96,7 @@ Feature: Autenticación de usuarios
 
   @register @validation
   Scenario: Registro con campos vacíos muestra validación HTML5
+    Given que el usuario navega a la página de login en español
     When cambia a modo registro en desktop
     And intenta enviar el formulario de registro vacío
     Then la validación HTML5 debe impedir el envío del formulario de registro desktop
@@ -99,12 +107,14 @@ Feature: Autenticación de usuarios
 
   @i18n
   Scenario: Cambiar idioma de español a inglés actualiza textos del login
+    Given que el usuario navega a la página de login en español
     When cambia el idioma a "English" en el selector de idioma
     Then los textos del login deben estar en inglés
     And la URL debe contener "/en/login"
 
   @i18n
   Scenario: Login en inglés redirige a dashboard en inglés
+    Given que el usuario navega a la página de login en español
     When cambia el idioma a "English" en el selector de idioma
     Then los textos del login deben estar en inglés
     When ingresa credenciales válidas en el formulario de login desktop

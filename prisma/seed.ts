@@ -370,6 +370,90 @@ async function main() {
   });
 
   console.log('✓ Account balances updated');
+
+  // Savings goals
+  console.log('Creating savings goals...');
+  const goalsData = [
+    {
+      name: 'Vacaciones Europa 2027',
+      description: 'Viaje de 3 semanas por España, Francia e Italia',
+      type: 'ANNUAL' as const,
+      targetAmountCents: 1500000000,
+      currentAmountCents: 420000000,
+      currency: 'COP' as const,
+      deadline: new Date('2027-06-01'),
+      monthlyContributionCents: 90000000,
+      status: 'ACTIVE' as const,
+      color: 'from-blue-500 to-cyan-500',
+    },
+    {
+      name: 'Fondo de Emergencia',
+      description: '6 meses de gastos fijos',
+      type: 'EMERGENCY' as const,
+      targetAmountCents: 1800000000,
+      currentAmountCents: 900000000,
+      currency: 'COP' as const,
+      monthlyContributionCents: 150000000,
+      status: 'ACTIVE' as const,
+      color: 'from-red-500 to-rose-500',
+    },
+    {
+      name: 'MacBook Pro',
+      description: 'Portátil nuevo para trabajo',
+      type: 'SHORT_TERM' as const,
+      targetAmountCents: 900000000,
+      currentAmountCents: 900000000,
+      currency: 'COP' as const,
+      deadline: new Date('2026-03-01'),
+      status: 'COMPLETED' as const,
+      color: 'from-emerald-500 to-teal-500',
+    },
+    {
+      name: 'Inversión ETF',
+      description: 'Acumulación mensual para invertir en ETFs',
+      type: 'CUSTOM' as const,
+      targetAmountCents: 500000000,
+      currentAmountCents: 125000000,
+      currency: 'COP' as const,
+      monthlyContributionCents: 50000000,
+      status: 'ACTIVE' as const,
+      color: 'from-violet-500 to-purple-500',
+    },
+  ];
+
+  for (const goalData of goalsData) {
+    const goal = await prisma.savingsGoal.create({
+      data: {
+        userId: user.id,
+        ...goalData,
+        createdBy: user.id,
+        lastModifiedBy: user.id,
+      },
+    });
+
+    // Add some contributions to active goals
+    if (goalData.status === 'ACTIVE' && goalData.currentAmountCents > 0) {
+      const contributionAmount = Math.floor(goalData.currentAmountCents / 3);
+      const months = [3, 2, 1];
+      for (const monthsAgo of months) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - monthsAgo);
+        await prisma.savingsContribution.create({
+          data: {
+            goalId: goal.id,
+            amountCents: contributionAmount,
+            currency: goalData.currency,
+            idempotencyKey: crypto.randomUUID(),
+            date,
+            createdBy: user.id,
+            lastModifiedBy: user.id,
+          },
+        });
+      }
+    }
+  }
+
+  console.log(`✓ Created ${goalsData.length} savings goals with contributions`);
   console.log('✅ Seed completed successfully!');
 }
 

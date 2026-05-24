@@ -22,6 +22,7 @@
   "deadlineHint": "Optional — when do you want to reach this goal?",
   "currency": "Currency",
   "color": "Color",
+  "customColor": "Custom color",
   "createGoal": "Create Goal",
   "updateGoal": "Update Goal",
   "deleteGoal": "Delete Goal",

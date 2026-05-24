@@ -22,6 +22,7 @@
   "deadlineHint": "Opcional — ¿cuándo quieres alcanzar esta meta?",
   "currency": "Moneda",
   "color": "Color",
+  "customColor": "Color personalizado",
   "createGoal": "Crear Meta",
   "updateGoal": "Actualizar Meta",
   "deleteGoal": "Eliminar Meta",

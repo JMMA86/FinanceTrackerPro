@@ -12,13 +12,13 @@ import type { SavingsGoal } from '@prisma/client';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 
 const GOAL_STATUS = ['ACTIVE', 'COMPLETED', 'CANCELLED'] as const;
-const COLOR_OPTIONS = [
-  { value: 'from-violet-500 to-purple-500', label: 'Púrpura' },
-  { value: 'from-blue-500 to-cyan-500', label: 'Azul' },
-  { value: 'from-emerald-500 to-teal-500', label: 'Verde' },
-  { value: 'from-amber-500 to-orange-500', label: 'Ámbar' },
-  { value: 'from-red-500 to-rose-500', label: 'Rojo' },
-  { value: 'from-pink-500 to-fuchsia-500', label: 'Rosa' },
+const COLOR_PRESETS = [
+  'from-violet-500 to-purple-500',
+  'from-blue-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-amber-500 to-orange-500',
+  'from-red-500 to-rose-500',
+  'from-pink-500 to-fuchsia-500',
 ];
 
 interface EditSavingsGoalModalProps {
@@ -41,6 +41,8 @@ export function EditSavingsGoalModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [targetCents, setTargetCents] = useState(0);
   const [monthlyCents, setMonthlyCents] = useState<number | undefined>(undefined);
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
+  const [customColor, setCustomColor] = useState('#6366f1');
 
   const {
     register,
@@ -80,6 +82,11 @@ export function EditSavingsGoalModal({
     const id = requestAnimationFrame(() => {
       setTargetCents(goal.targetAmountCents);
       setMonthlyCents(goal.monthlyContributionCents ?? undefined);
+      const initialColor = goal.color ?? undefined;
+      setSelectedColor(initialColor);
+      if (initialColor && !COLOR_PRESETS.includes(initialColor)) {
+        setCustomColor(initialColor);
+      }
       setSubmitError(null);
       setIsVisible(true);
     });
@@ -254,22 +261,40 @@ export function EditSavingsGoalModal({
           {/* Color */}
           <div>
             <label className={labelCls}>{get(dictionary, 'color')}</label>
-            <div className="flex gap-2 flex-wrap">
-              {COLOR_OPTIONS.map((c) => (
-                <label
-                  key={c.value}
-                  className="flex items-center gap-2 p-2 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors has-[:checked]:ring-2 has-[:checked]:ring-violet-400"
-                >
-                  <input
-                    type="radio"
-                    value={c.value}
-                    className="sr-only"
-                    {...register('color')}
-                  />
-                  <div className={`w-5 h-5 rounded-full bg-gradient-to-r ${c.value}`} />
-                  <span className="text-xs text-slate-300">{c.label}</span>
-                </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {COLOR_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  aria-label={preset}
+                  onClick={() => { setSelectedColor(preset); setValue('color', preset); }}
+                  className={`w-7 h-7 rounded-full bg-gradient-to-r ${preset} transition-all ${
+                    selectedColor === preset
+                      ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'
+                      : 'opacity-70 hover:opacity-100 hover:scale-105'
+                  }`}
+                />
               ))}
+              <label
+                aria-label={get(dictionary, 'customColor')}
+                className={`relative w-7 h-7 rounded-full overflow-hidden cursor-pointer transition-all ${
+                  selectedColor && !COLOR_PRESETS.includes(selectedColor)
+                    ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'
+                    : 'opacity-70 hover:opacity-100 hover:scale-105'
+                }`}
+                style={{ background: customColor }}
+              >
+                <input
+                  type="color"
+                  value={customColor}
+                  onChange={(e) => {
+                    setCustomColor(e.target.value);
+                    setSelectedColor(e.target.value);
+                    setValue('color', e.target.value);
+                  }}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                />
+              </label>
             </div>
           </div>
 

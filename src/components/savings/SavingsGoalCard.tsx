@@ -42,7 +42,9 @@ export function SavingsGoalCard({
   const isCompleted = goal.status === 'COMPLETED';
   const progress = Math.min(goal.progressPercentage, 100);
 
-  const gradient = goal.color || TYPE_COLORS[goal.type] || DEFAULT_GRADIENT;
+  const isHexColor = goal.color?.startsWith('#') ?? false;
+  const gradient = isHexColor ? '' : (goal.color || TYPE_COLORS[goal.type] || DEFAULT_GRADIENT);
+  const solidStyle = isHexColor ? { background: goal.color } : undefined;
 
   const remainingCents = useMemo(
     () => Math.max(0, goal.targetAmountCents - goal.currentAmountCents),
@@ -92,7 +94,10 @@ export function SavingsGoalCard({
       aria-label={`${goal.name} - ${typeLabel}`}
     >
       {/* Colored header bar */}
-      <div className={`h-1.5 bg-gradient-to-r ${gradient}`} />
+      <div
+        className={`h-1.5 ${isHexColor ? '' : `bg-gradient-to-r ${gradient}`}`}
+        style={solidStyle}
+      />
 
       <div className="p-5 space-y-4">
         {/* Header */}
@@ -155,8 +160,8 @@ export function SavingsGoalCard({
           </div>
           <div className="h-2.5 bg-white/5 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${goal.name}: ${progress.toFixed(1)}%`}>
             <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out bg-gradient-to-r ${gradient}`}
-              style={{ width: `${progress}%` }}
+              className={`h-full rounded-full transition-all duration-1000 ease-out ${isHexColor ? '' : `bg-gradient-to-r ${gradient}`}`}
+              style={{ width: `${progress}%`, ...solidStyle }}
             />
           </div>
         </div>

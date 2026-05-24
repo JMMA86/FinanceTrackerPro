@@ -38,18 +38,6 @@ export default async function AccountsPage({ params }: Readonly<AccountsPageProp
       <section className="app-shell rounded-2xl p-5 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-white">
-            {get(dictionary, 'sections.investments')}
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">Próximamente</p>
-        </div>
-        <span className="text-xs font-medium text-slate-500 bg-white/5 px-2.5 py-1 rounded-full">
-          En desarrollo
-        </span>
-      </section>
-
-      <section className="app-shell rounded-2xl p-5 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-white">
             {get(dictionary, 'sections.creditCards')}
           </p>
           <p className="text-xs text-slate-400 mt-0.5">Próximamente</p>

@@ -5,8 +5,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySession } from '@/lib/auth/session';
-import { getLocaleFromHeader, isValidLocale } from '@/lib/i18n';
+import { verifySession } from './src/lib/auth/session';
+import { getLocaleFromHeader, isValidLocale } from './src/lib/i18n';
 
 const AUTH_ROUTES = ['/login', '/register'];
 const PROTECTED_ROUTES = [

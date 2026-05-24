@@ -6,6 +6,7 @@ import {
   Home,
   ShoppingBasket,
   HandCoins,
+  TrendingUp,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -67,6 +68,13 @@ export const navigationItems: NavigationItem[] = [
     href: '/loans',
     icon: HandCoins,
     showInMobile: false,
+  },
+  {
+    nameKey: 'investments',
+    descKey: 'investmentsDesc',
+    href: '/investments',
+    icon: TrendingUp,
+    showInMobile: true,
   },
   {
     nameKey: 'settings',

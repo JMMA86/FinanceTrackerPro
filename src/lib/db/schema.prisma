@@ -87,6 +87,14 @@ enum LoanType {
   BUSINESS   // Negocio
 }
 
+enum InvestmentTransactionType {
+  DEPOSIT       // Depósito desde cuenta bancaria
+  WITHDRAWAL    // Retiro hacia cuenta bancaria
+  BUY           // Compra de activo
+  SELL          // Venta de activo
+  DIVIDEND      // Dividendo recibido
+}
+
 // ============================================================================
 // USER & SECURITY
 // ============================================================================
@@ -176,6 +184,9 @@ model Account {
   parentAccountId   String?
   parentAccount     Account?    @relation("AccountPockets", fields: [parentAccountId], references: [id], onDelete: Restrict)
   pockets           Account[]   @relation("AccountPockets")
+
+  // Investment holdings
+  assetHoldings     InvestmentAssetHolding[]
 
   // Relations
   transactions      Transaction[]
@@ -434,5 +445,42 @@ model LoanInstallment {
   @@unique([loanId, installmentNumber])
   @@index([loanId])
   @@index([dueDate])
+  @@index([isActive])
+}
+
+// ============================================================================
+// INVESTMENT ASSET HOLDINGS (Stock tracking per investment account)
+// ============================================================================
+
+model InvestmentAssetHolding {
+  id                  String      @id @default(cuid())
+  accountId           String
+  account             Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  // Asset identification (Rule 11 — trazabilidad)
+  symbol              String      // e.g., "AAPL", "TSLA", "MSFT"
+  name                String      // e.g., "Apple Inc."
+  quantity            Decimal     @db.Decimal(20, 8) // Número de acciones (permite fraccionales)
+  avgCostCents        Int         // Costo promedio de compra en centavos
+  currency            Currency    // Moneda del activo (USD, EUR)
+  currentPriceCents   Int         @default(0) // Último precio de mercado en centavos
+  lastPriceUpdate     DateTime?   // Última actualización de precio
+
+  // Trazabilidad de moneda original (Rule 11)
+  originalCurrency    Currency?
+  originalCostCents   Int?
+  exchangeRate        Decimal?    @db.Decimal(20, 8)
+
+  // Audit (Rule 4)
+  isActive            Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  deletedAt           DateTime?
+  createdBy           String?
+  lastModifiedBy      String?
+
+  @@unique([accountId, symbol])  // No se puede tener el mismo símbolo 2 veces en la misma cuenta
+  @@index([accountId])
+  @@index([symbol])
   @@index([isActive])
 }

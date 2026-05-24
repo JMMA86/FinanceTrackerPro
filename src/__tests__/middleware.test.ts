@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { proxy } from '../proxy';
+import { proxy } from '../../proxy';
 import type { SessionData } from '@/lib/auth/session';
 
 vi.mock('@/lib/auth/session', () => ({

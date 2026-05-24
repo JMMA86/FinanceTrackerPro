@@ -9,6 +9,13 @@ export const TEST_USER = {
   name: 'E2E Test User',
 };
 
+/** Isolated user for investments.feature — investment tests never touch other users' accounts. */
+export const INVESTMENTS_TEST_USER = {
+  email: process.env.E2E_INVESTMENTS_USER ?? 'investments@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Investments E2E User',
+};
+
 /** Isolated user for accounts.feature — accounts tests never touch the auth or dashboard users. */
 export const ACCOUNTS_TEST_USER = {
   email: process.env.E2E_ACCOUNTS_USER ?? 'accounts@e2e.financetrackerpro.com',

@@ -29,6 +29,7 @@ test('warm up Next.js dev server routes and Server Actions', async ({ page }) =>
   // 3. Warm up the accounts and dashboard pages while logged in
   await page.goto('/es/accounts', { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => {});
   await page.goto('/es/dashboard', { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => {});
+  await page.goto('/es/investments', { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => {});
 
   // 4. Warm up the English login page (used by i18n tests)
   await page.context().clearCookies();

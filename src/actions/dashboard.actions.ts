@@ -346,6 +346,38 @@ function buildRecentTransactions(
 }
 
 /**
+ * Calculate investment sparkline data (last N months cumulative balance)
+ */
+function calculateInvestmentSparkline(
+  transactions: TransactionData[],
+  months: number
+): number[] {
+  const now = new Date();
+  const monthlyTotals: number[] = [];
+
+  // Initialize each month with 0
+  for (let i = months - 1; i >= 0; i--) {
+    const monthStart = startOfMonth(subMonths(now, i));
+    const monthEnd = endOfMonth(subMonths(now, i));
+
+    // Sum all INVESTMENT transactions for this month
+    let monthTotal = 0;
+    for (const tx of transactions) {
+      if (
+        tx.type === 'INVESTMENT' &&
+        tx.date >= monthStart &&
+        tx.date <= monthEnd
+      ) {
+        monthTotal = addCents(monthTotal, tx.amountCents);
+      }
+    }
+    monthlyTotals.push(monthTotal);
+  }
+
+  return monthlyTotals;
+}
+
+/**
  * Format final metrics result
  */
 function formatMetricsResult(
@@ -364,6 +396,8 @@ function formatMetricsResult(
     lastMonthExpenses: number;
     pendingFixedExpenses: number;
     transactions: TransactionData[];
+    dollarRate: number;
+    investmentSparkline: number[];
   },
   locale: string
 ): DashboardMetrics {
@@ -450,8 +484,8 @@ function formatMetricsResult(
       formatted: metrics.maxInterestRate > 0 ? `${metrics.maxInterestRate.toFixed(2)}%` : '--',
     },
     dollarRate: {
-      amount: 0,
-      formatted: '--',
+      amount: metrics.dollarRate,
+      formatted: metrics.dollarRate > 0 ? `$${metrics.dollarRate.toFixed(2)}` : '--',
     },
 
     // Gastos
@@ -470,7 +504,9 @@ function formatMetricsResult(
     netWorthDistribution: buildDistribution(metrics.distribution),
 
     // Sparklines
-    sparklines: {},
+    sparklines: {
+      investments: metrics.investmentSparkline,
+    },
 
     // Transacciones
     recentTransactions: buildRecentTransactions(metrics.transactions),
@@ -549,6 +585,26 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
     select: { expectedAmountCents: true, currency: true },
   });
 
+  // Fetch latest exchange rate for dollarRate metric
+  const latestInvestmentTx = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      isActive: true,
+      type: 'INVESTMENT',
+      exchangeRate: { not: null },
+      originalCurrency: 'COP',
+    },
+    orderBy: { date: 'desc' },
+    select: { exchangeRate: true },
+  });
+
+  const dollarRate = latestInvestmentTx?.exchangeRate
+    ? Number(latestInvestmentTx.exchangeRate)
+    : 0;
+
+  // Calculate investment sparkline (last 6 months)
+  const investmentSparkline = calculateInvestmentSparkline(allTransactions, 6);
+
   // Calculate metrics via helper functions
   const accountMetrics = await calculateAccountMetrics(accounts, transactionRepo);
   const externalDebts = calculateLoanMetrics(loans);
@@ -570,6 +626,8 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
       lastMonthExpenses: txMetrics.lastMonthExpenses,
       pendingFixedExpenses: pendingFixedExpensesTotal,
       transactions: allTransactions,
+      dollarRate,
+      investmentSparkline,
     },
     locale
   );

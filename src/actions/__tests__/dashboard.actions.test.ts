@@ -19,7 +19,7 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     account: { findMany: vi.fn() },
     loan: { findMany: vi.fn() },
-    transaction: { findMany: vi.fn() },
+    transaction: { findMany: vi.fn(), findFirst: vi.fn() },
     fixedExpensePayment: { findMany: vi.fn() },
   },
 }));
@@ -52,6 +52,7 @@ const mockGetSession = vi.mocked(getSession);
 const mockAccount = vi.mocked(prisma.account.findMany);
 const mockLoan = vi.mocked(prisma.loan.findMany);
 const mockTx = vi.mocked(prisma.transaction.findMany);
+const mockTxFindFirst = vi.mocked(prisma.transaction.findFirst);
 const mockFixed = vi.mocked(prisma.fixedExpensePayment.findMany);
 const mockGetTrueBalance = vi.mocked(getTrueBalance);
 const mockFormatMoney = vi.mocked(formatMoney);
@@ -127,6 +128,7 @@ describe('dashboard.actions.ts', () => {
     mockAccount.mockResolvedValue([]);
     mockLoan.mockResolvedValue([]);
     mockTx.mockResolvedValue([]);
+    mockTxFindFirst.mockResolvedValue(null);
     mockFixed.mockResolvedValue([]);
   });
 

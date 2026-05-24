@@ -22,6 +22,10 @@ type ModalId =
   | 'edit-pocket'
   | 'delete-confirm'
   | 'settings'
+  | 'create-investment'
+  | 'deposit-investment'
+  | 'buy-asset'
+  | 'sell-asset'
   | null;
 
 interface UIState {

@@ -73,6 +73,51 @@ async function main() {
     'Dashboard E2E User',     // dashboard.feature
   );
 
+  // Investments E2E user with pre-seeded COP bank account for deposit tests
+  const invUserEmail = process.env.E2E_INVESTMENTS_USER || 'investments@e2e.financetrackerpro.com';
+  const invUser = await upsertUserAndGet(invUserEmail, 'Investments E2E User');
+
+  // Create a COP bank account for the investment user (needed for deposits)
+  const invBankAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-inv-bank-account' },
+    create: {
+      idempotencyKey: 'e2e-inv-bank-account',
+      userId: invUser.id,
+      name: 'Cuenta Bancaria COP',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 100000000, // $1,000,000 COP
+      createdBy: invUser.id,
+      lastModifiedBy: invUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Create an initial INCOME transaction for true balance reconciliation
+  const invInitialTxExists = await prisma.transaction.findFirst({
+    where: { idempotencyKey: 'e2e-inv-bank-initial' },
+  });
+  if (!invInitialTxExists) {
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: 'e2e-inv-bank-initial',
+        userId: invUser.id,
+        accountId: invBankAccount.id,
+        type: 'INCOME',
+        amountCents: 100000000,
+        currency: 'COP',
+        description: 'Saldo inicial cuenta bancaria COP',
+        date: new Date('2026-01-01'),
+        createdBy: invUser.id,
+        lastModifiedBy: invUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  console.log('✓ Investments user seeded with COP bank account and initial transaction');
+
   // Transactions E2E user with pre-seeded accounts and transactions
   const txUserEmail = process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com';
   const txUser = await upsertUserAndGet(txUserEmail, 'Transactions E2E User');

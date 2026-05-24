@@ -8,6 +8,7 @@ import 'server-only';
 
 import { prisma } from '@/lib/db';
 import { getTrueBalance } from '@/services/reconciliation.service';
+import { getMaxSpendable, getSavingsSummary } from '@/services/savings.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { formatMoney, addCents, subtractCents } from '@/lib/money';
 import Decimal from 'decimal.js';
@@ -46,6 +47,11 @@ export interface DashboardMetrics {
   // Gastos
   monthlyExpenses: { amount: number; formatted: string; currency: Currency };
   pendingFixedExpenses: { amount: number; formatted: string; currency: Currency };
+
+  // Savings
+  activeSavingsGoals: number;
+  totalSavedCents: { amount: number; formatted: string; currency: Currency };
+  savingsProgress: number;
 
   // Distribución patrimonial
   netWorthDistribution: DistributionItem[];
@@ -127,6 +133,10 @@ function getEmptyMetrics(): DashboardMetrics {
     // Gastos
     monthlyExpenses: { amount: 0, formatted: '$0', currency: defaultCurrency },
     pendingFixedExpenses: { amount: 0, formatted: '$0', currency: defaultCurrency },
+    // Savings
+    activeSavingsGoals: 0,
+    totalSavedCents: { amount: 0, formatted: '$0', currency: defaultCurrency },
+    savingsProgress: 0,
     // Distribución
     netWorthDistribution: [],
     // Sparklines
@@ -398,6 +408,10 @@ function formatMetricsResult(
     transactions: TransactionData[];
     dollarRate: number;
     investmentSparkline: number[];
+    activeSavingsGoals: number;
+    totalSavedCents: number;
+    savingsProgress: number;
+    maxSpendableCents: number;
   },
   locale: string
 ): DashboardMetrics {
@@ -410,9 +424,8 @@ function formatMetricsResult(
       : 0;
   const isPositiveSavings = metrics.monthlyExpenses <= metrics.lastMonthExpenses;
 
-  // Calculate max spendable (income - expenses - savings target 20%)
-  const savingsTarget = Math.floor(metrics.monthlyIncome * 0.2);
-  const maxSpendable = Math.max(0, metrics.monthlyIncome - metrics.monthlyExpenses - savingsTarget);
+  // Max spendable from savings service (replaces simple calculation)
+  const maxSpendable = metrics.maxSpendableCents;
 
   // Calculate credit available
   const creditAvailable = Math.max(0, metrics.creditLimitTotal - metrics.creditCardDebt);
@@ -499,6 +512,15 @@ function formatMetricsResult(
       formatted: formatMoney(metrics.pendingFixedExpenses, defaultCurrency, locale),
       currency: defaultCurrency,
     },
+
+    // Savings
+    activeSavingsGoals: metrics.activeSavingsGoals,
+    totalSavedCents: {
+      amount: metrics.totalSavedCents,
+      formatted: formatMoney(metrics.totalSavedCents, defaultCurrency, locale),
+      currency: defaultCurrency,
+    },
+    savingsProgress: metrics.savingsProgress,
 
     // Distribución
     netWorthDistribution: buildDistribution(metrics.distribution),
@@ -616,6 +638,14 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
   );
   const pendingFixedExpensesTotal = calculatePendingFixedExpenses(pendingFixedExpenses);
 
+  // Savings metrics
+  const savingsSummary = await getSavingsSummary(userId);
+  const maxSpendableBreakdown = await getMaxSpendable(
+    userId,
+    now.getMonth() + 1,
+    now.getFullYear()
+  );
+
   // Build and return final result
   return formatMetricsResult(
     {
@@ -628,6 +658,10 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
       transactions: allTransactions,
       dollarRate,
       investmentSparkline,
+      activeSavingsGoals: savingsSummary.activeGoalsCount,
+      totalSavedCents: savingsSummary.totalSavedCents,
+      savingsProgress: savingsSummary.overallProgressPercentage,
+      maxSpendableCents: maxSpendableBreakdown.maxSpendableCents,
     },
     locale
   );

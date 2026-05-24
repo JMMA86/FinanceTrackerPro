@@ -30,6 +30,13 @@ export const DASHBOARD_TEST_USER = {
   name: 'Dashboard E2E User',
 };
 
+/** Isolated user for savings.feature — savings tests need pre-seeded accounts and goals. */
+export const SAVINGS_TEST_USER = {
+  email: process.env.E2E_SAVINGS_USER ?? 'savings@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Savings E2E User',
+};
+
 export const INVALID_CREDENTIALS = {
   email: 'nonexistent@test.com',
   password: 'WrongPass123',

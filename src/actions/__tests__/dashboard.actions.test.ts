@@ -21,6 +21,9 @@ vi.mock('@/lib/db', () => ({
     loan: { findMany: vi.fn() },
     transaction: { findMany: vi.fn(), findFirst: vi.fn() },
     fixedExpensePayment: { findMany: vi.fn() },
+    fixedExpense: { create: vi.fn() },
+    savingsGoal: { findMany: vi.fn().mockResolvedValue([]) },
+    savingsContribution: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -36,6 +39,27 @@ vi.mock('@/lib/money', () => ({
   formatMoney: vi.fn().mockImplementation((cents: number, currency: string) => `${currency}:${cents}`),
   addCents: vi.fn().mockImplementation((a: number, b: number) => a + b),
   subtractCents: vi.fn().mockImplementation((a: number, b: number) => a - b),
+}));
+
+// Mock savings service to avoid interfering with dashboard tests
+vi.mock('@/services/savings.service', () => ({
+  getSavingsSummary: vi.fn().mockResolvedValue({
+    totalSavedCents: 0,
+    totalTargetCents: 0,
+    overallProgressPercentage: 0,
+    activeGoalsCount: 0,
+    completedGoalsCount: 0,
+    monthlyContributedCents: 0,
+  }),
+  getMaxSpendable: vi.fn().mockResolvedValue({
+    totalIncomeCents: 0,
+    totalFixedExpensesCents: 0,
+    totalSavingsCommitmentsCents: 0,
+    totalVariableExpensesCents: 0,
+    maxSpendableCents: 0,
+  }),
+  reconcileGoalBalance: vi.fn(),
+  calculateProjectedCompletion: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
@@ -396,8 +420,9 @@ describe('dashboard.actions.ts', () => {
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
 
-      const savingsTarget = Math.floor(5_000_000 * 0.2);
-      expect(result.maxSpendable.amount).toBe(5_000_000 - 0 - savingsTarget);
+      // maxSpendable is now delegated to savings.service (mocked as 0)
+      // monthlyIncome is used internally but not exposed in final shape
+      expect(result.maxSpendable.amount).toBe(0);
     });
 
     it('accumulates current-month TRANSFER_IN into monthlyIncome', async () => {
@@ -405,8 +430,8 @@ describe('dashboard.actions.ts', () => {
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
 
-      const savingsTarget = Math.floor(1_000_000 * 0.2);
-      expect(result.maxSpendable.amount).toBe(1_000_000 - 0 - savingsTarget);
+      // maxSpendable is now delegated to savings.service (mocked as 0)
+      expect(result.maxSpendable.amount).toBe(0);
     });
 
     it('accumulates current-month EXPENSE into monthlyExpenses', async () => {

@@ -95,6 +95,19 @@ enum InvestmentTransactionType {
   DIVIDEND      // Dividendo recibido
 }
 
+enum SavingsGoalType {
+  ANNUAL       // Meta anual
+  SHORT_TERM   // Meta a corto plazo
+  EMERGENCY    // Fondo de emergencia
+  CUSTOM       // Meta personalizada
+}
+
+enum SavingsGoalStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 // ============================================================================
 // USER & SECURITY
 // ============================================================================
@@ -116,6 +129,7 @@ model User {
   transactions      Transaction[]
   fixedExpenses     FixedExpense[]
   loans             Loan[]
+  savingsGoals      SavingsGoal[]
   biometricCredentials BiometricCredential[]
 
   // Audit fields
@@ -190,6 +204,8 @@ model Account {
 
   // Relations
   transactions      Transaction[]
+  savingsGoals      SavingsGoal[]
+  savingsContributions SavingsContribution[]
 
   // Card personalization
   cardColor         String?     // Hex color or preset theme key
@@ -259,6 +275,9 @@ model Transaction {
   // Loan installment payment link
   loanInstallmentId   String?           @unique
   loanInstallment     LoanInstallment?  @relation(fields: [loanInstallmentId], references: [id], onDelete: SetNull)
+
+  // Savings contribution link
+  savingsContributions SavingsContribution[]
 
   // Extended audit (Rule 14)
   ipAddress           String?
@@ -482,5 +501,94 @@ model InvestmentAssetHolding {
   @@unique([accountId, symbol])  // No se puede tener el mismo símbolo 2 veces en la misma cuenta
   @@index([accountId])
   @@index([symbol])
+  @@index([isActive])
+}
+
+// ============================================================================
+// SAVINGS GOALS (Metas de Ahorro)
+// ============================================================================
+
+model SavingsGoal {
+  id                      String            @id @default(cuid())
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                    String            // "Vacaciones 2026", "Fondo de Emergencia"
+  description             String?           // Descripción opcional
+  type                    SavingsGoalType   @default(CUSTOM)
+
+  // Target
+  targetAmountCents       Int               // Meta en centavos
+  currency                Currency          @default(COP)
+  currentAmountCents      Int               @default(0) // CACHE - reconcile from contributions
+
+  // Timeline
+  deadline                DateTime?         // null = sin fecha límite
+  monthlyContributionCents Int?             // Contribución mensual planeada
+
+  // Linked savings account (optional)
+  linkedAccountId         String?
+  linkedAccount           Account?          @relation(fields: [linkedAccountId], references: [id], onDelete: SetNull)
+
+  // Progress
+  status                  SavingsGoalStatus @default(ACTIVE)
+  priority                Int               @default(0) // 0=normal, 1=high, 2=critical
+
+  // UI
+  color                   String?           // Hex color for card
+  icon                    String?           // Icon name for display
+
+  // Relations
+  contributions           SavingsContribution[]
+
+  // Idempotency
+  idempotencyKey          String?           @unique
+
+  // Audit (Rule 4)
+  isActive                Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  deletedAt               DateTime?
+  createdBy               String?
+  lastModifiedBy          String?
+
+  @@index([userId])
+  @@index([status])
+  @@index([isActive])
+  @@index([deadline])
+}
+
+model SavingsContribution {
+  id                      String      @id @default(cuid())
+  goalId                  String
+  goal                    SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  amountCents             Int         // Monto contribuido en centavos
+  currency                Currency
+  date                    DateTime    @default(now())
+
+  // Source tracking
+  sourceAccountId         String?     // De qué cuenta bancaria salió
+  sourceAccount           Account?    @relation(fields: [sourceAccountId], references: [id], onDelete: SetNull)
+  transactionId           String?     // Link a Transaction si existe
+  transaction             Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  notes                   String?
+
+  // Idempotency
+  idempotencyKey          String?     @unique
+
+  // Audit
+  isActive                Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+  deletedAt               DateTime?
+  createdBy               String?
+  lastModifiedBy          String?
+  ipAddress               String?
+  userAgent               String?
+
+  @@index([goalId])
+  @@index([date])
   @@index([isActive])
 }

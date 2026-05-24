@@ -193,6 +193,168 @@ async function main() {
 
   console.log('✓ Transactions user seeded with 2 accounts and 20 transactions');
 
+  // ============================================================================
+  // Savings E2E user with pre-seeded bank account for goals
+  // ============================================================================
+  const savingsUserEmail = process.env.E2E_SAVINGS_USER || 'savings@e2e.financetrackerpro.com';
+  const savingsUser = await upsertUserAndGet(savingsUserEmail, 'Savings E2E User');
+
+  // Create a CHECKING bank account for savings user (source account for contributions)
+  const savingsBankAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-savings-bank-account' },
+    create: {
+      idempotencyKey: 'e2e-savings-bank-account',
+      userId: savingsUser.id,
+      name: 'Cuenta Corriente',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 10000000, // $100,000 COP
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Create initial income transaction for true balance reconciliation
+  const savingsInitialTxExists = await prisma.transaction.findFirst({
+    where: { idempotencyKey: 'e2e-savings-bank-initial' },
+  });
+  if (!savingsInitialTxExists) {
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: 'e2e-savings-bank-initial',
+        userId: savingsUser.id,
+        accountId: savingsBankAccount.id,
+        type: 'INCOME',
+        amountCents: 10000000,
+        currency: 'COP',
+        description: 'Saldo inicial cuenta corriente',
+        date: new Date('2026-01-01'),
+        createdBy: savingsUser.id,
+        lastModifiedBy: savingsUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  // Create a SAVINGS account linked to savings user (for goals)
+  const savingsUserSavingsAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-savings-account' },
+    create: {
+      idempotencyKey: 'e2e-savings-account',
+      userId: savingsUser.id,
+      name: 'Cuenta de Ahorros',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 5000000, // $50,000 COP
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Pre-seed goals for faster and more reliable E2E tests
+  // These are referenced by name in savings.feature scenarios
+  await prisma.savingsGoal.upsert({
+    where: { idempotencyKey: 'e2e-savings-emergency-goal' },
+    create: {
+      idempotencyKey: 'e2e-savings-emergency-goal',
+      userId: savingsUser.id,
+      name: 'Fondo de Emergencia',
+      type: 'EMERGENCY',
+      targetAmountCents: 2000000,
+      currency: 'COP',
+      currentAmountCents: 0,
+      monthlyContributionCents: 200000,
+      linkedAccountId: savingsUserSavingsAccount.id,
+      color: 'from-red-500 to-rose-500',
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  await prisma.savingsGoal.upsert({
+    where: { idempotencyKey: 'e2e-savings-partial-goal' },
+    create: {
+      idempotencyKey: 'e2e-savings-partial-goal',
+      userId: savingsUser.id,
+      name: 'Pequeña Meta',
+      type: 'SHORT_TERM',
+      targetAmountCents: 50000,
+      currency: 'COP',
+      currentAmountCents: 40000, // 80% complete
+      monthlyContributionCents: 10000,
+      linkedAccountId: savingsUserSavingsAccount.id,
+      color: 'from-amber-500 to-orange-500',
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  await prisma.savingsGoal.upsert({
+    where: { idempotencyKey: 'e2e-savings-editable-goal' },
+    create: {
+      idempotencyKey: 'e2e-savings-editable-goal',
+      userId: savingsUser.id,
+      name: 'Meta Original',
+      type: 'CUSTOM',
+      targetAmountCents: 100000,
+      currency: 'COP',
+      currentAmountCents: 0,
+      color: 'from-violet-500 to-purple-500',
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  await prisma.savingsGoal.upsert({
+    where: { idempotencyKey: 'e2e-savings-deletable-goal' },
+    create: {
+      idempotencyKey: 'e2e-savings-deletable-goal',
+      userId: savingsUser.id,
+      name: 'Meta Eliminable',
+      type: 'SHORT_TERM',
+      targetAmountCents: 75000,
+      currency: 'COP',
+      currentAmountCents: 0,
+      color: 'from-blue-500 to-cyan-500',
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Completed goal for summary tests
+  await prisma.savingsGoal.upsert({
+    where: { idempotencyKey: 'e2e-savings-completed-goal' },
+    create: {
+      idempotencyKey: 'e2e-savings-completed-goal',
+      userId: savingsUser.id,
+      name: 'Meta Completada',
+      type: 'CUSTOM',
+      targetAmountCents: 100000,
+      currency: 'COP',
+      currentAmountCents: 100000,
+      status: 'COMPLETED',
+      color: 'from-emerald-500 to-teal-500',
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  console.log('✓ Savings user seeded with bank account, savings account, and 5 goals');
+
   console.log('✅ E2E seed completed successfully!');
 }
 

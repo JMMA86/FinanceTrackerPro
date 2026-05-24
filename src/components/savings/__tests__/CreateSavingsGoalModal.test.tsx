@@ -127,7 +127,7 @@ describe('CreateSavingsGoalModal', () => {
     expect(currencyValues).toContain('EUR');
   });
 
-  it('should have color radio options using input type radio', () => {
+  it('should have color swatch buttons and a custom color input', () => {
     const { container } = render(
       <CreateSavingsGoalModal
         dictionary={defaultDictionary}
@@ -137,8 +137,13 @@ describe('CreateSavingsGoalModal', () => {
       />
     );
 
-    const colorRadios = container.querySelectorAll('input[type="radio"]');
-    expect(colorRadios.length).toBeGreaterThanOrEqual(6);
+    // Preset colors are rendered as gradient swatch buttons (aria-label matches Tailwind gradient class)
+    const colorSwatchButtons = container.querySelectorAll('button[aria-label^="from-"]');
+    expect(colorSwatchButtons.length).toBeGreaterThanOrEqual(6);
+
+    // A native color picker input is also present for custom hex colors
+    const colorInput = container.querySelector('input[type="color"]');
+    expect(colorInput).toBeInTheDocument();
   });
 
   it('should call showModal when isOpen=true', () => {

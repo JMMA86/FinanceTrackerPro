@@ -33,6 +33,13 @@ vi.mock('@/lib/i18n', () => ({
       projectedCompletion: 'Proyección',
       noProjection: 'Sin proyección',
       remaining: 'Restante',
+      daysLeft: 'días restantes',
+      monthsLeft: 'meses restantes',
+      overduePrefix: 'Vencido hace',
+      overdueDays: 'días',
+      deadlineToday: 'Hoy',
+      deadlineTomorrow: 'Mañana',
+      recentContributions: 'Últimas contribuciones',
     };
     return keyMap[key] ?? key;
   }),
@@ -236,7 +243,7 @@ describe('SavingsGoalCard', () => {
     );
     const deleteBtn = screen.getByRole('button', { name: /eliminar.*vacaciones 2026/i });
     fireEvent.click(deleteBtn);
-    expect(mockOnDelete).toHaveBeenCalledWith('goal-1', false);
+    expect(mockOnDelete).toHaveBeenCalledWith('goal-1', 'Vacaciones 2026', false);
   });
 
   it('should show no deadline section when deadline is null', () => {

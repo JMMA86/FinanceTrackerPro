@@ -47,7 +47,12 @@ next-env.d.ts
 
 # prisma
 /src/generated/prisma
-/prisma/migrations
+
+# playwright bdd generated specs
+.features-gen/
+
+# env files for test database
+.env.test
 
 # sonarqube
 /.scannerwork

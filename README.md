@@ -289,7 +289,26 @@ runs-on: [self-hosted, windows, x64]
    .\config.cmd --url https://github.com/JMMA86/FinanceTrackerPro --token <REG_TOKEN> --labels self-hosted,windows,x64 --name financetracker-runner
    .\svc.cmd install   # run as a user account with Docker Desktop access
    ```
-3. Add repository **secrets**: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `JWT_SECRET`, `SONAR_TOKEN`.
+3. Add repository **variables** (Settings → Variables) and **secrets** (Settings → Secrets):
+
+   | Type     | Name                | Value (local defaults)    |
+   | -------- | ------------------- | ------------------------- |
+   | Variable | `POSTGRES_HOST`     | `localhost`               |
+   | Variable | `POSTGRES_PORT`     | `5432`                    |
+   | Variable | `POSTGRES_USER`     | `postgres`                |
+   | Variable | `POSTGRES_DB`       | `financetracker-postgres` |
+   | Variable | `POSTGRES_SCHEMA`   | `public`                  |
+   | Secret   | `POSTGRES_PASSWORD` | `admin`                   |
+   | Secret   | `JWT_SECRET`        | random (see below)        |
+   | Secret   | `SONAR_TOKEN`       | generated in SonarQube    |
+
+   `DATABASE_URL` is **computed by the workflow** from the values above — no need to store it.
+
+   Generate a strong `JWT_SECRET` with Python:
+
+   ```powershell
+   python -c "import secrets; print(secrets.token_urlsafe(64))"
+   ```
 
 ### Prerequisites on the runner machine
 

@@ -111,9 +111,10 @@ export function SellAssetModal({
         addNotification('success', `Sold ${qty} ${holding.symbol}`);
         closeModal();
       } else {
-        const msg = res.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : get(dictionary, 'errors.sellFailed');
+        const msg =
+          res.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : get(dictionary, 'errors.sellFailed');
         setSubmitError(msg);
       }
     } catch {
@@ -124,11 +125,11 @@ export function SellAssetModal({
   }
 
   const qtyNum = Number.parseFloat(quantity) || 0;
-  const totalProceedsCents = qtyNum > 0 && pricePerShareCents > 0
-    ? Math.round(qtyNum * pricePerShareCents)
-    : 0;
+  const totalProceedsCents =
+    qtyNum > 0 && pricePerShareCents > 0 ? Math.round(qtyNum * pricePerShareCents) : 0;
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   if (!holding) return null;
@@ -181,21 +182,27 @@ export function SellAssetModal({
             <div>
               <p className="text-sm font-semibold text-white">{holding.symbol}</p>
               <p className="text-xs text-slate-400">
-                {holding.quantity.toFixed(4)} shares · Avg {formatMoney(holding.avgCostCents, currency, locale)}
+                {holding.quantity.toFixed(4)} shares · Avg{' '}
+                {formatMoney(holding.avgCostCents, currency, locale)}
               </p>
             </div>
           </div>
 
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
 
           {/* Quantity */}
           <div>
-            <label htmlFor="sell-qty" className={labelCls}>{get(dictionary, 'quantity')}</label>
+            <label htmlFor="sell-qty" className={labelCls}>
+              {get(dictionary, 'quantity')}
+            </label>
             <input
               id="sell-qty"
               type="number"
@@ -215,7 +222,9 @@ export function SellAssetModal({
 
           {/* Price per share */}
           <div>
-            <label htmlFor="sell-price" className={labelCls}>{get(dictionary, 'pricePerShare')}</label>
+            <label htmlFor="sell-price" className={labelCls}>
+              {get(dictionary, 'pricePerShare')}
+            </label>
             <input
               id="sell-price"
               type="number"
@@ -223,7 +232,9 @@ export function SellAssetModal({
               step="0.01"
               min="0"
               value={(pricePerShareCents / 100).toFixed(2)}
-              onChange={(e) => setPricePerShareCents(Math.round(Number.parseFloat(e.target.value) * 100))}
+              onChange={(e) =>
+                setPricePerShareCents(Math.round(Number.parseFloat(e.target.value) * 100))
+              }
               className={`${inputCls} font-mono tabular-nums`}
             />
           </div>
@@ -254,7 +265,9 @@ export function SellAssetModal({
               className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
             >
               {selling ? (
-                <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Selling...</>
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Selling...
+                </>
               ) : (
                 <>{get(dictionary, 'confirmSell')}</>
               )}

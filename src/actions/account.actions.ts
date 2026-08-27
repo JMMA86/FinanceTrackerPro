@@ -9,11 +9,7 @@ import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
 import { AppError, NotFoundError, UnauthorizedError } from '@/lib/errors/api-errors';
-import {
-  CreateAccountSchema,
-  DeleteAccountSchema,
-  UpdateAccountSchema,
-} from './account.schema';
+import { CreateAccountSchema, DeleteAccountSchema, UpdateAccountSchema } from './account.schema';
 
 const BANK_TYPES = ['CHECKING', 'CASH', 'SAVINGS', 'POCKET'] as const;
 
@@ -74,7 +70,7 @@ async function createBankAccountInternal(input: unknown) {
     throw new AppError(
       'Your session is no longer valid. Please log out and sign in again.',
       401,
-      'SESSION_INVALID',
+      'SESSION_INVALID'
     );
   }
 
@@ -113,21 +109,31 @@ async function createBankAccountInternal(input: unknown) {
       throw new AppError(
         'Your session is no longer valid. Please log out and sign in again.',
         401,
-        'SESSION_INVALID',
+        'SESSION_INVALID'
       );
     }
     throw err;
   }
 
   log.info(
-    { action: 'account.create', accountId: account.id, type: account.type, userId: session.userId, ipAddress, userAgent },
-    'Account created',
+    {
+      action: 'account.create',
+      accountId: account.id,
+      type: account.type,
+      userId: session.userId,
+      ipAddress,
+      userAgent,
+    },
+    'Account created'
   );
 
   revalidatePath('/[lang]/accounts', 'page');
   revalidatePath('/[lang]/dashboard', 'page');
   return {
-    account: { ...account, interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA) },
+    account: {
+      ...account,
+      interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
+    },
     wasIdempotent: false,
   };
 }
@@ -155,10 +161,16 @@ async function updateBankAccountInternal(input: unknown) {
     },
   });
 
-  log.info({ action: 'account.update', accountId: updated.id, userId: session.userId }, 'Account updated');
+  log.info(
+    { action: 'account.update', accountId: updated.id, userId: session.userId },
+    'Account updated'
+  );
   revalidatePath('/[lang]/accounts', 'page');
   return {
-    account: { ...updated, interestRateEA: updated.interestRateEA == null ? null : Number(updated.interestRateEA) },
+    account: {
+      ...updated,
+      interestRateEA: updated.interestRateEA == null ? null : Number(updated.interestRateEA),
+    },
   };
 }
 

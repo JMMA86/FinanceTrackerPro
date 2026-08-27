@@ -59,7 +59,10 @@ const errorCls = 'mt-1 text-xs text-red-400';
 // Component
 // ---------------------------------------------------------------------------
 
-export function CreateTransactionModal({ accounts, dictionary }: Readonly<CreateTransactionModalProps>) {
+export function CreateTransactionModal({
+  accounts,
+  dictionary,
+}: Readonly<CreateTransactionModalProps>) {
   const activeModal = useUIStore((s) => s.activeModal);
   const closeModal = useUIStore((s) => s.closeModal);
   const addNotification = useUIStore((s) => s.addNotification);
@@ -155,8 +158,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
       setIsSubmitting(true);
 
       // Convert amount: positive for INCOME, negative for EXPENSE
-      const signedAmountCents =
-        data.type === 'EXPENSE' ? -data.amountCents : data.amountCents;
+      const signedAmountCents = data.type === 'EXPENSE' ? -data.amountCents : data.amountCents;
 
       const result = await createTransaction({
         idempotencyKey: crypto.randomUUID(),
@@ -203,9 +205,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
     },
   ];
 
-  const submitLabel = isSubmitting
-    ? get(dictionary, 'creating')
-    : get(dictionary, 'create');
+  const submitLabel = isSubmitting ? get(dictionary, 'creating') : get(dictionary, 'create');
 
   return (
     <dialog
@@ -230,9 +230,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
       <div
         className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{
-          transform: isVisible
-            ? 'scale(1) translateY(0)'
-            : 'scale(0.93) translateY(12px)',
+          transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)',
           opacity: isVisible ? 1 : 0,
           transition: isVisible
             ? 'transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms cubic-bezier(0.4, 0, 0.2, 1)'
@@ -241,10 +239,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 sticky top-0 bg-slate-900 z-10">
-          <h2
-            id="create-transaction-title"
-            className="text-base font-semibold text-white"
-          >
+          <h2 id="create-transaction-title" className="text-base font-semibold text-white">
             {get(dictionary, 'createTitle')}
           </h2>
           <button
@@ -261,9 +256,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-5" noValidate>
           {/* Type selector (INCOME / EXPENSE) */}
           <fieldset>
-            <legend className={labelCls}>
-              {get(dictionary, 'type')}
-            </legend>
+            <legend className={labelCls}>{get(dictionary, 'type')}</legend>
             <div className="grid grid-cols-2 gap-3">
               {typeOptions.map((opt) => {
                 const isActive = selectedType === opt.value;
@@ -272,8 +265,12 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
                 let borderClasses: string;
                 let iconClasses: string;
                 if (isActive) {
-                  borderClasses = isIncome ? 'border-emerald-500/60 bg-emerald-500/15' : 'border-rose-500/60 bg-rose-500/15';
-                  iconClasses = isIncome ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400';
+                  borderClasses = isIncome
+                    ? 'border-emerald-500/60 bg-emerald-500/15'
+                    : 'border-rose-500/60 bg-rose-500/15';
+                  iconClasses = isIncome
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-rose-500/20 text-rose-400';
                 } else {
                   borderClasses = 'border-white/10 bg-white/4 hover:border-white/20';
                   iconClasses = 'bg-white/5 text-slate-400';
@@ -290,9 +287,7 @@ export function CreateTransactionModal({ accounts, dictionary }: Readonly<Create
                       className="sr-only"
                       aria-label={opt.label}
                     />
-                    <div
-                      className={`p-1.5 rounded-lg ${iconClasses}`}
-                    >
+                    <div className={`p-1.5 rounded-lg ${iconClasses}`}>
                       <Icon className="w-4 h-4" aria-hidden="true" />
                     </div>
                     <span

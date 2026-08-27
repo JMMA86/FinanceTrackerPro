@@ -67,9 +67,10 @@ export async function generateMetadata({ params }: Readonly<SavingsPageProps>): 
   const dict = await getDictionary(lang, 'savings');
 
   const title = `${dict.title as string} | FinanceTrackerPro`;
-  const description = lang === 'es'
-    ? 'Define metas de ahorro y sigue tu progreso financiero.'
-    : 'Set savings goals and track your financial progress.';
+  const description =
+    lang === 'es'
+      ? 'Define metas de ahorro y sigue tu progreso financiero.'
+      : 'Set savings goals and track your financial progress.';
 
   return {
     title,
@@ -125,12 +126,7 @@ export default async function SavingsPage({ params }: Readonly<SavingsPageProps>
         {/* Sidebar (1/3 width) */}
         <div className="space-y-4">
           <Suspense fallback={<MaxSpendableSkeleton />}>
-            <MaxSpendableCard
-              dictionary={dictionary}
-              locale={locale}
-              month={month}
-              year={year}
-            />
+            <MaxSpendableCard dictionary={dictionary} locale={locale} month={month} year={year} />
           </Suspense>
         </div>
       </div>

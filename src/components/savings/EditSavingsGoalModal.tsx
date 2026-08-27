@@ -113,9 +113,10 @@ export function EditSavingsGoalModal({
       if (result.success) {
         onClose();
       } else {
-        const msg = result.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : (result.error ?? get(dictionary, 'errors.updateFailed'));
+        const msg =
+          result.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : (result.error ?? get(dictionary, 'errors.updateFailed'));
         setSubmitError(msg);
       }
     } catch {
@@ -123,8 +124,10 @@ export function EditSavingsGoalModal({
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
-  const selectCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const selectCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
   const errorCls = 'mt-1 text-xs text-red-400';
 
@@ -172,14 +175,19 @@ export function EditSavingsGoalModal({
 
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
 
           {/* Goal name */}
           <div>
-            <label htmlFor="edit-savings-name" className={labelCls}>{get(dictionary, 'goalName')}</label>
+            <label htmlFor="edit-savings-name" className={labelCls}>
+              {get(dictionary, 'goalName')}
+            </label>
             <input
               id="edit-savings-name"
               type="text"
@@ -191,13 +199,17 @@ export function EditSavingsGoalModal({
               {...register('name')}
             />
             {errors.name && (
-              <p id="edit-savings-name-error" role="alert" className={errorCls}>{errors.name.message}</p>
+              <p id="edit-savings-name-error" role="alert" className={errorCls}>
+                {errors.name.message}
+              </p>
             )}
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="edit-savings-desc" className={labelCls}>{get(dictionary, 'goalDescription')}</label>
+            <label htmlFor="edit-savings-desc" className={labelCls}>
+              {get(dictionary, 'goalDescription')}
+            </label>
             <textarea
               id="edit-savings-desc"
               rows={2}
@@ -209,16 +221,23 @@ export function EditSavingsGoalModal({
 
           {/* Target amount */}
           <div>
-            <label htmlFor="edit-savings-target" className={labelCls}>{get(dictionary, 'targetAmount')}</label>
+            <label htmlFor="edit-savings-target" className={labelCls}>
+              {get(dictionary, 'targetAmount')}
+            </label>
             <FormattedNumericInput
               id="edit-savings-target"
               value={targetCents}
-              onChange={(v) => { setTargetCents(v); setValue('targetAmountCents', v); }}
+              onChange={(v) => {
+                setTargetCents(v);
+                setValue('targetAmountCents', v);
+              }}
               aria-invalid={!!errors.targetAmountCents}
               className={`${inputCls} font-mono tabular-nums`}
             />
             {errors.targetAmountCents && (
-              <p role="alert" className={errorCls}>{errors.targetAmountCents.message}</p>
+              <p role="alert" className={errorCls}>
+                {errors.targetAmountCents.message}
+              </p>
             )}
           </div>
 
@@ -227,33 +246,46 @@ export function EditSavingsGoalModal({
             <label htmlFor="edit-savings-monthly" className={labelCls}>
               {get(dictionary, 'monthlyContribution')}
             </label>
-            <p className="text-[10px] text-slate-500 mb-1.5">{get(dictionary, 'monthlyContributionHint')}</p>
+            <p className="text-[10px] text-slate-500 mb-1.5">
+              {get(dictionary, 'monthlyContributionHint')}
+            </p>
             <FormattedNumericInput
               id="edit-savings-monthly"
               value={monthlyCents ?? 0}
-              onChange={(v) => { setMonthlyCents(v); setValue('monthlyContributionCents', v || undefined); }}
+              onChange={(v) => {
+                setMonthlyCents(v);
+                setValue('monthlyContributionCents', v || undefined);
+              }}
               className={`${inputCls} font-mono tabular-nums`}
             />
           </div>
 
           {/* Deadline */}
           <div>
-            <label htmlFor="edit-savings-deadline" className={labelCls}>{get(dictionary, 'deadline')}</label>
+            <label htmlFor="edit-savings-deadline" className={labelCls}>
+              {get(dictionary, 'deadline')}
+            </label>
             <p className="text-[10px] text-slate-500 mb-1.5">{get(dictionary, 'deadlineHint')}</p>
             <input
               id="edit-savings-deadline"
               type="date"
               className={inputCls}
-              {...register('deadline', { setValueAs: (v: string) => v ? new Date(v) : undefined })}
+              {...register('deadline', {
+                setValueAs: (v: string) => (v ? new Date(v) : undefined),
+              })}
             />
           </div>
 
           {/* Status */}
           <div>
-            <label htmlFor="edit-savings-status" className={labelCls}>{get(dictionary, 'status')}</label>
+            <label htmlFor="edit-savings-status" className={labelCls}>
+              {get(dictionary, 'status')}
+            </label>
             <select id="edit-savings-status" className={selectCls} {...register('status')}>
               {GOAL_STATUS.map((s) => (
-                <option key={s} value={s} className="bg-slate-800">{s}</option>
+                <option key={s} value={s} className="bg-slate-800">
+                  {s}
+                </option>
               ))}
             </select>
           </div>
@@ -267,7 +299,10 @@ export function EditSavingsGoalModal({
                   key={preset}
                   type="button"
                   aria-label={preset}
-                  onClick={() => { setSelectedColor(preset); setValue('color', preset); }}
+                  onClick={() => {
+                    setSelectedColor(preset);
+                    setValue('color', preset);
+                  }}
                   className={`w-7 h-7 rounded-full bg-gradient-to-r ${preset} transition-all ${
                     selectedColor === preset
                       ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'

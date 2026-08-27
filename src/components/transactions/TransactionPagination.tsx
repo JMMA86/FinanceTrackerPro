@@ -44,7 +44,11 @@ export function TransactionPagination({
     'inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-40 disabled:pointer-events-none';
 
   return (
-    <nav role="navigation" aria-label={get(dictionary, 'title')} className="flex items-center gap-3">
+    <nav
+      role="navigation"
+      aria-label={get(dictionary, 'title')}
+      className="flex items-center gap-3"
+    >
       {/* Previous */}
       <button
         type="button"

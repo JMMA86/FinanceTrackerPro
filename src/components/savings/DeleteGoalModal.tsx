@@ -69,9 +69,10 @@ export function DeleteGoalModal({
       if (result.success) {
         onClose();
       } else {
-        const msg = result.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : (result.error ?? get(dictionary, 'errors.deleteFailed'));
+        const msg =
+          result.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : (result.error ?? get(dictionary, 'errors.deleteFailed'));
         setSubmitError(msg);
       }
     } catch {
@@ -121,7 +122,10 @@ export function DeleteGoalModal({
         <div className="px-6 py-5 space-y-4">
           {/* Error */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
@@ -143,7 +147,10 @@ export function DeleteGoalModal({
 
           {/* Blocking warning if has contributions */}
           {hasContributions && (
-            <div role="alert" className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-400 flex items-start gap-2">
+            <div
+              role="alert"
+              className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-400 flex items-start gap-2"
+            >
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
               <span>{get(dictionary, 'deleteGoalWarning')}</span>
             </div>

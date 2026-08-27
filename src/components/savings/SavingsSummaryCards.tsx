@@ -28,10 +28,7 @@ interface SavingsSummaryCardsProps {
   locale: string;
 }
 
-export function SavingsSummaryCards({
-  dictionary,
-  locale,
-}: Readonly<SavingsSummaryCardsProps>) {
+export function SavingsSummaryCards({ dictionary, locale }: Readonly<SavingsSummaryCardsProps>) {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [maxSpendable, setMaxSpendable] = useState<MaxSpendableData | null>(null);
   const [error, setError] = useState(false);
@@ -122,10 +119,12 @@ export function SavingsSummaryCards({
         ? formatMoney(maxSpendable.maxSpendableCents, 'COP', locale)
         : formatMoney(0, 'COP', locale),
       icon: DollarSign,
-      color: maxSpendable && maxSpendable.maxSpendableCents < 0
-        ? 'bg-red-500/15 text-red-400'
-        : 'bg-amber-500/15 text-amber-400',
-      valueColor: maxSpendable && maxSpendable.maxSpendableCents < 0 ? 'text-red-400' : 'text-white',
+      color:
+        maxSpendable && maxSpendable.maxSpendableCents < 0
+          ? 'bg-red-500/15 text-red-400'
+          : 'bg-amber-500/15 text-amber-400',
+      valueColor:
+        maxSpendable && maxSpendable.maxSpendableCents < 0 ? 'text-red-400' : 'text-white',
     },
   ];
 
@@ -141,12 +140,8 @@ export function SavingsSummaryCards({
               <card.icon className="w-4 h-4" aria-hidden="true" />
             </div>
           </div>
-          <p className={`text-xl font-bold tabular-nums ${card.valueColor}`}>
-            {card.value}
-          </p>
-          {card.subtext && (
-            <p className="mt-1 text-xs text-slate-500">{card.subtext}</p>
-          )}
+          <p className={`text-xl font-bold tabular-nums ${card.valueColor}`}>{card.value}</p>
+          {card.subtext && <p className="mt-1 text-xs text-slate-500">{card.subtext}</p>}
         </div>
       ))}
     </div>

@@ -136,7 +136,9 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should render when activeModal is create-transaction', () => {
-    const { container } = render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    const { container } = render(
+      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
+    );
 
     expect(screen.getByText('Create Transaction')).toBeInTheDocument();
     // jsdom doesn't map <dialog> to role="dialog", use native querySelector
@@ -145,7 +147,9 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should show modal dialog with proper role and aria attributes', () => {
-    const { container } = render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    const { container } = render(
+      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
+    );
 
     const dialog = container.querySelector('dialog');
     expect(dialog).toBeInTheDocument();
@@ -373,9 +377,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should reset form when modal opens', () => {
-    render(
-      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
-    );
+    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
 
     // Verify default type is selected (EXPENSE)
     const expenseRadio = screen.getByLabelText('Expense');
@@ -383,7 +385,9 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should be accessible with aria-labelledby attribute', () => {
-    const { container } = render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    const { container } = render(
+      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
+    );
 
     // jsdom doesn't map <dialog> to role="dialog" by default,
     // so we use the native element directly

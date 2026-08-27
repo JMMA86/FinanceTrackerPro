@@ -13,14 +13,22 @@ const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const EASE_OUT = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 const TX_LABELS: Record<string, string> = {
-  INCOME: 'Ingreso', EXPENSE: 'Gasto',
-  TRANSFER_OUT: 'Salida', TRANSFER_IN: 'Entrada',
-  INVESTMENT: 'Inversión', LOAN_PAYMENT: 'Cuota', CREDIT_PAYMENT: 'Pago tarjeta',
+  INCOME: 'Ingreso',
+  EXPENSE: 'Gasto',
+  TRANSFER_OUT: 'Salida',
+  TRANSFER_IN: 'Entrada',
+  INVESTMENT: 'Inversión',
+  LOAN_PAYMENT: 'Cuota',
+  CREDIT_PAYMENT: 'Pago tarjeta',
 };
 
 interface Tx {
-  id: string; description: string | null;
-  amountCents: number; currency: string; type: string; date: Date | string;
+  id: string;
+  description: string | null;
+  amountCents: number;
+  currency: string;
+  type: string;
+  date: Date | string;
 }
 
 interface PocketTxListProps {
@@ -56,7 +64,8 @@ function PocketTxList({ loading, txs, locale }: Readonly<PocketTxListProps>) {
             </div>
             <div className="flex-shrink-0 text-right">
               <p className={`text-xs font-semibold ${isIn ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {isIn ? '+' : '-'}{formatMoney(Math.abs(tx.amountCents), tx.currency, locale)}
+                {isIn ? '+' : '-'}
+                {formatMoney(Math.abs(tx.amountCents), tx.currency, locale)}
               </p>
               <p className="text-[10px] text-white/30 mt-0.5">{TX_LABELS[tx.type] ?? tx.type}</p>
             </div>
@@ -76,10 +85,20 @@ interface PocketDetailModalProps {
 }
 
 function fmt(d: Date | string, locale: string) {
-  return new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(d).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
-export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, onDelete }: Readonly<PocketDetailModalProps>) {
+export function PocketDetailModal({
+  pocket,
+  locale = 'es-CO',
+  onClose,
+  onEdit,
+  onDelete,
+}: Readonly<PocketDetailModalProps>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const pocketIdRef = useRef(pocket?.id);
   const [mounted, setMounted] = useState(false);
@@ -87,7 +106,8 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
   const [liveName, setLiveName] = useState<string | null>(null);
   const [liveRate, setLiveRate] = useState<number | null>(null);
   const displayName = liveName ?? pocket?.name ?? '';
-  const displayRate = liveRate ?? (pocket?.interestRateEA == null ? 0 : Number(pocket.interestRateEA));
+  const displayRate =
+    liveRate ?? (pocket?.interestRateEA == null ? 0 : Number(pocket.interestRateEA));
 
   const [txs, setTxs] = useState<Tx[]>([]);
   const [page, setPage] = useState(1);
@@ -106,7 +126,14 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
 
   useEffect(() => {
     const onUpdated = (e: Event) => {
-      const detail = (e as CustomEvent<{ accountId: string; cardColor?: string | null; name?: string; interestRateEA?: number }>).detail;
+      const detail = (
+        e as CustomEvent<{
+          accountId: string;
+          cardColor?: string | null;
+          name?: string;
+          interestRateEA?: number;
+        }>
+      ).detail;
       if (detail.accountId === pocket?.id) {
         if (detail.name != null) setLiveName(detail.name);
         if (detail.interestRateEA != null) setLiveRate(Number(detail.interestRateEA));
@@ -138,7 +165,6 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
     };
     document.addEventListener('finance:account-deleted', onDeleted);
     return () => document.removeEventListener('finance:account-deleted', onDeleted);
-   
   }, [pocket?.id]);
 
   useEffect(() => {
@@ -189,7 +215,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
       }
       if (!cancelled) setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [pocketId, page]);
 
   const handleDialogClose = () => {
@@ -199,7 +227,7 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
   if (!mounted || !pocket) return null;
 
   const rate = displayRate;
-  const annualCents = rate > 0 ? Math.floor(pocket.balanceCents * rate / 100) : 0;
+  const annualCents = rate > 0 ? Math.floor((pocket.balanceCents * rate) / 100) : 0;
 
   const panelStyle: React.CSSProperties = {
     transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(24px)',
@@ -210,8 +238,12 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
   };
 
   return (
-    <dialog ref={dialogRef} onClose={handleDialogClose} aria-labelledby="pocket-modal-title"
-      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4">
+    <dialog
+      ref={dialogRef}
+      onClose={handleDialogClose}
+      aria-labelledby="pocket-modal-title"
+      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
+    >
       <div
         className="fixed inset-0 bg-black/65 backdrop-blur-sm transition-opacity"
         style={{ opacity: isVisible ? 1 : 0, transitionDuration: `${ANIM_MS - 20}ms` }}
@@ -233,7 +265,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h2 id="pocket-modal-title" className="text-sm font-semibold text-white">{displayName}</h2>
+            <h2 id="pocket-modal-title" className="text-sm font-semibold text-white">
+              {displayName}
+            </h2>
             <span className="text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full">
               Bolsillo
             </span>
@@ -271,7 +305,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
               </svg>
             </div>
             <div>
-              <p className="text-[10px] text-white/60 uppercase tracking-widest mb-0.5">Saldo actual</p>
+              <p className="text-[10px] text-white/60 uppercase tracking-widest mb-0.5">
+                Saldo actual
+              </p>
               <p className="text-2xl font-bold text-white leading-none">
                 {formatMoney(pocket.balanceCents, pocket.currency, locale)}
               </p>
@@ -283,7 +319,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
             <div className="px-5 py-4 border-b border-white/8 space-y-3">
               <div className="flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Rentabilidad</p>
+                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">
+                  Rentabilidad
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -291,7 +329,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
                   { label: 'Ganancia', value: formatMoney(annualCents, pocket.currency, locale) },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-white/5 rounded-xl p-3">
-                    <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{label}</p>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+                      {label}
+                    </p>
                     <p className="text-sm font-bold text-white leading-tight">{value}</p>
                   </div>
                 ))}
@@ -303,7 +343,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5 text-blue-400" />
-                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Movimientos</p>
+                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">
+                  Movimientos
+                </p>
               </div>
               {!loading && <p className="text-[11px] text-white/30">{total} en total</p>}
             </div>
@@ -320,7 +362,9 @@ export function PocketDetailModal({ pocket, locale = 'es-CO', onClose, onEdit, o
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs text-white/50">{page} / {totalPages}</span>
+                <span className="text-xs text-white/50">
+                  {page} / {totalPages}
+                </span>
                 <button
                   type="button"
                   disabled={page >= totalPages}

@@ -46,7 +46,9 @@ Given('navega a la página de transacciones', async ({ page }) => {
   await page.goto('/es/transactions', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   // Wait for the page heading (present on both desktop and mobile views)
-  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 // Note: 'que la pantalla es de escritorio' and 'que la pantalla es móvil {int}x{int}'
@@ -61,13 +63,17 @@ Given('que hay filtros activos en la URL', async ({ page }) => {
   await page.goto('/es/transactions?search=nomina&type=EXPENSE', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
   // With active filters, an empty state or the filter bar is shown
-  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 Given('que navega a la página 2 de transacciones', async ({ page }) => {
   await page.goto('/es/transactions?page=2', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Transacciones' })).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 // ============================================================================
@@ -168,7 +174,7 @@ When('selecciona {string} como cuenta', async ({ page }, accountName: string) =>
   const accountCombo = dialog.getByRole('combobox', { name: 'Cuenta' });
   // Match by partial label text — find the option that contains the account name
   const options = await accountCombo.locator('option').allTextContents();
-  const matchingOption = options.find(o => o.toLowerCase().includes(accountName.toLowerCase()));
+  const matchingOption = options.find((o) => o.toLowerCase().includes(accountName.toLowerCase()));
   if (matchingOption) {
     await accountCombo.selectOption({ label: matchingOption });
   } else {
@@ -239,14 +245,17 @@ Then('debe ver la tabla de transacciones', async ({ page }) => {
   await expect(table).toBeVisible({ timeout: 5000 });
 });
 
-Then('debe ver los encabezados {string}, {string}, {string}, {string}, {string}', async ({ page }, h1: string, h2: string, h3: string, h4: string, h5: string) => {
-  const headers = page.locator('table thead th');
-  await expect(headers.nth(0)).toHaveText(h1);
-  await expect(headers.nth(1)).toHaveText(h2);
-  await expect(headers.nth(2)).toHaveText(h3);
-  await expect(headers.nth(3)).toHaveText(h4);
-  await expect(headers.nth(4)).toHaveText(h5);
-});
+Then(
+  'debe ver los encabezados {string}, {string}, {string}, {string}, {string}',
+  async ({ page }, h1: string, h2: string, h3: string, h4: string, h5: string) => {
+    const headers = page.locator('table thead th');
+    await expect(headers.nth(0)).toHaveText(h1);
+    await expect(headers.nth(1)).toHaveText(h2);
+    await expect(headers.nth(2)).toHaveText(h3);
+    await expect(headers.nth(3)).toHaveText(h4);
+    await expect(headers.nth(4)).toHaveText(h5);
+  }
+);
 
 // ============================================================================
 // THEN - Amount Color Assertions
@@ -291,19 +300,21 @@ Then('debe ver el texto de paginación', async ({ page }) => {
 });
 
 Then('debe ver el texto {string}', async ({ page }, expectedText: string) => {
-  await expect(page.getByText(expectedText, { exact: false }).first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(expectedText, { exact: false }).first()).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 Then('el botón {string} debe estar deshabilitado', async ({ page }, buttonName: string) => {
-  await expect(
-    page.getByRole('button', { name: new RegExp(buttonName, 'i') })
-  ).toBeDisabled({ timeout: 5000 });
+  await expect(page.getByRole('button', { name: new RegExp(buttonName, 'i') })).toBeDisabled({
+    timeout: 5000,
+  });
 });
 
 Then('el botón {string} debe estar habilitado', async ({ page }, buttonName: string) => {
-  await expect(
-    page.getByRole('button', { name: new RegExp(buttonName, 'i') })
-  ).toBeEnabled({ timeout: 5000 });
+  await expect(page.getByRole('button', { name: new RegExp(buttonName, 'i') })).toBeEnabled({
+    timeout: 5000,
+  });
 });
 
 // ============================================================================
@@ -317,12 +328,15 @@ Then('debe ver un diálogo con título {string}', async ({ page }, title: string
   await expect(heading).toHaveText(title);
 });
 
-Then('debe ver el campo tipo con opciones {string} e {string}', async ({ page }, opt1: string, opt2: string) => {
-  const dialog = getOpenDialog(page);
-  // Radio buttons for type selection
-  await expect(dialog.getByRole('radio', { name: opt1 })).toBeVisible({ timeout: 3000 });
-  await expect(dialog.getByRole('radio', { name: opt2 })).toBeVisible({ timeout: 3000 });
-});
+Then(
+  'debe ver el campo tipo con opciones {string} e {string}',
+  async ({ page }, opt1: string, opt2: string) => {
+    const dialog = getOpenDialog(page);
+    // Radio buttons for type selection
+    await expect(dialog.getByRole('radio', { name: opt1 })).toBeVisible({ timeout: 3000 });
+    await expect(dialog.getByRole('radio', { name: opt2 })).toBeVisible({ timeout: 3000 });
+  }
+);
 
 Then('debe ver el campo cuenta', async ({ page }) => {
   const dialog = getOpenDialog(page);
@@ -341,7 +355,9 @@ Then('debe ver el campo descripción', async ({ page }) => {
 
 Then('debe ver el campo fecha', async ({ page }) => {
   const dialog = getOpenDialog(page);
-  await expect(dialog.getByRole('textbox', { name: 'Fecha de la transacción' })).toBeVisible({ timeout: 3000 });
+  await expect(dialog.getByRole('textbox', { name: 'Fecha de la transacción' })).toBeVisible({
+    timeout: 3000,
+  });
 });
 
 Then('debe ver el botón {string}', async ({ page }, buttonName: string) => {
@@ -375,7 +391,9 @@ Then('el campo cuenta debe mostrar error', async ({ page }) => {
 Then('el campo valor debe mostrar error', async ({ page }) => {
   const dialog = getOpenDialog(page);
   // Amount field shows alert with "Amount must be greater than 0" or similar
-  const amountErrors = dialog.locator('[role="alert"]').filter({ hasText: /amount|valor|monto|greater|mayor/i });
+  const amountErrors = dialog
+    .locator('[role="alert"]')
+    .filter({ hasText: /amount|valor|monto|greater|mayor/i });
   await expect(amountErrors.first()).toBeVisible({ timeout: 3000 });
 });
 
@@ -405,9 +423,11 @@ Then('la tabla de transacciones debe ser visible', async ({ page }) => {
   // On mobile, transactions are rendered as a <ul> list instead of a table
   // Check for the list container with the transactions aria-label
   const listContainer = page.getByRole('list', { name: 'Transacciones' });
-  await expect(listContainer).toBeVisible({ timeout: 5000 }).catch(async () => {
-    // Fallback: check for the ul directly
-    const ul = page.locator('ul[aria-label="Transacciones"]');
-    await expect(ul).toBeVisible({ timeout: 5000 });
-  });
+  await expect(listContainer)
+    .toBeVisible({ timeout: 5000 })
+    .catch(async () => {
+      // Fallback: check for the ul directly
+      const ul = page.locator('ul[aria-label="Transacciones"]');
+      await expect(ul).toBeVisible({ timeout: 5000 });
+    });
 });

@@ -100,10 +100,7 @@ async function createTransactionInternal(input: unknown) {
 
   // Capture audit metadata (Rule 7)
   const headersList = await headers();
-  const ipAddress =
-    headersList.get('x-forwarded-for') ??
-    headersList.get('x-real-ip') ??
-    'unknown';
+  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
   const userAgent = headersList.get('user-agent') ?? 'unknown';
 
   const result = await prisma.$transaction(async (tx) => {
@@ -132,17 +129,11 @@ async function createTransactionInternal(input: unknown) {
     // For EXPENSE, verify sufficient funds using true balance (Rule 13)
     if (validated.type === 'EXPENSE') {
       const transactionRepo = getTransactionRepository();
-      const trueBalance = await getTrueBalance(
-        validated.accountId,
-        transactionRepo
-      );
+      const trueBalance = await getTrueBalance(validated.accountId, transactionRepo);
 
       const projectedBalance = addCents(trueBalance, validated.amountCents);
       if (projectedBalance < 0) {
-        throw new InsufficientFundsError(
-          Math.abs(validated.amountCents),
-          trueBalance
-        );
+        throw new InsufficientFundsError(Math.abs(validated.amountCents), trueBalance);
       }
     }
 
@@ -223,8 +214,7 @@ async function deleteTransactionInternal(input: unknown) {
       },
     });
 
-    if (!transaction?.isActive)
-      throw new NotFoundError('Transaction', transactionId);
+    if (!transaction?.isActive) throw new NotFoundError('Transaction', transactionId);
     if (transaction.userId !== session.userId)
       throw new UnauthorizedError('Transaction does not belong to user');
 
@@ -235,10 +225,7 @@ async function deleteTransactionInternal(input: unknown) {
     if (!account) throw new NotFoundError('Account', transaction.accountId);
 
     // Reverse balance impact to maintain cache consistency
-    const revertedBalance = addCents(
-      account.balanceCents,
-      -transaction.amountCents
-    );
+    const revertedBalance = addCents(account.balanceCents, -transaction.amountCents);
 
     await tx.account.update({
       where: { id: account.id },
@@ -291,8 +278,7 @@ async function getTransactionByIdInternal(input: unknown) {
     where: { id: transactionId },
   });
 
-  if (!transaction?.isActive)
-    throw new NotFoundError('Transaction', transactionId);
+  if (!transaction?.isActive) throw new NotFoundError('Transaction', transactionId);
   if (transaction.userId !== session.userId)
     throw new UnauthorizedError('Transaction does not belong to user');
 

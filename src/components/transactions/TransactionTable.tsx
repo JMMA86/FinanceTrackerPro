@@ -2,7 +2,14 @@
 
 import { memo, useMemo, useCallback } from 'react';
 import { formatMoney } from '@/lib/money';
-import { ArrowUpRight, ArrowDownRight, ArrowLeftRight, TrendingUp, CreditCard, Landmark } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowLeftRight,
+  TrendingUp,
+  CreditCard,
+  Landmark,
+} from 'lucide-react';
 import { get } from '@/lib/i18n';
 
 // ---------------------------------------------------------------------------
@@ -142,8 +149,12 @@ const TransactionRowItem = memo(function TransactionRowItem({
     <tr className="group border-b border-white/5 hover:bg-white/[0.02] transition-colors">
       {/* Date */}
       <td className="py-3 px-4">
-        <time dateTime={typeof transaction.date === 'string' ? transaction.date : transaction.date.toISOString()}
-          className="text-sm text-slate-400 tabular-nums whitespace-nowrap">
+        <time
+          dateTime={
+            typeof transaction.date === 'string' ? transaction.date : transaction.date.toISOString()
+          }
+          className="text-sm text-slate-400 tabular-nums whitespace-nowrap"
+        >
           {formattedDate}
         </time>
       </td>
@@ -157,7 +168,9 @@ const TransactionRowItem = memo(function TransactionRowItem({
 
       {/* Type badge */}
       <td className="py-3 px-4">
-        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getTypeBadgeStyles(transaction.type)}`}>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${getTypeBadgeStyles(transaction.type)}`}
+        >
           <TypeIcon className="w-3 h-3" aria-hidden="true" />
           {getTypeLabel(transaction.type, dictionary)}
         </span>
@@ -170,8 +183,11 @@ const TransactionRowItem = memo(function TransactionRowItem({
 
       {/* Amount */}
       <td className="py-3 px-4 text-right">
-        <span className={`text-sm font-semibold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {isPositive ? '+' : '-'}{formattedAmount}
+        <span
+          className={`text-sm font-semibold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
+        >
+          {isPositive ? '+' : '-'}
+          {formattedAmount}
         </span>
       </td>
     </tr>
@@ -219,15 +235,23 @@ const TransactionCard = memo(function TransactionCard({
           {transaction.description || <span className="text-slate-500 italic">—</span>}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <time dateTime={typeof transaction.date === 'string' ? transaction.date : transaction.date.toISOString()}
-            className="text-xs text-slate-500 tabular-nums">
+          <time
+            dateTime={
+              typeof transaction.date === 'string'
+                ? transaction.date
+                : transaction.date.toISOString()
+            }
+            className="text-xs text-slate-500 tabular-nums"
+          >
             {formattedDate}
           </time>
           <span className="text-slate-600">·</span>
           <span className="text-xs text-slate-500 truncate">{accountName}</span>
         </div>
         <div className="mt-1">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getTypeBadgeStyles(transaction.type)}`}>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getTypeBadgeStyles(transaction.type)}`}
+          >
             <TypeIcon className="w-2.5 h-2.5" aria-hidden="true" />
             {getTypeLabel(transaction.type, dictionary)}
           </span>
@@ -235,8 +259,11 @@ const TransactionCard = memo(function TransactionCard({
       </div>
 
       {/* Amount */}
-      <span className={`text-sm font-semibold tabular-nums shrink-0 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-        {isPositive ? '+' : '-'}{formattedAmount}
+      <span
+        className={`text-sm font-semibold tabular-nums shrink-0 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
+      >
+        {isPositive ? '+' : '-'}
+        {formattedAmount}
       </span>
     </div>
   );
@@ -268,7 +295,10 @@ export const TransactionTable = memo(function TransactionTable({
 
   if (transactions.length === 0) {
     return (
-      <div className="app-shell rounded-2xl py-16 flex flex-col items-center gap-4 text-center" aria-live="polite">
+      <div
+        className="app-shell rounded-2xl py-16 flex flex-col items-center gap-4 text-center"
+        aria-live="polite"
+      >
         <div className="p-4 rounded-2xl bg-slate-500/10 text-slate-400">
           <Landmark className="w-8 h-8" aria-hidden="true" />
         </div>
@@ -276,9 +306,7 @@ export const TransactionTable = memo(function TransactionTable({
           <p className="text-sm font-semibold text-white mb-1">
             {get(dictionary, 'noTransactions')}
           </p>
-          <p className="text-xs text-slate-400 max-w-xs">
-            {get(dictionary, 'noTransactionsDesc')}
-          </p>
+          <p className="text-xs text-slate-400 max-w-xs">{get(dictionary, 'noTransactionsDesc')}</p>
         </div>
       </div>
     );
@@ -291,19 +319,34 @@ export const TransactionTable = memo(function TransactionTable({
         <table className="w-full" role="table" aria-label={get(dictionary, 'title')}>
           <thead>
             <tr className="border-b border-white/5">
-              <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+              >
                 {get(dictionary, 'date')}
               </th>
-              <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+              >
                 {get(dictionary, 'description')}
               </th>
-              <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+              >
                 {get(dictionary, 'type')}
               </th>
-              <th scope="col" className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+              >
                 {get(dictionary, 'account')}
               </th>
-              <th scope="col" className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+              >
                 {get(dictionary, 'amount')}
               </th>
             </tr>
@@ -337,5 +380,3 @@ export const TransactionTable = memo(function TransactionTable({
     </div>
   );
 });
-
-

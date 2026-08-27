@@ -10,7 +10,14 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 // ============================================================================
 
 const { mockLogger } = vi.hoisted(() => ({
-  mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn() },
+  mockLogger: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -166,20 +173,23 @@ describe('StockPriceService', () => {
       // Second call should fetch again
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          chart: {
-            result: [{
-              meta: {
-                symbol: 'AAPL',
-                regularMarketPrice: 192.3,
-                currency: 'USD',
-                regularMarketChange: 2.8,
-                regularMarketChangePercent: 1.48,
-              },
-            }],
-            error: null,
-          },
-        }),
+        json: () =>
+          Promise.resolve({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'AAPL',
+                    regularMarketPrice: 192.3,
+                    currency: 'USD',
+                    regularMarketChange: 2.8,
+                    regularMarketChangePercent: 1.48,
+                  },
+                },
+              ],
+              error: null,
+            },
+          }),
       });
 
       const quote2 = await getStockQuote('AAPL');
@@ -193,7 +203,9 @@ describe('StockPriceService', () => {
         json: () => Promise.resolve(mockInvalidSymbolResponse),
       });
 
-      await expect(getStockQuote('INVALID')).rejects.toThrow('No data available for symbol: INVALID');
+      await expect(getStockQuote('INVALID')).rejects.toThrow(
+        'No data available for symbol: INVALID'
+      );
     });
 
     it('should throw an error when API returns non-ok status and no cache', async () => {
@@ -204,7 +216,9 @@ describe('StockPriceService', () => {
         json: () => Promise.resolve({}),
       });
 
-      await expect(getStockQuote('UNKNOWN_SYM')).rejects.toThrow('Yahoo Finance API returned 429: Too Many Requests');
+      await expect(getStockQuote('UNKNOWN_SYM')).rejects.toThrow(
+        'Yahoo Finance API returned 429: Too Many Requests'
+      );
     });
 
     it('should return stale cache on API failure when cache exists', async () => {

@@ -46,9 +46,7 @@ export default function RegisterForm({
 }: Readonly<RegisterFormProps>) {
   const suffix = isMobile ? '-mobile' : '-desktop';
   const hasError = error && error.length > 0;
-  const inputBgClass = isMobile
-    ? 'bg-gray-700/70 border-gray-600'
-    : 'bg-gray-700 border-gray-600';
+  const inputBgClass = isMobile ? 'bg-gray-700/70 border-gray-600' : 'bg-gray-700 border-gray-600';
   const checklistBgClass = 'bg-gray-700/50 border-gray-600';
   const errorBgClass = isMobile ? 'bg-red-900/30' : 'bg-red-900/20';
 
@@ -62,10 +60,7 @@ export default function RegisterForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label
-          htmlFor={`name${suffix}`}
-          className="block text-sm font-semibold text-gray-300 mb-2"
-        >
+        <label htmlFor={`name${suffix}`} className="block text-sm font-semibold text-gray-300 mb-2">
           {labels.name}
         </label>
         <input
@@ -165,9 +160,7 @@ export default function RegisterForm({
                   )}
                   <span
                     className={
-                      req.test(formData.password)
-                        ? 'text-green-400 font-medium'
-                        : 'text-gray-400'
+                      req.test(formData.password) ? 'text-green-400 font-medium' : 'text-gray-400'
                     }
                   >
                     {req.label}

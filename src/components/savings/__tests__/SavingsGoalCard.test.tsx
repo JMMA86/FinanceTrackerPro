@@ -169,7 +169,12 @@ describe('SavingsGoalCard', () => {
   });
 
   it('should show "Completado" badge when status is COMPLETED', () => {
-    const completedGoal = { ...baseGoal, status: 'COMPLETED' as const, currentAmountCents: 200000, progressPercentage: 100 };
+    const completedGoal = {
+      ...baseGoal,
+      status: 'COMPLETED' as const,
+      currentAmountCents: 200000,
+      progressPercentage: 100,
+    };
     render(
       <SavingsGoalCard
         goal={completedGoal}
@@ -258,7 +263,9 @@ describe('SavingsGoalCard', () => {
       />
     );
     // The calendar icon for deadline should not be present
-    expect(screen.queryByText(/Vencido|Hoy|Mañana|días restantes|meses restantes/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Vencido|Hoy|Mañana|días restantes|meses restantes/)
+    ).not.toBeInTheDocument();
   });
 
   it('should render deadline text when deadline is provided', () => {
@@ -297,8 +304,44 @@ describe('SavingsGoalCard', () => {
     const goalWithContributions = {
       ...baseGoal,
       contributions: [
-        { id: 'c1', goalId: 'goal-1', amountCents: 10000, currency: 'COP' as const, date: new Date(), notes: null, sourceAccountId: null, transactionId: null, idempotencyKey: null, isActive: true, createdAt: new Date(), updatedAt: new Date(), deletedAt: null, createdBy: 'user-1', lastModifiedBy: 'user-1', ipAddress: null, userAgent: null },
-        { id: 'c2', goalId: 'goal-1', amountCents: 15000, currency: 'COP' as const, date: new Date(), notes: null, sourceAccountId: null, transactionId: null, idempotencyKey: null, isActive: true, createdAt: new Date(), updatedAt: new Date(), deletedAt: null, createdBy: 'user-1', lastModifiedBy: 'user-1', ipAddress: null, userAgent: null },
+        {
+          id: 'c1',
+          goalId: 'goal-1',
+          amountCents: 10000,
+          currency: 'COP' as const,
+          date: new Date(),
+          notes: null,
+          sourceAccountId: null,
+          transactionId: null,
+          idempotencyKey: null,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+          createdBy: 'user-1',
+          lastModifiedBy: 'user-1',
+          ipAddress: null,
+          userAgent: null,
+        },
+        {
+          id: 'c2',
+          goalId: 'goal-1',
+          amountCents: 15000,
+          currency: 'COP' as const,
+          date: new Date(),
+          notes: null,
+          sourceAccountId: null,
+          transactionId: null,
+          idempotencyKey: null,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+          createdBy: 'user-1',
+          lastModifiedBy: 'user-1',
+          ipAddress: null,
+          userAgent: null,
+        },
       ],
     };
     render(
@@ -315,7 +358,12 @@ describe('SavingsGoalCard', () => {
   });
 
   it('should disable contribute button when goal is completed', () => {
-    const completedGoal = { ...baseGoal, status: 'COMPLETED' as const, currentAmountCents: 200000, progressPercentage: 100 };
+    const completedGoal = {
+      ...baseGoal,
+      status: 'COMPLETED' as const,
+      currentAmountCents: 200000,
+      progressPercentage: 100,
+    };
     render(
       <SavingsGoalCard
         goal={completedGoal}

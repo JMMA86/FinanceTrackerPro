@@ -23,9 +23,8 @@ function maskEmail(email: string): string {
   if (!local || !domain) return email;
   const maskedLocal = local.length > 2 ? local[0] + '***' : local[0] + '**';
   const domainParts = domain.split('.');
-  const maskedDomain = domainParts.length > 1
-    ? domainParts[0][0] + '***.' + domainParts.slice(1).join('.')
-    : domain;
+  const maskedDomain =
+    domainParts.length > 1 ? domainParts[0][0] + '***.' + domainParts.slice(1).join('.') : domain;
   return `${maskedLocal}@${maskedDomain}`;
 }
 
@@ -42,7 +41,7 @@ function maskString(str: string, preserveEnd: number = 4): string {
 
 function isPIIField(key: string): boolean {
   const lowerKey = key.toLowerCase();
-  return PII_FIELDS.some(field => lowerKey === field.toLowerCase());
+  return PII_FIELDS.some((field) => lowerKey === field.toLowerCase());
 }
 
 function getMaskType(key: string): string {

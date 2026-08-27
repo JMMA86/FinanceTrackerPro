@@ -31,7 +31,10 @@ async function openCreateInvestmentModal(page: Page) {
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
   // Click "Nueva Cuenta de Inversión" (empty state or header button)
-  await page.getByRole('button', { name: /nueva cuenta de inversión/i }).first().click();
+  await page
+    .getByRole('button', { name: /nueva cuenta de inversión/i })
+    .first()
+    .click();
 
   // Wait for dialog to be open
   await expect(page.locator('dialog[open]').first()).toBeVisible({ timeout: 5000 });
@@ -42,7 +45,7 @@ async function createInvestmentAccount(
   page: Page,
   name: string = CREATED_ACCOUNT_NAME,
   currency: string = 'USD',
-  balanceCents: number = 500000,
+  balanceCents: number = 500000
 ) {
   // First create the account via the modal
   const btn = page.getByRole('button', { name: /nueva cuenta de inversión/i }).first();
@@ -84,19 +87,21 @@ async function createInvestmentAccount(
   });
 
   // Wait for dialog to close (success) or error to appear
-  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 60000 }).catch(async () => {
-    // If dialog didn't close, wait a bit more for slow server response
-    await page.waitForTimeout(2000);
-  });
+  await expect(page.locator('dialog[open]'))
+    .toHaveCount(0, { timeout: 60000 })
+    .catch(async () => {
+      // If dialog didn't close, wait a bit more for slow server response
+      await page.waitForTimeout(2000);
+    });
 
   // Refresh and wait for the grid to show the new account
   await page.goto('/es/investments', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
   // Wait for the account card to appear (data-testid or aria-label)
-  await expect(
-    page.locator(`button[aria-label="${name}"]`).first()
-  ).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(`button[aria-label="${name}"]`).first()).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 // ============================================================================
@@ -209,12 +214,18 @@ When('envía el formulario de creación de inversión', async ({ page }) => {
 // ============================================================================
 
 When('hace clic en {string} en la página de inversiones', async ({ page }, buttonName: string) => {
-  await page.getByRole('button', { name: new RegExp(buttonName, 'i') }).first().click();
+  await page
+    .getByRole('button', { name: new RegExp(buttonName, 'i') })
+    .first()
+    .click();
 });
 
 When('abre el modal de depósito de inversión', async ({ page }) => {
   // The deposit button is in the header (first one) when accounts exist
-  await page.getByRole('button', { name: /depositar/i }).first().click();
+  await page
+    .getByRole('button', { name: /depositar/i })
+    .first()
+    .click();
   await expect(page.locator('dialog[open]').first()).toBeVisible({ timeout: 5000 });
 });
 
@@ -260,18 +271,20 @@ When('envía el formulario de depósito', async ({ page }) => {
   // Click the Depositar button directly - React onClick handler reads state from closure
   await dialog.getByRole('button', { name: /^depositar$/i }).click();
   // Wait for dialog to close on success
-  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 60000 }).catch(async () => {
-    // Log error if dialog doesn't close
-    const alerts = page.locator('[role="alert"]');
-    const alertCount = await alerts.count();
-    let alertText = '';
-    for (let i = 0; i < alertCount; i++) {
-      alertText += (await alerts.nth(i).textContent()) + ' | ';
-    }
-    console.log(`Deposit failed. Alerts: "${alertText}"`);
-    // Re-throw the error
-    throw new Error(`Deposit submission failed. Alerts: "${alertText}"`);
-  });
+  await expect(page.locator('dialog[open]'))
+    .toHaveCount(0, { timeout: 60000 })
+    .catch(async () => {
+      // Log error if dialog doesn't close
+      const alerts = page.locator('[role="alert"]');
+      const alertCount = await alerts.count();
+      let alertText = '';
+      for (let i = 0; i < alertCount; i++) {
+        alertText += (await alerts.nth(i).textContent()) + ' | ';
+      }
+      console.log(`Deposit failed. Alerts: "${alertText}"`);
+      // Re-throw the error
+      throw new Error(`Deposit submission failed. Alerts: "${alertText}"`);
+    });
 });
 
 // ============================================================================
@@ -345,7 +358,9 @@ Then('la cuenta de inversión debe crearse exitosamente', async ({ page }) => {
 
 Then('la nueva cuenta de inversión debe aparecer en el grid', async ({ page }) => {
   // After successful creation, the page shows the account card with data-* attribute
-  await expect(page.locator(`button[aria-label="${CREATED_ACCOUNT_NAME}"]`).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(`button[aria-label="${CREATED_ACCOUNT_NAME}"]`).first()).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 Then('la tarjeta debe mostrar el nombre {string}', async ({ page }, accountName: string) => {
@@ -375,7 +390,9 @@ Then('debe ver el modal de depósito con título {string}', async ({ page }, tit
 
 Then('debe ver el estimado de recibo en el modal', async ({ page }) => {
   const dialog = getOpenDialog(page);
-  await expect(dialog.getByText(/recibirás aproximadamente/i).first()).toBeVisible({ timeout: 5000 });
+  await expect(dialog.getByText(/recibirás aproximadamente/i).first()).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 Then('el modal de depósito debe cerrarse', async ({ page }) => {
@@ -397,9 +414,9 @@ Then('la tarjeta de inversión debe mostrar balance actualizado', async ({ page 
 // ============================================================================
 
 Then('debe ver el botón {string} visible en la página', async ({ page }, buttonName: string) => {
-  await expect(
-    page.getByRole('button', { name: new RegExp(buttonName, 'i') }).first()
-  ).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('button', { name: new RegExp(buttonName, 'i') }).first()).toBeVisible(
+    { timeout: 5000 }
+  );
 });
 
 // ============================================================================
@@ -431,10 +448,14 @@ Then('debe ver resultados de búsqueda o mensaje de error', async ({ page }) => 
   } catch {
     // Fallback: check if an error message appeared
     try {
-      await expect(dialog.getByText(/no encontrada|no encontrado/i).first()).toBeVisible({ timeout: 3000 });
+      await expect(dialog.getByText(/no encontrada|no encontrado/i).first()).toBeVisible({
+        timeout: 3000,
+      });
     } catch {
       // If neither, log it but don't fail - the search depends on external API
-      console.log('No search results or error message appeared. External API may not be available.');
+      console.log(
+        'No search results or error message appeared. External API may not be available.'
+      );
     }
   }
 });
@@ -466,5 +487,7 @@ Then('la página de inversiones debe mostrarse correctamente en mobile', async (
   const bottomNav = page.locator('.md\\:hidden.fixed.bottom-0');
   await expect(bottomNav).toBeVisible({ timeout: 3000 });
   // Should see the title via the h1 element (not sidebar text which is hidden on mobile)
-  await expect(page.getByRole('heading', { level: 1, name: 'Inversiones' })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Inversiones' })).toBeVisible({
+    timeout: 5000,
+  });
 });

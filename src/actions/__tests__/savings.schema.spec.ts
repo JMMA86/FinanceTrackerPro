@@ -65,15 +65,15 @@ describe('CreateSavingsGoalSchema', () => {
   });
 
   it('should reject empty name', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, name: '' })
-    ).toThrow('Name is required');
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, name: '' })).toThrow(
+      'Name is required'
+    );
   });
 
   it('should reject name exceeding 100 characters', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, name: 'x'.repeat(101) })
-    ).toThrow('Name too long');
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, name: 'x'.repeat(101) })).toThrow(
+      'Name too long'
+    );
   });
 
   it('should trim whitespace from name', () => {
@@ -82,15 +82,15 @@ describe('CreateSavingsGoalSchema', () => {
   });
 
   it('should reject negative targetAmountCents', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: -100 })
-    ).toThrow('Target amount must be positive');
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: -100 })).toThrow(
+      'Target amount must be positive'
+    );
   });
 
   it('should reject zero targetAmountCents', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: 0 })
-    ).toThrow('Target amount must be positive');
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: 0 })).toThrow(
+      'Target amount must be positive'
+    );
   });
 
   it('should reject non-integer targetAmountCents', () => {
@@ -106,9 +106,7 @@ describe('CreateSavingsGoalSchema', () => {
   });
 
   it('should reject invalid currency', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, currency: 'GBP' })
-    ).toThrow();
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, currency: 'GBP' })).toThrow();
   });
 
   it('should accept COP currency', () => {
@@ -123,9 +121,9 @@ describe('CreateSavingsGoalSchema', () => {
 
   it('should reject deadline in the past', () => {
     const pastDate = new Date('2020-01-01');
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, deadline: pastDate })
-    ).toThrow('Deadline must be in the future');
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, deadline: pastDate })).toThrow(
+      'Deadline must be in the future'
+    );
   });
 
   it('should reject negative monthlyContributionCents', () => {
@@ -147,9 +145,7 @@ describe('CreateSavingsGoalSchema', () => {
   });
 
   it('should reject invalid type value', () => {
-    expect(() =>
-      CreateSavingsGoalSchema.parse({ ...validInput, type: 'INVALID' })
-    ).toThrow();
+    expect(() => CreateSavingsGoalSchema.parse({ ...validInput, type: 'INVALID' })).toThrow();
   });
 });
 
@@ -186,46 +182,42 @@ describe('UpdateSavingsGoalSchema', () => {
   });
 
   it('should reject missing goalId', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({})
-    ).toThrow();
+    expect(() => UpdateSavingsGoalSchema.parse({})).toThrow();
   });
 
   it('should reject invalid goalId CUID', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ goalId: 'not-cuid' })
-    ).toThrow('Must be a valid CUID');
+    expect(() => UpdateSavingsGoalSchema.parse({ goalId: 'not-cuid' })).toThrow(
+      'Must be a valid CUID'
+    );
   });
 
   it('should reject empty name when provided', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ ...validInput, name: '' })
-    ).toThrow('Name is required');
+    expect(() => UpdateSavingsGoalSchema.parse({ ...validInput, name: '' })).toThrow(
+      'Name is required'
+    );
   });
 
   it('should reject name exceeding 100 characters', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ ...validInput, name: 'x'.repeat(101) })
-    ).toThrow('Name too long');
+    expect(() => UpdateSavingsGoalSchema.parse({ ...validInput, name: 'x'.repeat(101) })).toThrow(
+      'Name too long'
+    );
   });
 
   it('should reject negative targetAmountCents when provided', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: -100 })
-    ).toThrow('Target amount must be positive');
+    expect(() => UpdateSavingsGoalSchema.parse({ ...validInput, targetAmountCents: -100 })).toThrow(
+      'Target amount must be positive'
+    );
   });
 
   it('should reject deadline in the past when provided', () => {
     const pastDate = new Date('2020-01-01');
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ ...validInput, deadline: pastDate })
-    ).toThrow('Deadline must be in the future');
+    expect(() => UpdateSavingsGoalSchema.parse({ ...validInput, deadline: pastDate })).toThrow(
+      'Deadline must be in the future'
+    );
   });
 
   it('should reject invalid status value', () => {
-    expect(() =>
-      UpdateSavingsGoalSchema.parse({ ...validInput, status: 'INVALID' })
-    ).toThrow();
+    expect(() => UpdateSavingsGoalSchema.parse({ ...validInput, status: 'INVALID' })).toThrow();
   });
 
   it('should accept COMPLETED status', () => {
@@ -275,21 +267,21 @@ describe('ContributeToGoalSchema', () => {
   });
 
   it('should reject negative amountCents', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, amountCents: -100 })
-    ).toThrow('Amount must be positive');
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, amountCents: -100 })).toThrow(
+      'Amount must be positive'
+    );
   });
 
   it('should reject zero amountCents', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, amountCents: 0 })
-    ).toThrow('Amount must be positive');
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, amountCents: 0 })).toThrow(
+      'Amount must be positive'
+    );
   });
 
   it('should reject non-integer amountCents', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, amountCents: 100.5 })
-    ).toThrow('Amount must be an integer');
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, amountCents: 100.5 })).toThrow(
+      'Amount must be an integer'
+    );
   });
 
   it('should reject amountCents exceeding MAX_SAFE_CENTS', () => {
@@ -300,15 +292,11 @@ describe('ContributeToGoalSchema', () => {
 
   it('should reject missing currency', () => {
     const { currency: _, ...withoutCurrency } = validInput;
-    expect(() =>
-      ContributeToGoalSchema.parse(withoutCurrency)
-    ).toThrow();
+    expect(() => ContributeToGoalSchema.parse(withoutCurrency)).toThrow();
   });
 
   it('should reject invalid currency', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, currency: 'GBP' })
-    ).toThrow();
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, currency: 'GBP' })).toThrow();
   });
 
   it('should reject invalid idempotencyKey (non-UUID)', () => {
@@ -318,9 +306,9 @@ describe('ContributeToGoalSchema', () => {
   });
 
   it('should reject invalid goalId CUID', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, goalId: 'bad-cuid' })
-    ).toThrow('Must be a valid CUID');
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, goalId: 'bad-cuid' })).toThrow(
+      'Must be a valid CUID'
+    );
   });
 
   it('should reject invalid sourceAccountId CUID', () => {
@@ -330,9 +318,7 @@ describe('ContributeToGoalSchema', () => {
   });
 
   it('should reject notes exceeding 500 characters', () => {
-    expect(() =>
-      ContributeToGoalSchema.parse({ ...validInput, notes: 'x'.repeat(501) })
-    ).toThrow();
+    expect(() => ContributeToGoalSchema.parse({ ...validInput, notes: 'x'.repeat(501) })).toThrow();
   });
 });
 
@@ -446,9 +432,9 @@ describe('DeleteSavingsGoalSchema', () => {
   });
 
   it('should reject invalid goalId CUID', () => {
-    expect(() =>
-      DeleteSavingsGoalSchema.parse({ goalId: 'not-cuid' })
-    ).toThrow('Must be a valid CUID');
+    expect(() => DeleteSavingsGoalSchema.parse({ goalId: 'not-cuid' })).toThrow(
+      'Must be a valid CUID'
+    );
   });
 });
 

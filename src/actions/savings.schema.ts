@@ -14,31 +14,18 @@ const UUIDv4 = z.uuid('Must be a valid UUID v4');
 /**
  * Savings goal type enum
  */
-export const SavingsGoalTypeSchema = z.enum([
-  'ANNUAL',
-  'SHORT_TERM',
-  'EMERGENCY',
-  'CUSTOM',
-]);
+export const SavingsGoalTypeSchema = z.enum(['ANNUAL', 'SHORT_TERM', 'EMERGENCY', 'CUSTOM']);
 
 /**
  * Savings goal status enum
  */
-export const SavingsGoalStatusSchema = z.enum([
-  'ACTIVE',
-  'COMPLETED',
-  'CANCELLED',
-]);
+export const SavingsGoalStatusSchema = z.enum(['ACTIVE', 'COMPLETED', 'CANCELLED']);
 
 /**
  * Create savings goal validation schema
  */
 export const CreateSavingsGoalSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(100, 'Name too long')
-    .trim(),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long').trim(),
   description: z.string().max(500).optional(),
   type: SavingsGoalTypeSchema.default('CUSTOM'),
   targetAmountCents: z
@@ -47,15 +34,18 @@ export const CreateSavingsGoalSchema = z.object({
     .min(1, 'Target amount must be positive')
     .max(MAX_SAFE_CENTS, 'Target amount exceeds maximum safe value'),
   currency: CurrencySchema.default('COP'),
-  deadline: z.coerce.date().optional().refine(
-    (date) => {
-      if (!date) return true;
-      return date > new Date();
-    },
-    {
-      message: 'Deadline must be in the future',
-    }
-  ),
+  deadline: z.coerce
+    .date()
+    .optional()
+    .refine(
+      (date) => {
+        if (!date) return true;
+        return date > new Date();
+      },
+      {
+        message: 'Deadline must be in the future',
+      }
+    ),
   monthlyContributionCents: z
     .number()
     .int('Monthly contribution must be an integer')
@@ -72,12 +62,7 @@ export const CreateSavingsGoalSchema = z.object({
  */
 export const UpdateSavingsGoalSchema = z.object({
   goalId: CUID,
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(100, 'Name too long')
-    .trim()
-    .optional(),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long').trim().optional(),
   description: z.string().max(500).optional(),
   targetAmountCents: z
     .number()
@@ -85,15 +70,18 @@ export const UpdateSavingsGoalSchema = z.object({
     .min(1, 'Target amount must be positive')
     .max(MAX_SAFE_CENTS, 'Target amount exceeds maximum safe value')
     .optional(),
-  deadline: z.coerce.date().optional().refine(
-    (date) => {
-      if (!date) return true;
-      return date > new Date();
-    },
-    {
-      message: 'Deadline must be in the future',
-    }
-  ),
+  deadline: z.coerce
+    .date()
+    .optional()
+    .refine(
+      (date) => {
+        if (!date) return true;
+        return date > new Date();
+      },
+      {
+        message: 'Deadline must be in the future',
+      }
+    ),
   monthlyContributionCents: z
     .number()
     .int('Monthly contribution must be an integer')

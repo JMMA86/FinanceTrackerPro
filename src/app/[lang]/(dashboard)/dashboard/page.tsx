@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
   const { lang } = await params;
   return {
     title: `Dashboard - FinanceTrackerPro`,
-    description: 'Your financial command center. Track expenses, manage budgets, and monitor investments.',
+    description:
+      'Your financial command center. Track expenses, manage budgets, and monitor investments.',
     openGraph: {
       title: 'Dashboard - FinanceTrackerPro',
       description: 'Your financial command center',

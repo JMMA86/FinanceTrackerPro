@@ -175,17 +175,13 @@ export default function AuthClient({
 
                     {success && (
                       <div className="bg-green-900/20 border border-green-800 rounded-xl p-4">
-                        <p className="text-sm text-green-200 font-medium">
-                          {success}
-                        </p>
+                        <p className="text-sm text-green-200 font-medium">{success}</p>
                       </div>
                     )}
 
                     {error && mode === 'login' && (
                       <div className="bg-red-900/20 border border-red-800 rounded-xl p-4">
-                        <p className="text-sm text-red-200 font-medium">
-                          {error}
-                        </p>
+                        <p className="text-sm text-red-200 font-medium">{error}</p>
                       </div>
                     )}
 
@@ -230,9 +226,7 @@ export default function AuthClient({
                     <h1 className="text-4xl font-bold text-white mb-2">
                       {get(auth, 'register.title')}
                     </h1>
-                    <p className="text-gray-400 text-lg">
-                      {get(auth, 'register.subtitleDesktop')}
-                    </p>
+                    <p className="text-gray-400 text-lg">{get(auth, 'register.subtitleDesktop')}</p>
                   </div>
 
                   <RegisterForm

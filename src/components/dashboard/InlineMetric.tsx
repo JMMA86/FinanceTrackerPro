@@ -40,15 +40,15 @@ export function InlineMetric({
         <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider leading-tight">
           {label}
         </span>
-        <span className={`flex-shrink-0 ${accent} [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4`}>
+        <span
+          className={`flex-shrink-0 ${accent} [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4`}
+        >
           {icon}
         </span>
       </div>
 
       {/* Sublabel */}
-      {sublabel && (
-        <span className="text-[10px] text-slate-500 block mb-1.5">{sublabel}</span>
-      )}
+      {sublabel && <span className="text-[10px] text-slate-500 block mb-1.5">{sublabel}</span>}
 
       {/* Value + sparkline */}
       <div className="flex items-end justify-between gap-1 mb-1 sm:mb-2">
@@ -60,10 +60,14 @@ export function InlineMetric({
 
       {/* Sub-value badge */}
       {subValue && (
-        <div className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-medium ${trendColor}`}>
+        <div
+          className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-medium ${trendColor}`}
+        >
           {trend === 'up' && <ArrowUpDown className="w-2.5 h-2.5 rotate-180" />}
           {trend === 'down' && <ArrowUpDown className="w-2.5 h-2.5" />}
-          {trend === 'neutral' && <span className="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block" />}
+          {trend === 'neutral' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block" />
+          )}
           <span>{subValue}</span>
         </div>
       )}

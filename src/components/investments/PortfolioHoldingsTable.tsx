@@ -39,9 +39,7 @@ function HoldingRow({
   const marketValueCents = Math.round(holding.quantity * holding.currentPriceCents);
   const totalCostCents = Math.round(holding.quantity * holding.avgCostCents);
   const gainLossCents = marketValueCents - totalCostCents;
-  const gainLossPercent = totalCostCents > 0
-    ? ((gainLossCents / totalCostCents) * 100)
-    : 0;
+  const gainLossPercent = totalCostCents > 0 ? (gainLossCents / totalCostCents) * 100 : 0;
   const isPositive = gainLossCents >= 0;
 
   return (
@@ -49,9 +47,11 @@ function HoldingRow({
       {/* Symbol + Name */}
       <td className="py-3 pr-4">
         <div className="flex items-center gap-2.5">
-          <div className={`p-1.5 rounded-lg flex-shrink-0 ${
-            isPositive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-          }`}>
+          <div
+            className={`p-1.5 rounded-lg flex-shrink-0 ${
+              isPositive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+            }`}
+          >
             {isPositive ? (
               <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" />
             ) : (
@@ -95,12 +95,16 @@ function HoldingRow({
 
       {/* G/L */}
       <td className="py-3 px-2 text-right">
-        <span className={`text-sm font-semibold tabular-nums ${
-          isPositive ? 'text-emerald-400' : 'text-red-400'
-        }`}>
-          {isPositive ? '+' : ''}{formatMoney(gainLossCents, currency, locale)}
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            isPositive ? 'text-emerald-400' : 'text-red-400'
+          }`}
+        >
+          {isPositive ? '+' : ''}
+          {formatMoney(gainLossCents, currency, locale)}
           <span className="text-[11px] ml-1 opacity-70">
-            ({isPositive ? '+' : ''}{gainLossPercent.toFixed(2)}%)
+            ({isPositive ? '+' : ''}
+            {gainLossPercent.toFixed(2)}%)
           </span>
         </span>
       </td>
@@ -165,13 +169,22 @@ export function PortfolioHoldingsTable({
         </p>
         <div className="flex items-center gap-4 text-xs">
           <span className="text-slate-400">
-            {get(dictionary, 'totalInvested')}: <span className="text-white font-medium">{formatMoney(totalCostCents, currency, locale)}</span>
+            {get(dictionary, 'totalInvested')}:{' '}
+            <span className="text-white font-medium">
+              {formatMoney(totalCostCents, currency, locale)}
+            </span>
           </span>
           <span className="text-slate-400">
-            {get(dictionary, 'totalMarketValue')}: <span className="text-white font-medium">{formatMoney(totalMarketValueCents, currency, locale)}</span>
+            {get(dictionary, 'totalMarketValue')}:{' '}
+            <span className="text-white font-medium">
+              {formatMoney(totalMarketValueCents, currency, locale)}
+            </span>
           </span>
-          <span className={`font-semibold ${isOverallPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-            {isOverallPositive ? '+' : ''}{formatMoney(totalGainLossCents, currency, locale)}
+          <span
+            className={`font-semibold ${isOverallPositive ? 'text-emerald-400' : 'text-red-400'}`}
+          >
+            {isOverallPositive ? '+' : ''}
+            {formatMoney(totalGainLossCents, currency, locale)}
           </span>
         </div>
       </div>

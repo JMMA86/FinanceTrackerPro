@@ -487,15 +487,25 @@ describe('transfer.actions.ts', () => {
         vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
           const mockTx = {
             account: {
-              findUnique: vi.fn()
+              findUnique: vi
+                .fn()
                 .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
                 .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
               update: vi.fn().mockResolvedValue({}),
             },
             transaction: {
-              create: vi.fn()
-                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-debit', type: 'TRANSFER_OUT', amountCents: -10000 }))
-                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-credit', type: 'TRANSFER_IN', amountCents: 10000 })),
+              create: vi
+                .fn()
+                .mockResolvedValueOnce(
+                  buildMockTransaction({
+                    id: 'tx-debit',
+                    type: 'TRANSFER_OUT',
+                    amountCents: -10000,
+                  })
+                )
+                .mockResolvedValueOnce(
+                  buildMockTransaction({ id: 'tx-credit', type: 'TRANSFER_IN', amountCents: 10000 })
+                ),
             },
           };
           return callback(asTransactionClient(mockTx));
@@ -517,15 +527,29 @@ describe('transfer.actions.ts', () => {
         vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
           const mockTx = {
             account: {
-              findUnique: vi.fn()
+              findUnique: vi
+                .fn()
                 .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)) // Swapped
                 .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT)), // Swapped
               update: vi.fn().mockResolvedValue({}),
             },
             transaction: {
-              create: vi.fn()
-                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-reversal-debit', type: 'TRANSFER_OUT', amountCents: -10000 }))
-                .mockResolvedValueOnce(buildMockTransaction({ id: 'tx-reversal-credit', type: 'TRANSFER_IN', amountCents: 10000 })),
+              create: vi
+                .fn()
+                .mockResolvedValueOnce(
+                  buildMockTransaction({
+                    id: 'tx-reversal-debit',
+                    type: 'TRANSFER_OUT',
+                    amountCents: -10000,
+                  })
+                )
+                .mockResolvedValueOnce(
+                  buildMockTransaction({
+                    id: 'tx-reversal-credit',
+                    type: 'TRANSFER_IN',
+                    amountCents: 10000,
+                  })
+                ),
             },
           };
           return callback(asTransactionClient(mockTx));

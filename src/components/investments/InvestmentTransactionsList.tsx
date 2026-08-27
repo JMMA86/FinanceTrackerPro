@@ -62,7 +62,9 @@ export function InvestmentTransactionsList({
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [accountId, page]);
 
   const getTypeIcon = (type: string, amountCents: number) => {
@@ -140,8 +142,11 @@ export function InvestmentTransactionsList({
               </div>
 
               <div className="text-right flex-shrink-0">
-                <p className={`text-sm font-semibold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {isPositive ? '+' : '-'}{formatMoney(absAmountCents, currency, locale)}
+                <p
+                  className={`text-sm font-semibold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {isPositive ? '+' : '-'}
+                  {formatMoney(absAmountCents, currency, locale)}
                 </p>
                 {tx.originalCurrency && tx.originalAmountCents && (
                   <p className="text-[10px] text-slate-500 tabular-nums">

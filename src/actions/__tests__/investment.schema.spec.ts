@@ -632,8 +632,6 @@ describe('GetStockPriceSchema', () => {
   });
 
   it('should reject symbol exceeding 20 characters', () => {
-    expect(() =>
-      GetStockPriceSchema.parse({ symbol: 'A'.repeat(21) })
-    ).toThrow();
+    expect(() => GetStockPriceSchema.parse({ symbol: 'A'.repeat(21) })).toThrow();
   });
 });

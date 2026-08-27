@@ -68,13 +68,16 @@ export function InvestmentDashboard({
   );
 
   const totalMarketValueCents = useMemo(
-    () => accounts.reduce((sum, a) => {
-      const holdings = (a.assetHoldings ?? []) as Array<{
-        quantity: number;
-        currentPriceCents: number;
-      }>;
-      return sum + holdings.reduce((hSum, h) => hSum + Math.round(h.quantity * h.currentPriceCents), 0);
-    }, 0),
+    () =>
+      accounts.reduce((sum, a) => {
+        const holdings = (a.assetHoldings ?? []) as Array<{
+          quantity: number;
+          currentPriceCents: number;
+        }>;
+        return (
+          sum + holdings.reduce((hSum, h) => hSum + Math.round(h.quantity * h.currentPriceCents), 0)
+        );
+      }, 0),
     [accounts]
   );
 
@@ -92,9 +95,10 @@ export function InvestmentDashboard({
     try {
       const res = await updateAllAssetPrices({} as Record<string, never>);
       if (res.success) {
-        addNotification('success', res.data?.updated
-          ? `Updated ${res.data.updated} price(s)`
-          : 'No holdings to update');
+        addNotification(
+          'success',
+          res.data?.updated ? `Updated ${res.data.updated} price(s)` : 'No holdings to update'
+        );
         router.refresh();
       } else {
         addNotification('error', res.error ?? 'Failed to update prices');
@@ -106,10 +110,13 @@ export function InvestmentDashboard({
     }
   }, [addNotification, router]);
 
-  const handleSell = useCallback((holding: Holding) => {
-    setSellHolding(holding);
-    openModal('sell-asset');
-  }, [openModal]);
+  const handleSell = useCallback(
+    (holding: Holding) => {
+      setSellHolding(holding);
+      openModal('sell-asset');
+    },
+    [openModal]
+  );
 
   // Currency for selected account display
   const selectedCurrency = selectedAccount?.currency ?? 'USD';
@@ -196,7 +203,8 @@ export function InvestmentDashboard({
                     {get(dictionary, 'holdings')}
                   </p>
                   <p className="text-xl font-bold text-white tabular-nums">
-                    {totalHoldings} {totalHoldings === 1
+                    {totalHoldings}{' '}
+                    {totalHoldings === 1
                       ? get(dictionary, 'position')
                       : get(dictionary, 'positions')}
                   </p>
@@ -290,11 +298,7 @@ export function InvestmentDashboard({
       {/* Modals */}
       <CreateInvestmentModal dictionary={dictionary} />
       <DepositModal dictionary={dictionary} locale={locale} />
-      <AssetSearchModal
-        account={selectedAccount}
-        dictionary={dictionary}
-        locale={locale}
-      />
+      <AssetSearchModal account={selectedAccount} dictionary={dictionary} locale={locale} />
       <SellAssetModal
         holding={sellHolding}
         currency={selectedCurrency}

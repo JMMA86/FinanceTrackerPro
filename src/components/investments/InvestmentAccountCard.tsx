@@ -82,7 +82,8 @@ export function InvestmentAccountCard({
         <div
           className="absolute inset-0 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
           style={{
-            background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%)',
+            background:
+              'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%)',
           }}
           aria-hidden="true"
         />
@@ -94,9 +95,7 @@ export function InvestmentAccountCard({
               <div className="p-1.5 rounded-lg bg-violet-500/20 text-violet-300 flex-shrink-0">
                 <TrendingUp className="w-4 h-4" aria-hidden="true" />
               </div>
-              <p className="text-sm font-semibold text-white truncate">
-                {account.name}
-              </p>
+              <p className="text-sm font-semibold text-white truncate">{account.name}</p>
             </div>
             <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider bg-white/10 backdrop-blur-sm text-violet-200 px-2 py-0.5 rounded-md">
               {account.currency}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { Plus, Pencil, Trash2, Calendar, Clock, CheckCircle2 } from 'lucide-react';
 import { get } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
@@ -43,8 +44,9 @@ export function SavingsGoalCard({
   const progress = Math.min(goal.progressPercentage, 100);
 
   const isHexColor = goal.color?.startsWith('#') ?? false;
-  const gradient = isHexColor ? '' : (goal.color || TYPE_COLORS[goal.type] || DEFAULT_GRADIENT);
-  const solidStyle = isHexColor ? { background: goal.color } : undefined;
+  const gradient = isHexColor ? '' : goal.color || TYPE_COLORS[goal.type] || DEFAULT_GRADIENT;
+  const solidStyle: CSSProperties | undefined =
+    isHexColor && goal.color ? { background: goal.color } : undefined;
 
   const remainingCents = useMemo(
     () => Math.max(0, goal.targetAmountCents - goal.currentAmountCents),
@@ -58,7 +60,8 @@ export function SavingsGoalCard({
     const diffTime = deadline.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return `${get(dictionary, 'overduePrefix')} ${Math.abs(diffDays)} ${get(dictionary, 'overdueDays')}`;
+    if (diffDays < 0)
+      return `${get(dictionary, 'overduePrefix')} ${Math.abs(diffDays)} ${get(dictionary, 'overdueDays')}`;
     if (diffDays === 0) return get(dictionary, 'deadlineToday');
     if (diffDays === 1) return get(dictionary, 'deadlineTomorrow');
     if (diffDays <= 30) return `${diffDays} ${get(dictionary, 'daysLeft')}`;
@@ -71,10 +74,7 @@ export function SavingsGoalCard({
     return get(dictionary, key);
   }, [goal.type, dictionary]);
 
-  const recentContributions = useMemo(
-    () => goal.contributions.slice(0, 3),
-    [goal.contributions]
-  );
+  const recentContributions = useMemo(() => goal.contributions.slice(0, 3), [goal.contributions]);
 
   const handleContribute = useCallback(() => {
     onContribute(goal.id);
@@ -158,7 +158,14 @@ export function SavingsGoalCard({
               {progress.toFixed(1)}%
             </span>
           </div>
-          <div className="h-2.5 bg-white/5 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${goal.name}: ${progress.toFixed(1)}%`}>
+          <div
+            className="h-2.5 bg-white/5 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${goal.name}: ${progress.toFixed(1)}%`}
+          >
             <div
               className={`h-full rounded-full transition-all duration-1000 ease-out ${isHexColor ? '' : `bg-gradient-to-r ${gradient}`}`}
               style={{ width: `${progress}%`, ...solidStyle }}

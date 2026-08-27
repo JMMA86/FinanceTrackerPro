@@ -1,7 +1,7 @@
 /**
  * Pie Chart Component - Client Component
  * Uses useState for hover interaction
- * 
+ *
  * Enhanced with premium animations and better tooltip
  */
 
@@ -33,7 +33,19 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
     // Use reduce with tuple accumulator: [results, currentAngle]
     const initialAngle = -90;
 
-    return data.reduce<[Array<{ category: string; amount: number; percentage: number; color: string; path: string; index: number }>, number]>(
+    return data.reduce<
+      [
+        Array<{
+          category: string;
+          amount: number;
+          percentage: number;
+          color: string;
+          path: string;
+          index: number;
+        }>,
+        number,
+      ]
+    >(
       ([segmentsAcc, currentAngle], item, index) => {
         const angle = (item.percentage / 100) * 360;
         const startAngle = currentAngle;
@@ -81,9 +93,9 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
 
   return (
     <div className="relative flex items-center justify-center">
-      <svg 
-        width={size} 
-        height={size} 
+      <svg
+        width={size}
+        height={size}
         className="overflow-visible"
         style={{
           transform: isAnimating ? 'scale(0.8)' : 'scale(1)',
@@ -99,12 +111,7 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
           fill="rgba(13, 28, 58, 0.6)"
           className="transition-all duration-300"
         />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={innerRadius}
-          fill="rgba(13, 28, 58, 0.85)"
-        />
+        <circle cx={size / 2} cy={size / 2} r={innerRadius} fill="rgba(13, 28, 58, 0.85)" />
 
         {/* Segments with premium hover effects */}
         {segments.map((segment) => (
@@ -128,9 +135,10 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
               opacity={hoveredIndex === null || hoveredIndex === segment.index ? 1 : 0.6}
               className="transition-all duration-300 cursor-pointer"
               style={{
-                filter: hoveredIndex === segment.index
-                  ? `drop-shadow(0 0 16px ${segment.color})`
-                  : 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
+                filter:
+                  hoveredIndex === segment.index
+                    ? `drop-shadow(0 0 16px ${segment.color})`
+                    : 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
               }}
               onMouseEnter={() => setHoveredIndex(segment.index)}
               onMouseLeave={() => setHoveredIndex(null)}
@@ -168,13 +176,11 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
           }}
         >
           <div className="flex items-center gap-2 mb-1">
-            <div 
+            <div
               className="w-2.5 h-2.5 rounded-full shadow-sm"
               style={{ backgroundColor: segments[hoveredIndex].color }}
             />
-            <p className="text-white text-sm font-semibold">
-              {segments[hoveredIndex].category}
-            </p>
+            <p className="text-white text-sm font-semibold">{segments[hoveredIndex].category}</p>
           </div>
           <div className="flex items-center justify-between gap-4">
             <p className="text-slate-400 text-xs">
@@ -195,8 +201,8 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
             key={item.category}
             aria-label={`Mostrar detalles de ${item.category}`}
             className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
-              hoveredIndex === index 
-                ? 'bg-slate-800/90 scale-105 shadow-lg' 
+              hoveredIndex === index
+                ? 'bg-slate-800/90 scale-105 shadow-lg'
                 : 'hover:bg-slate-800/50'
             }`}
             onMouseEnter={() => setHoveredIndex(index)}
@@ -208,7 +214,9 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
               className="w-2.5 h-2.5 rounded-full shadow-sm"
               style={{ backgroundColor: item.color }}
             />
-            <span className={`text-xs truncate ${hoveredIndex === index ? 'text-white' : 'text-slate-400'}`}>
+            <span
+              className={`text-xs truncate ${hoveredIndex === index ? 'text-white' : 'text-slate-400'}`}
+            >
               {item.category}
             </span>
           </button>

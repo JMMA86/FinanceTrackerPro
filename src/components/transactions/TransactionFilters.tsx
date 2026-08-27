@@ -117,7 +117,11 @@ export function TransactionFilters({ dictionary }: Readonly<TransactionFiltersPr
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   return (
-    <div className="app-shell rounded-2xl p-5 space-y-4" role="search" aria-label={get(dictionary, 'filters')}>
+    <div
+      className="app-shell rounded-2xl p-5 space-y-4"
+      role="search"
+      aria-label={get(dictionary, 'filters')}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Search */}
         <div className="relative">
@@ -125,7 +129,10 @@ export function TransactionFilters({ dictionary }: Readonly<TransactionFiltersPr
             {get(dictionary, 'description')}
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" aria-hidden="true" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"
+              aria-hidden="true"
+            />
             <input
               id="tx-search"
               type="text"

@@ -58,9 +58,7 @@ describe('GetAllTransactionsSchema', () => {
   });
 
   it('should reject search exceeding 100 characters', () => {
-    expect(() =>
-      GetAllTransactionsSchema.parse({ search: 'x'.repeat(101) })
-    ).toThrow();
+    expect(() => GetAllTransactionsSchema.parse({ search: 'x'.repeat(101) })).toThrow();
   });
 
   it('should accept valid typeFilter', () => {
@@ -69,9 +67,7 @@ describe('GetAllTransactionsSchema', () => {
   });
 
   it('should reject invalid typeFilter', () => {
-    expect(() =>
-      GetAllTransactionsSchema.parse({ typeFilter: 'INVALID_TYPE' })
-    ).toThrow();
+    expect(() => GetAllTransactionsSchema.parse({ typeFilter: 'INVALID_TYPE' })).toThrow();
   });
 
   it('should accept dateFrom as string (coerced)', () => {
@@ -94,9 +90,7 @@ describe('GetAllTransactionsSchema', () => {
   });
 
   it('should reject invalid accountId CUID', () => {
-    expect(() =>
-      GetAllTransactionsSchema.parse({ accountId: 'not-a-cuid' })
-    ).toThrow();
+    expect(() => GetAllTransactionsSchema.parse({ accountId: 'not-a-cuid' })).toThrow();
   });
 
   it('should combine page and pageSize with all filters', () => {
@@ -314,23 +308,15 @@ describe('DeleteTransactionSchema', () => {
   });
 
   it('should reject non-CUID string', () => {
-    expect(() =>
-      DeleteTransactionSchema.parse({ transactionId: 'not-a-cuid' })
-    ).toThrow();
+    expect(() => DeleteTransactionSchema.parse({ transactionId: 'not-a-cuid' })).toThrow();
 
-    expect(() =>
-      DeleteTransactionSchema.parse({ transactionId: '' })
-    ).toThrow();
+    expect(() => DeleteTransactionSchema.parse({ transactionId: '' })).toThrow();
 
-    expect(() =>
-      DeleteTransactionSchema.parse({ transactionId: 'abc' })
-    ).toThrow();
+    expect(() => DeleteTransactionSchema.parse({ transactionId: 'abc' })).toThrow();
   });
 
   it('should reject non-string input', () => {
-    expect(() =>
-      DeleteTransactionSchema.parse({ transactionId: 12345 })
-    ).toThrow();
+    expect(() => DeleteTransactionSchema.parse({ transactionId: 12345 })).toThrow();
   });
 });
 
@@ -347,9 +333,7 @@ describe('GetTransactionByIdSchema', () => {
   });
 
   it('should reject non-CUID string', () => {
-    expect(() =>
-      GetTransactionByIdSchema.parse({ transactionId: 'invalid' })
-    ).toThrow();
+    expect(() => GetTransactionByIdSchema.parse({ transactionId: 'invalid' })).toThrow();
   });
 
   it('should reject missing transactionId', () => {

@@ -118,16 +118,21 @@ When('ingresa un email único en el registro desktop', async ({ page }) => {
   const email = uniqueEmail();
   await page.locator('#email-desktop').fill(email);
   // Store in page context for later use
-  await page.evaluate((e) => { (window as Window & typeof globalThis & { __e2eRegisterEmail?: string }).__e2eRegisterEmail = e; }, email);
+  await page.evaluate((e) => {
+    (window as Window & typeof globalThis & { __e2eRegisterEmail?: string }).__e2eRegisterEmail = e;
+  }, email);
 });
 
 When('ingresa {string} en el email del registro desktop', async ({ page }, email: string) => {
   await page.locator('#email-desktop').fill(email);
 });
 
-When('ingresa {string} en el campo contraseña del registro desktop', async ({ page }, password: string) => {
-  await page.locator('#password-desktop').fill(password);
-});
+When(
+  'ingresa {string} en el campo contraseña del registro desktop',
+  async ({ page }, password: string) => {
+    await page.locator('#password-desktop').fill(password);
+  }
+);
 
 When('hace clic en {string} en el registro desktop', async ({ page }, _buttonName: string) => {
   const registerForm = page.locator('form').filter({ has: page.locator('#password-desktop') });
@@ -151,7 +156,7 @@ When('escribe caracteres en el campo contraseña del registro desktop', async ({
 When('cambia el idioma a {string} en el selector de idioma', async ({ page }, language: string) => {
   // Click the language selector toggle button
   await page.locator('.relative .bg-slate-700').first().click();
-  
+
   // Click the language option in the dropdown
   await page.locator('.absolute.right-0 button').filter({ hasText: language }).click();
   // networkidle ensures the new locale page is fully hydrated before we check text content.
@@ -202,12 +207,15 @@ Then('la validación HTML5 debe impedir el envío del formulario de login', asyn
   // No network request should have been made
 });
 
-Then('la validación HTML5 debe impedir el envío del formulario de registro desktop', async ({ page }) => {
-  // Check that we're still on the login page
-  await expect(page).toHaveURL(/\/es\/login/);
-  // The register form should still be in register mode
-  // And no success/error message appeared
-});
+Then(
+  'la validación HTML5 debe impedir el envío del formulario de registro desktop',
+  async ({ page }) => {
+    // Check that we're still on the login page
+    await expect(page).toHaveURL(/\/es\/login/);
+    // The register form should still be in register mode
+    // And no success/error message appeared
+  }
+);
 
 // ============================================================================
 // THEN - Register Assertions
@@ -229,28 +237,38 @@ Then('el botón de registro debe estar habilitado', async ({ page }) => {
   await expect(page.locator('button[type="submit"]').last()).toBeEnabled();
 });
 
-Then('los {int} requisitos de contraseña deben mostrarse sin cumplir', async ({ page }, count: number) => {
-  // Password requirements checklist is visible when password is not empty
-  // The checklist appears in desktop register form when password has value
-  const desktopRegisterForm = page.locator('form').filter({ has: page.locator('#password-desktop') });
-  const checklistContainer = desktopRegisterForm.locator('.rounded-lg.border');
-  await expect(checklistContainer).toBeVisible();
-  
-  // Count the requirement items (there should be 4)
-  const items = checklistContainer.locator('li');
-  await expect(items).toHaveCount(count);
-});
+Then(
+  'los {int} requisitos de contraseña deben mostrarse sin cumplir',
+  async ({ page }, count: number) => {
+    // Password requirements checklist is visible when password is not empty
+    // The checklist appears in desktop register form when password has value
+    const desktopRegisterForm = page
+      .locator('form')
+      .filter({ has: page.locator('#password-desktop') });
+    const checklistContainer = desktopRegisterForm.locator('.rounded-lg.border');
+    await expect(checklistContainer).toBeVisible();
 
-Then('los {int} requisitos de contraseña deben estar cumplidos', async ({ page }, count: number) => {
-  // All password requirements should be satisfied
-  const desktopRegisterForm = page.locator('form').filter({ has: page.locator('#password-desktop') });
-  const checklistContainer = desktopRegisterForm.locator('.rounded-lg.border');
-  await expect(checklistContainer).toBeVisible();
-  
-  // Count green items (text-green-400 font-medium for satisfied requirements)
-  const greenItems = checklistContainer.locator('li span.text-green-400');
-  await expect(greenItems).toHaveCount(count);
-});
+    // Count the requirement items (there should be 4)
+    const items = checklistContainer.locator('li');
+    await expect(items).toHaveCount(count);
+  }
+);
+
+Then(
+  'los {int} requisitos de contraseña deben estar cumplidos',
+  async ({ page }, count: number) => {
+    // All password requirements should be satisfied
+    const desktopRegisterForm = page
+      .locator('form')
+      .filter({ has: page.locator('#password-desktop') });
+    const checklistContainer = desktopRegisterForm.locator('.rounded-lg.border');
+    await expect(checklistContainer).toBeVisible();
+
+    // Count green items (text-green-400 font-medium for satisfied requirements)
+    const greenItems = checklistContainer.locator('li span.text-green-400');
+    await expect(greenItems).toHaveCount(count);
+  }
+);
 
 // ============================================================================
 // THEN - Language Assertions
@@ -279,7 +297,7 @@ Then('debe ver el formulario de login mobile', async ({ page }) => {
   // Mobile login form: the mobile container (.md:hidden) should be visible
   const mobileForm = page.locator('.md\\:hidden form');
   await expect(mobileForm).toBeVisible();
-  
+
   // Should show login title - use heading role for unique match
   await expect(page.getByRole('heading', { name: 'Inicia Sesión' })).toBeVisible();
 });
@@ -288,7 +306,7 @@ Then('debe ver el formulario de registro mobile', async ({ page }) => {
   // Mobile register form should show register fields
   // Use the mobile heading (it's inside .md:hidden with opacity-100)
   await expect(page.getByRole('heading', { name: 'Crear Cuenta' })).toBeVisible();
-  
+
   // Name field should be visible (it's animated in for register mode)
   const nameInput = page.locator('.md\\:hidden input[type="text"]');
   await expect(nameInput).toBeVisible();

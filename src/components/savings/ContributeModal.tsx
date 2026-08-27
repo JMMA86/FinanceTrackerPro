@@ -144,9 +144,10 @@ export function ContributeModal({
       if (result.success) {
         onClose();
       } else {
-        const msg = result.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : (result.error ?? get(dictionary, 'errors.contributeFailed'));
+        const msg =
+          result.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : (result.error ?? get(dictionary, 'errors.contributeFailed'));
         setSubmitError(msg);
       }
     } catch {
@@ -155,13 +156,16 @@ export function ContributeModal({
   }
 
   const remainingCents = goal ? Math.max(0, goal.targetAmountCents - goal.currentAmountCents) : 0;
-  const newProgress = goal && goal.targetAmountCents > 0
-    ? Math.min(100, ((goal.currentAmountCents + amountCents) / goal.targetAmountCents) * 100)
-    : 0;
+  const newProgress =
+    goal && goal.targetAmountCents > 0
+      ? Math.min(100, ((goal.currentAmountCents + amountCents) / goal.targetAmountCents) * 100)
+      : 0;
   const currentProgress = goal?.progressPercentage ?? 0;
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
-  const selectCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const selectCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
   const errorCls = 'mt-1 text-xs text-red-400';
 
@@ -212,7 +216,10 @@ export function ContributeModal({
 
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
@@ -222,7 +229,9 @@ export function ContributeModal({
             <div className="bg-white/5 rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">{get(dictionary, 'progress')} actual</span>
-                <span className="font-semibold text-white tabular-nums">{currentProgress.toFixed(1)}%</span>
+                <span className="font-semibold text-white tabular-nums">
+                  {currentProgress.toFixed(1)}%
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">{get(dictionary, 'remaining')}</span>
@@ -247,18 +256,24 @@ export function ContributeModal({
             <FormattedNumericInput
               id="contribute-amount"
               value={amountCents}
-              onChange={(v) => { setAmountCents(v); setValue('amountCents', v); }}
+              onChange={(v) => {
+                setAmountCents(v);
+                setValue('amountCents', v);
+              }}
               aria-invalid={!!errors.amountCents}
               aria-describedby={errors.amountCents ? 'contribute-amount-error' : undefined}
               className={`${inputCls} font-mono tabular-nums`}
               maxValue={remainingCents}
             />
             {errors.amountCents && (
-              <p id="contribute-amount-error" role="alert" className={errorCls}>{errors.amountCents.message}</p>
+              <p id="contribute-amount-error" role="alert" className={errorCls}>
+                {errors.amountCents.message}
+              </p>
             )}
             {amountCents > 0 && goal && (
               <p className="mt-1.5 text-xs text-slate-400">
-                {get(dictionary, 'progress')}: {currentProgress.toFixed(1)}% → <span className="text-emerald-400 font-semibold">{newProgress.toFixed(1)}%</span>
+                {get(dictionary, 'progress')}: {currentProgress.toFixed(1)}% →{' '}
+                <span className="text-emerald-400 font-semibold">{newProgress.toFixed(1)}%</span>
               </p>
             )}
           </div>
@@ -269,7 +284,9 @@ export function ContributeModal({
               {get(dictionary, 'sourceAccount')}
             </label>
             <select id="contribute-account" className={selectCls} {...register('sourceAccountId')}>
-              <option value="" className="bg-slate-800">—</option>
+              <option value="" className="bg-slate-800">
+                —
+              </option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id} className="bg-slate-800">
                   {a.name} ({formatMoney(a.balanceCents, a.currency, locale)})

@@ -9,7 +9,10 @@ const MOCK_CUID = 'clh1234567890abcdefghij';
 
 // Mock actions
 vi.mock('@/actions/savings.actions', () => ({
-  contributeToGoal: vi.fn().mockResolvedValue({ success: true, data: { contribution: { id: 'c-1' }, wasIdempotent: false } }),
+  contributeToGoal: vi.fn().mockResolvedValue({
+    success: true,
+    data: { contribution: { id: 'c-1' }, wasIdempotent: false },
+  }),
   getSavingsGoals: vi.fn().mockResolvedValue({
     success: true,
     data: [
@@ -86,20 +89,34 @@ vi.mock('@/lib/money', () => ({
 
 // Mock FormattedNumericInput
 vi.mock('@/components/ui/FormattedNumericInput', () => ({
-  FormattedNumericInput: vi.fn(({ id, value, onChange, 'aria-invalid': ariaInvalid, className, maxValue }: {
-    id?: string; value: number; onChange: (v: number) => void; 'aria-invalid'?: boolean; className?: string; maxValue?: number;
-  }) => (
-    <input
-      id={id}
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      data-testid={`numeric-input-${id}`}
-      aria-invalid={ariaInvalid}
-      className={className}
-      max={maxValue}
-    />
-  )),
+  FormattedNumericInput: vi.fn(
+    ({
+      id,
+      value,
+      onChange,
+      'aria-invalid': ariaInvalid,
+      className,
+      maxValue,
+    }: {
+      id?: string;
+      value: number;
+      onChange: (v: number) => void;
+      'aria-invalid'?: boolean;
+      className?: string;
+      maxValue?: number;
+    }) => (
+      <input
+        id={id}
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        data-testid={`numeric-input-${id}`}
+        aria-invalid={ariaInvalid}
+        className={className}
+        max={maxValue}
+      />
+    )
+  ),
 }));
 
 beforeEach(() => {

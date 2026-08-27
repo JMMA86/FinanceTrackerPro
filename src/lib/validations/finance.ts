@@ -77,8 +77,8 @@ export const TransferSchema = z
       .int('Amount must be an integer')
       .min(MIN_SAFE_CENTS, 'Amount must be at least 1 cent')
       .max(MAX_SAFE_CENTS, `Amount cannot exceed ${MAX_SAFE_CENTS} cents`),
-      // NOTE: For transfers, negative amounts are handled by the business logic
-      // This validates the absolute value
+    // NOTE: For transfers, negative amounts are handled by the business logic
+    // This validates the absolute value
 
     // Currency (same for both accounts in this version)
     currency: CurrencySchema,

@@ -31,7 +31,10 @@ export async function createSession(data: SessionData): Promise<string> {
     .setExpirationTime('7d')
     .sign(SECRET_KEY);
 
-  log.info({ action: 'session.create', userId: data.userId, email: data.email }, 'Session JWT created');
+  log.info(
+    { action: 'session.create', userId: data.userId, email: data.email },
+    'Session JWT created'
+  );
   return token;
 }
 

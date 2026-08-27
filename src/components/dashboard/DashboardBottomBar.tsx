@@ -53,10 +53,7 @@ export function DashboardBottomBar({ lang, navigationLabels }: Readonly<Dashboar
               )}
 
               {isActive && (
-                <span
-                  className="absolute inset-1 rounded-xl bg-blue-500/10"
-                  aria-hidden="true"
-                />
+                <span className="absolute inset-1 rounded-xl bg-blue-500/10" aria-hidden="true" />
               )}
 
               <Icon

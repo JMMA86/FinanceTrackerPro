@@ -33,10 +33,13 @@ const InvestmentCurrencySchema = z.enum(['USD', 'EUR']);
 const DecimalQuantitySchema = z
   .string()
   .regex(/^\d+(\.\d+)?$/, 'Must be a valid positive decimal number')
-  .refine((val) => {
-    const num = Number.parseFloat(val);
-    return num > 0 && Number.isFinite(num);
-  }, { message: 'Quantity must be positive and finite' });
+  .refine(
+    (val) => {
+      const num = Number.parseFloat(val);
+      return num > 0 && Number.isFinite(num);
+    },
+    { message: 'Quantity must be positive and finite' }
+  );
 
 /**
  * Create investment account schema
@@ -65,7 +68,10 @@ export const DepositToInvestmentSchema = z.object({
     .int('Amount must be an integer')
     .min(1, 'Amount must be at least 1 cent')
     .max(MAX_SAFE_CENTS, 'Amount exceeds maximum safe value'),
-  exchangeRate: z.number().positive('Exchange rate must be positive').max(10000, 'Exchange rate seems unrealistic'),
+  exchangeRate: z
+    .number()
+    .positive('Exchange rate must be positive')
+    .max(10000, 'Exchange rate seems unrealistic'),
   description: z.string().max(500).optional(),
 });
 

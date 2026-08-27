@@ -11,7 +11,12 @@ vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
 
-import { getBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount } from '../account.actions';
+import {
+  getBankAccounts,
+  createBankAccount,
+  updateBankAccount,
+  deleteBankAccount,
+} from '../account.actions';
 import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 import { headers } from 'next/headers';
@@ -33,22 +38,45 @@ function makeSession() {
 
 function makeAccountRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: ACCOUNT_ID, name: 'Test Account', type: 'CHECKING', currency: 'COP',
-    balanceCents: 500_000, interestRateEA: null, parentAccountId: null,
-    cardColor: null, idempotencyKey: IDEM_KEY,
-    isActive: true, userId: USER_ID, createdAt: new Date(), updatedAt: new Date(),
-    deletedAt: null, createdBy: USER_ID, lastModifiedBy: USER_ID,
-    creditLimitCents: null, cutoffDay: null, paymentDueDay: null, lastReconciled: null,
+    id: ACCOUNT_ID,
+    name: 'Test Account',
+    type: 'CHECKING',
+    currency: 'COP',
+    balanceCents: 500_000,
+    interestRateEA: null,
+    parentAccountId: null,
+    cardColor: null,
+    idempotencyKey: IDEM_KEY,
+    isActive: true,
+    userId: USER_ID,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    createdBy: USER_ID,
+    lastModifiedBy: USER_ID,
+    creditLimitCents: null,
+    cutoffDay: null,
+    paymentDueDay: null,
+    lastReconciled: null,
     ...overrides,
   } as unknown as NonNullable<Awaited<ReturnType<typeof prisma.account.findUnique>>>;
 }
 
 function makeHeaders(ip = '127.0.0.1', ua = 'Vitest') {
-  return { get: (k: string) => k === 'x-forwarded-for' ? ip : k === 'user-agent' ? ua : null } as unknown as Awaited<ReturnType<typeof headers>>;
+  return {
+    get: (k: string) => (k === 'x-forwarded-for' ? ip : k === 'user-agent' ? ua : null),
+  } as unknown as Awaited<ReturnType<typeof headers>>;
 }
 
 function makeCreateInput(overrides: Record<string, unknown> = {}) {
-  return { idempotencyKey: IDEM_KEY, name: 'Mi Cuenta', type: 'CHECKING', currency: 'COP', initialBalanceCents: 0, ...overrides };
+  return {
+    idempotencyKey: IDEM_KEY,
+    name: 'Mi Cuenta',
+    type: 'CHECKING',
+    currency: 'COP',
+    initialBalanceCents: 0,
+    ...overrides,
+  };
 }
 
 describe('account.actions.ts', () => {
@@ -76,7 +104,7 @@ describe('account.actions.ts', () => {
             isActive: true,
             type: { in: ['CHECKING', 'CASH', 'SAVINGS', 'POCKET'] },
           }),
-        }),
+        })
       );
     });
   });
@@ -118,7 +146,7 @@ describe('account.actions.ts', () => {
       expect(mockAccount.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ createdBy: USER_ID, lastModifiedBy: USER_ID }),
-        }),
+        })
       );
     });
 
@@ -131,13 +159,15 @@ describe('account.actions.ts', () => {
       await createBankAccount(makeCreateInput());
       expect(mockLog.info).toHaveBeenCalledWith(
         expect.objectContaining({ ipAddress: '203.0.113.5', userAgent: 'TestBrowser/2.0' }),
-        expect.any(String),
+        expect.any(String)
       );
     });
 
     it('returns ValidationError for name with script injection', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      const result = await createBankAccount(makeCreateInput({ name: '<script>alert(1)</script>' }));
+      const result = await createBankAccount(
+        makeCreateInput({ name: '<script>alert(1)</script>' })
+      );
       expect(result.success).toBe(false);
       expect(result.code).toBe('VALIDATION_ERROR');
     });
@@ -158,7 +188,7 @@ describe('account.actions.ts', () => {
       expect(mockAccount.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ idempotencyKey: IDEM_KEY, cardColor: 'blue' }),
-        }),
+        })
       );
     });
   });
@@ -166,7 +196,9 @@ describe('account.actions.ts', () => {
   describe('updateBankAccount', () => {
     it('returns UnauthorizedError when account belongs to another user', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockAccount.findUnique.mockResolvedValue(makeAccountRow({ userId: 'cother00000000000000001' }));
+      mockAccount.findUnique.mockResolvedValue(
+        makeAccountRow({ userId: 'cother00000000000000001' })
+      );
       const result = await updateBankAccount({ accountId: ACCOUNT_ID, name: 'New Name' });
       expect(result.success).toBe(false);
       expect(result.code).toBe('UNAUTHORIZED');
@@ -176,13 +208,19 @@ describe('account.actions.ts', () => {
     it('updates name and cardColor when called by owner', async () => {
       mockGetSession.mockResolvedValue(makeSession());
       mockAccount.findUnique.mockResolvedValue(makeAccountRow());
-      mockAccount.update.mockResolvedValue(makeAccountRow({ name: 'Updated', cardColor: 'violet' }));
-      const result = await updateBankAccount({ accountId: ACCOUNT_ID, name: 'Updated', cardColor: 'violet' });
+      mockAccount.update.mockResolvedValue(
+        makeAccountRow({ name: 'Updated', cardColor: 'violet' })
+      );
+      const result = await updateBankAccount({
+        accountId: ACCOUNT_ID,
+        name: 'Updated',
+        cardColor: 'violet',
+      });
       expect(result.success).toBe(true);
       expect(mockAccount.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ name: 'Updated', cardColor: 'violet' }),
-        }),
+        })
       );
     });
   });
@@ -190,7 +228,9 @@ describe('account.actions.ts', () => {
   describe('deleteBankAccount', () => {
     it('returns UnauthorizedError when account belongs to another user', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockAccount.findUnique.mockResolvedValue(makeAccountRow({ userId: 'cother00000000000000001' }));
+      mockAccount.findUnique.mockResolvedValue(
+        makeAccountRow({ userId: 'cother00000000000000001' })
+      );
       const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
       expect(result.success).toBe(false);
       expect(result.code).toBe('UNAUTHORIZED');
@@ -206,7 +246,7 @@ describe('account.actions.ts', () => {
       expect(mockAccount.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ isActive: false, deletedAt: expect.any(Date) }),
-        }),
+        })
       );
     });
 

@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { TransactionTable } from '../TransactionTable';
 
-
 // Mock i18n
 vi.mock('@/lib/i18n', () => ({
   get: vi.fn((dict: Record<string, unknown>, key: string) => {

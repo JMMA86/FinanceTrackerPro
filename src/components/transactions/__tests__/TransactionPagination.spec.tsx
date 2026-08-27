@@ -49,24 +49,14 @@ describe('TransactionPagination', () => {
 
   it('should render nothing when totalPages <= 1', () => {
     const { container } = render(
-      <TransactionPagination
-        currentPage={1}
-        totalPages={1}
-        dictionary={dictionary}
-      />
+      <TransactionPagination currentPage={1} totalPages={1} dictionary={dictionary} />
     );
 
     expect(container.firstChild).toBeNull();
   });
 
   it('should render prev and next buttons when multiple pages', () => {
-    render(
-      <TransactionPagination
-        currentPage={2}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={2} totalPages={5} dictionary={dictionary} />);
 
     const prevButton = screen.getByLabelText('Previous');
     const nextButton = screen.getByLabelText('Next');
@@ -76,39 +66,21 @@ describe('TransactionPagination', () => {
   });
 
   it('should disable prev button on page 1', () => {
-    render(
-      <TransactionPagination
-        currentPage={1}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={1} totalPages={5} dictionary={dictionary} />);
 
     const prevButton = screen.getByLabelText('Previous');
     expect(prevButton).toBeDisabled();
   });
 
   it('should disable next button on last page', () => {
-    render(
-      <TransactionPagination
-        currentPage={5}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={5} totalPages={5} dictionary={dictionary} />);
 
     const nextButton = screen.getByLabelText('Next');
     expect(nextButton).toBeDisabled();
   });
 
   it('should enable both buttons on middle pages', () => {
-    render(
-      <TransactionPagination
-        currentPage={3}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={3} totalPages={5} dictionary={dictionary} />);
 
     const prevButton = screen.getByLabelText('Previous');
     const nextButton = screen.getByLabelText('Next');
@@ -118,25 +90,13 @@ describe('TransactionPagination', () => {
   });
 
   it('should display current page and total pages', () => {
-    render(
-      <TransactionPagination
-        currentPage={3}
-        totalPages={10}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={3} totalPages={10} dictionary={dictionary} />);
 
     expect(screen.getByText('3 / 10')).toBeInTheDocument();
   });
 
   it('should navigate to previous page when clicking prev', async () => {
-    render(
-      <TransactionPagination
-        currentPage={3}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={3} totalPages={5} dictionary={dictionary} />);
 
     const prevButton = screen.getByLabelText('Previous');
     await userEvent.click(prevButton);
@@ -145,13 +105,7 @@ describe('TransactionPagination', () => {
   });
 
   it('should navigate to next page when clicking next', async () => {
-    render(
-      <TransactionPagination
-        currentPage={3}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={3} totalPages={5} dictionary={dictionary} />);
 
     const nextButton = screen.getByLabelText('Next');
     await userEvent.click(nextButton);
@@ -160,13 +114,7 @@ describe('TransactionPagination', () => {
   });
 
   it('should remove page param when going to page 1', async () => {
-    render(
-      <TransactionPagination
-        currentPage={2}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={2} totalPages={5} dictionary={dictionary} />);
 
     const prevButton = screen.getByLabelText('Previous');
     await userEvent.click(prevButton);
@@ -177,30 +125,16 @@ describe('TransactionPagination', () => {
   it('should preserve existing search params when navigating', async () => {
     mockSearchParamsValue = new URLSearchParams('search=food&type=INCOME');
 
-    render(
-      <TransactionPagination
-        currentPage={2}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={2} totalPages={5} dictionary={dictionary} />);
 
     const nextButton = screen.getByLabelText('Next');
     await userEvent.click(nextButton);
 
-    expect(mockPush).toHaveBeenCalledWith(
-      '/en/transactions?search=food&type=INCOME&page=3'
-    );
+    expect(mockPush).toHaveBeenCalledWith('/en/transactions?search=food&type=INCOME&page=3');
   });
 
   it('should be accessible with navigation role and aria-labels', () => {
-    render(
-      <TransactionPagination
-        currentPage={2}
-        totalPages={5}
-        dictionary={dictionary}
-      />
-    );
+    render(<TransactionPagination currentPage={2} totalPages={5} dictionary={dictionary} />);
 
     const nav = screen.getByRole('navigation');
     expect(nav).toBeInTheDocument();

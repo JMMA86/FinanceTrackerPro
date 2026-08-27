@@ -3,18 +3,18 @@
 import { get } from '@/lib/i18n';
 
 export const PRESETS = [
-  { key: 'blue',    from: '#1d4ed8', to: '#1e3a8a' },
-  { key: 'violet',  from: '#7c3aed', to: '#4c1d95' },
+  { key: 'blue', from: '#1d4ed8', to: '#1e3a8a' },
+  { key: 'violet', from: '#7c3aed', to: '#4c1d95' },
   { key: 'emerald', from: '#059669', to: '#065f46' },
-  { key: 'amber',   from: '#d97706', to: '#92400e' },
-  { key: 'rose',    from: '#e11d48', to: '#881337' },
-  { key: 'slate',   from: '#475569', to: '#1e293b' },
-  { key: 'gold',    from: '#ca8a04', to: '#78350f' },
-  { key: 'black',   from: '#374151', to: '#111827' },
-  { key: 'white',   from: '#f8fafc', to: '#e2e8f0' },
+  { key: 'amber', from: '#d97706', to: '#92400e' },
+  { key: 'rose', from: '#e11d48', to: '#881337' },
+  { key: 'slate', from: '#475569', to: '#1e293b' },
+  { key: 'gold', from: '#ca8a04', to: '#78350f' },
+  { key: 'black', from: '#374151', to: '#111827' },
+  { key: 'white', from: '#f8fafc', to: '#e2e8f0' },
 ] as const;
 
-export type PresetKey = typeof PRESETS[number]['key'];
+export type PresetKey = (typeof PRESETS)[number]['key'];
 
 export const LIGHT_PRESET_KEYS = new Set<string>(['white']);
 

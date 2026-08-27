@@ -23,12 +23,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
-import {
-  addCents,
-  subtractCents,
-  divideCents,
-  decimalToCents,
-} from '@/lib/money';
+import { addCents, subtractCents, divideCents, decimalToCents } from '@/lib/money';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import {
@@ -56,10 +51,7 @@ const BANK_ACCOUNT_TYPES = ['CHECKING', 'CASH', 'SAVINGS'] as const;
 
 async function getAuditMetadata() {
   const headersList = await headers();
-  const ipAddress =
-    headersList.get('x-forwarded-for') ??
-    headersList.get('x-real-ip') ??
-    'unknown';
+  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
   const userAgent = headersList.get('user-agent') ?? 'unknown';
   return { ipAddress, userAgent };
 }
@@ -85,17 +77,11 @@ async function getInvestmentAccountsInternal(_input: Record<string, never>) {
 
   return accounts.map((account) => ({
     ...account,
-    interestRateEA:
-      account.interestRateEA == null
-        ? null
-        : Number(account.interestRateEA),
+    interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
     assetHoldings: account.assetHoldings.map((holding) => ({
       ...holding,
       quantity: Number(holding.quantity),
-      exchangeRate:
-        holding.exchangeRate == null
-          ? null
-          : Number(holding.exchangeRate),
+      exchangeRate: holding.exchangeRate == null ? null : Number(holding.exchangeRate),
     })),
   }));
 }
@@ -157,18 +143,13 @@ async function createInvestmentAccountInternal(input: unknown) {
   return {
     account: {
       ...account,
-      interestRateEA:
-        account.interestRateEA == null
-          ? null
-          : Number(account.interestRateEA),
+      interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
     },
     wasIdempotent: false,
   };
 }
 
-export const createInvestmentAccount = safeAction(
-  createInvestmentAccountInternal
-);
+export const createInvestmentAccount = safeAction(createInvestmentAccountInternal);
 
 // ============================================================================
 // c) depositToInvestment — Transfer from bank (COP) to investment (USD/EUR)
@@ -222,11 +203,7 @@ async function depositToInvestmentInternal(input: unknown) {
     if (fromAccount.userId !== session.userId) {
       throw new UnauthorizedError('Source account does not belong to user');
     }
-    if (
-      !BANK_ACCOUNT_TYPES.includes(
-        fromAccount.type as (typeof BANK_ACCOUNT_TYPES)[number]
-      )
-    ) {
+    if (!BANK_ACCOUNT_TYPES.includes(fromAccount.type as (typeof BANK_ACCOUNT_TYPES)[number])) {
       throw new UnauthorizedError(
         'Source account must be a bank account (CHECKING, CASH, or SAVINGS)'
       );
@@ -256,29 +233,21 @@ async function depositToInvestmentInternal(input: unknown) {
       throw new InactiveAccountError(validated.investmentAccountId);
     }
     if (toAccount.userId !== session.userId) {
-      throw new UnauthorizedError(
-        'Investment account does not belong to user'
-      );
+      throw new UnauthorizedError('Investment account does not belong to user');
     }
     if (toAccount.type !== 'INVESTMENT') {
       throw new UnauthorizedError('Destination must be an investment account');
     }
 
     // 3. Verify sufficient funds using true balance (Rule 13)
-    const trueBalance = await getTrueBalance(
-      validated.fromBankAccountId,
-      transactionRepo
-    );
+    const trueBalance = await getTrueBalance(validated.fromBankAccountId, transactionRepo);
     if (trueBalance < validated.amountCents) {
       throw new InsufficientFundsError(validated.amountCents, trueBalance);
     }
 
     // 4. Calculate converted amount (COP -> USD/EUR)
     // exchangeRate is COP-per-1-USD (e.g. 3900), so we divide to convert COP to USD
-    const convertedAmountCents = divideCents(
-      validated.amountCents,
-      validated.exchangeRate
-    );
+    const convertedAmountCents = divideCents(validated.amountCents, validated.exchangeRate);
 
     // 5. Generate transfer ID
     const transferId = crypto.randomUUID();
@@ -292,9 +261,7 @@ async function depositToInvestmentInternal(input: unknown) {
         type: 'TRANSFER_OUT',
         amountCents: -validated.amountCents,
         currency: 'COP',
-        description:
-          validated.description ||
-          `Deposit to investment ${toAccount.name}`,
+        description: validated.description || `Deposit to investment ${toAccount.name}`,
         date: new Date(),
         transferId,
         transferToAccountId: validated.investmentAccountId,
@@ -314,9 +281,7 @@ async function depositToInvestmentInternal(input: unknown) {
         type: 'INVESTMENT',
         amountCents: convertedAmountCents,
         currency: toAccount.currency,
-        description:
-          validated.description ||
-          `Deposit from ${fromAccount.name}`,
+        description: validated.description || `Deposit from ${fromAccount.name}`,
         date: new Date(),
         transferId,
         transferFromAccountId: validated.fromBankAccountId,
@@ -332,10 +297,7 @@ async function depositToInvestmentInternal(input: unknown) {
     });
 
     // 8. Update cached balances
-    const newFromBalance = subtractCents(
-      fromAccount.balanceCents,
-      validated.amountCents
-    );
+    const newFromBalance = subtractCents(fromAccount.balanceCents, validated.amountCents);
     const newToBalance = addCents(toAccount.balanceCents, convertedAmountCents);
 
     await Promise.all([
@@ -436,10 +398,7 @@ async function buyAssetInternal(input: unknown) {
     );
 
     // 3. Verify sufficient funds (Rule 13)
-    const trueBalance = await getTrueBalance(
-      validated.accountId,
-      transactionRepo
-    );
+    const trueBalance = await getTrueBalance(validated.accountId, transactionRepo);
     if (trueBalance < totalCostCents) {
       throw new InsufficientFundsError(totalCostCents, trueBalance);
     }
@@ -591,10 +550,7 @@ async function sellAssetInternal(input: unknown) {
     const sellQty = new Decimal(validated.quantity);
     const currentQty = new Decimal(holding.quantity.toString());
     if (sellQty.greaterThan(currentQty)) {
-      throw new InsufficientFundsError(
-        decimalToCents(sellQty),
-        decimalToCents(currentQty)
-      );
+      throw new InsufficientFundsError(decimalToCents(sellQty), decimalToCents(currentQty));
     }
 
     // 3. Calculate total proceeds
@@ -653,10 +609,7 @@ async function sellAssetInternal(input: unknown) {
     }
 
     // 7. Update cached balance
-    const newBalance = addCents(
-      holding.account.balanceCents,
-      totalProceedsCents
-    );
+    const newBalance = addCents(holding.account.balanceCents, totalProceedsCents);
     await tx.account.update({
       where: { id: holding.accountId },
       data: {
@@ -774,10 +727,7 @@ async function updateAllAssetPricesInternal(_input: Record<string, never>) {
       }
       updated++;
     } catch (error) {
-      log.error(
-        { symbol, error: String(error) },
-        'Failed to update stock price'
-      );
+      log.error({ symbol, error: String(error) }, 'Failed to update stock price');
       failed++;
     }
   }
@@ -849,9 +799,7 @@ async function getInvestmentTransactionsInternal(input: unknown) {
   };
 }
 
-export const getInvestmentTransactions = safeAction(
-  getInvestmentTransactionsInternal
-);
+export const getInvestmentTransactions = safeAction(getInvestmentTransactionsInternal);
 
 // ============================================================================
 // h) searchStocksAction — Search stocks via Yahoo Finance autocomplete

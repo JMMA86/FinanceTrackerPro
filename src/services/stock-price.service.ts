@@ -22,8 +22,8 @@ const CACHE_TTL_MS = 60_000; // 60 seconds
 
 export interface StockQuote {
   symbol: string;
-  price: number;       // in currency units (decimal)
-  priceCents: number;  // in cents (integer)
+  price: number; // in currency units (decimal)
+  priceCents: number; // in cents (integer)
   currency: string;
   change: number;
   changePercent: number;
@@ -58,7 +58,7 @@ export async function getStockQuote(symbol: string): Promise<StockQuote> {
   try {
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'User-Agent': 'Mozilla/5.0 (compatible; FinanceTrackerPro/1.0)',
       },
       next: { revalidate: 60 },
@@ -101,10 +101,7 @@ export async function getStockQuote(symbol: string): Promise<StockQuote> {
 
     return quote;
   } catch (error) {
-    log.error(
-      { symbol, error: String(error) },
-      'Failed to fetch stock price from Yahoo Finance'
-    );
+    log.error({ symbol, error: String(error) }, 'Failed to fetch stock price from Yahoo Finance');
 
     // Return cached value even if expired, or throw if no cache
     if (cached) {
@@ -122,9 +119,7 @@ export async function getStockQuote(symbol: string): Promise<StockQuote> {
  * @param symbols Array of stock symbols
  * @returns Array of StockQuote
  */
-export async function getMultipleStockQuotes(
-  symbols: string[]
-): Promise<StockQuote[]> {
+export async function getMultipleStockQuotes(symbols: string[]): Promise<StockQuote[]> {
   const results: StockQuote[] = [];
 
   // Sequential calls to respect rate limits
@@ -154,7 +149,7 @@ export async function searchStocks(
   try {
     const response = await fetch(url, {
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'User-Agent': 'Mozilla/5.0 (compatible; FinanceTrackerPro/1.0)',
       },
       next: { revalidate: 300 }, // 5 minutes
@@ -177,17 +172,11 @@ export async function searchStocks(
         name: q.shortname,
       }));
 
-    log.info(
-      { query, resultsCount: results.length },
-      'Stock search completed'
-    );
+    log.info({ query, resultsCount: results.length }, 'Stock search completed');
 
     return results;
   } catch (error) {
-    log.error(
-      { query, error: String(error) },
-      'Failed to search stocks'
-    );
+    log.error({ query, error: String(error) }, 'Failed to search stocks');
     return [];
   }
 }

@@ -55,16 +55,6 @@ export const NO_LOWER_PASSWORD = 'ABCDEFG1';
 export const NO_NUMBER_PASSWORD = 'Abcdefgh';
 
 export const PASSWORD_REQUIREMENTS_LABELS = {
-  es: [
-    'Al menos 8 caracteres',
-    'Una letra mayúscula',
-    'Una letra minúscula',
-    'Un número',
-  ],
-  en: [
-    'At least 8 characters',
-    'One uppercase letter',
-    'One lowercase letter',
-    'One number',
-  ],
+  es: ['Al menos 8 caracteres', 'Una letra mayúscula', 'Una letra minúscula', 'Un número'],
+  en: ['At least 8 characters', 'One uppercase letter', 'One lowercase letter', 'One number'],
 };

@@ -8,7 +8,11 @@ interface SparklineChartProps {
   readonly height?: number;
 }
 
-export function SparklineChart({ data, color = 'text-emerald-400', height = 24 }: SparklineChartProps) {
+export function SparklineChart({
+  data,
+  color = 'text-emerald-400',
+  height = 24,
+}: SparklineChartProps) {
   const { points } = useMemo(() => {
     if (data.length === 0) return { points: [] };
 
@@ -48,13 +52,16 @@ export function SparklineChart({ data, color = 'text-emerald-400', height = 24 }
         </defs>
 
         {/* Area under curve */}
-        <path
-          d={`${pathData} L 100 100 L 0 100 Z`}
-          fill="url(#sparkline-gradient)"
-        />
+        <path d={`${pathData} L 100 100 L 0 100 Z`} fill="url(#sparkline-gradient)" />
 
         {/* Line */}
-        <path d={pathData} stroke="currentColor" strokeWidth="1.5" fill="none" vectorEffect="non-scaling-stroke" />
+        <path
+          d={pathData}
+          stroke="currentColor"
+          strokeWidth="1.5"
+          fill="none"
+          vectorEffect="non-scaling-stroke"
+        />
 
         {/* End point accent */}
         <circle cx={points.at(-1)?.x ?? 0} cy={points.at(-1)?.y ?? 0} r="1.5" fill="currentColor" />

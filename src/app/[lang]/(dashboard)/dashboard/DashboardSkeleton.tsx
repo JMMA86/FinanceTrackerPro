@@ -1,7 +1,7 @@
 /**
  * Dashboard Skeleton Loading Component
  * Used with Suspense for Partial Prerendering (PPR)
- * 
+ *
  * Provides instant static shell while financial data loads
  */
 
@@ -11,10 +11,7 @@ export function DashboardSkeleton() {
       {/* Metric Cards Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {['metric-1', 'metric-2', 'metric-3', 'metric-4'].map((key) => (
-          <div 
-            key={key} 
-            className="app-shell rounded-2xl p-6 animate-pulse"
-          >
+          <div key={key} className="app-shell rounded-2xl p-6 animate-pulse">
             <div className="h-4 bg-gray-700 rounded w-24 mb-2" />
             <div className="h-8 bg-gray-700 rounded w-32 mb-2" />
             <div className="h-3 bg-gray-700 rounded w-16 mt-2" />

@@ -45,10 +45,7 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
 
   useEffect(() => {
     if (!isOpen) return;
-    log.info(
-      { action: 'account.delete.open', accountId, isPocket },
-      'Delete confirm modal opened',
-    );
+    log.info({ action: 'account.delete.open', accountId, isPocket }, 'Delete confirm modal opened');
     const id = requestAnimationFrame(() => setIsVisible(true));
     return () => cancelAnimationFrame(id);
   }, [isOpen, accountId, isPocket]);
@@ -68,32 +65,38 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
 
   async function handleDelete() {
     if (!accountId) return;
-    log.info(
-      { action: 'account.delete.submit', accountId, isPocket },
-      'Delete account submit',
-    );
+    log.info({ action: 'account.delete.submit', accountId, isPocket }, 'Delete account submit');
     setIsDeleting(true);
 
     const result = await deleteBankAccount({ accountId });
     if (result.success) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      addNotification('success', get(dictionary, `delete${isPocket ? 'Pocket' : 'Account'}Success`));
+      addNotification(
+        'success',
+        get(dictionary, `delete${isPocket ? 'Pocket' : 'Account'}Success`)
+      );
       setIsDeleting(false);
       closeModal();
       log.info(
         { action: 'account.delete.success', accountId, isPocket },
-        'Account deleted (client)',
+        'Account deleted (client)'
       );
       if (isPocket) {
-        document.dispatchEvent(new CustomEvent('finance:pocket-deleted', { detail: { pocketId: accountId } }));
-        document.dispatchEvent(new CustomEvent('finance:account-deleted', { detail: { accountId } }));
+        document.dispatchEvent(
+          new CustomEvent('finance:pocket-deleted', { detail: { pocketId: accountId } })
+        );
+        document.dispatchEvent(
+          new CustomEvent('finance:account-deleted', { detail: { accountId } })
+        );
       } else {
-        document.dispatchEvent(new CustomEvent('finance:account-deleted', { detail: { accountId } }));
+        document.dispatchEvent(
+          new CustomEvent('finance:account-deleted', { detail: { accountId } })
+        );
       }
     } else {
       log.info(
         { action: 'account.delete.failure', accountId, isPocket, code: result.code },
-        'Account delete failed (client)',
+        'Account delete failed (client)'
       );
       addNotification('error', get(dictionary, 'errors.deleteFailed'));
       setIsDeleting(false);
@@ -117,11 +120,19 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
   };
 
   return (
-    <dialog ref={dialogRef} onClose={handleDialogClose} aria-labelledby="delete-modal-title"
-      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4">
+    <dialog
+      ref={dialogRef}
+      onClose={handleDialogClose}
+      aria-labelledby="delete-modal-title"
+      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
+    >
       <div
         className="fixed inset-0"
-        style={{ backgroundColor: isVisible ? 'rgba(0,0,0,0.60)' : 'rgba(0,0,0,0)', backdropFilter: isVisible ? 'blur(4px)' : 'none', transition: `background-color ${ANIM_MS - 20}ms ease, backdrop-filter ${ANIM_MS - 20}ms ease` }}
+        style={{
+          backgroundColor: isVisible ? 'rgba(0,0,0,0.60)' : 'rgba(0,0,0,0)',
+          backdropFilter: isVisible ? 'blur(4px)' : 'none',
+          transition: `background-color ${ANIM_MS - 20}ms ease, backdrop-filter ${ANIM_MS - 20}ms ease`,
+        }}
         onClick={handleClose}
         aria-hidden="true"
       />
@@ -146,7 +157,10 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
             <AlertTriangle className="w-6 h-6 text-rose-400" />
           </div>
 
-          <h2 id="delete-modal-title" className="text-base font-semibold text-white text-center mb-2">
+          <h2
+            id="delete-modal-title"
+            className="text-base font-semibold text-white text-center mb-2"
+          >
             {title}
           </h2>
 
@@ -154,9 +168,7 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
             <span className="font-semibold text-white">&quot;{accountName}&quot;</span>
           </p>
 
-          <p className="text-xs text-slate-400 text-center mb-6 leading-relaxed">
-            {message}
-          </p>
+          <p className="text-xs text-slate-400 text-center mb-6 leading-relaxed">{message}</p>
 
           <div className="flex gap-3">
             <button

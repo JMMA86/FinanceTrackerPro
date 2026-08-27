@@ -62,15 +62,15 @@ async function main() {
   // Three isolated users — one per feature file — so parallel workers never share account state.
   await upsertUserAndGet(
     process.env.E2E_TEST_USER || 'e2e@financetrackerpro.com',
-    'E2E Test User',          // auth.feature
+    'E2E Test User' // auth.feature
   );
   await upsertUserAndGet(
     process.env.E2E_ACCOUNTS_USER || 'accounts@e2e.financetrackerpro.com',
-    'Accounts E2E User',      // accounts.feature
+    'Accounts E2E User' // accounts.feature
   );
   await upsertUserAndGet(
     process.env.E2E_DASHBOARD_USER || 'dashboard@e2e.financetrackerpro.com',
-    'Dashboard E2E User',     // dashboard.feature
+    'Dashboard E2E User' // dashboard.feature
   );
 
   // Investments E2E user with pre-seeded COP bank account for deposit tests
@@ -164,10 +164,10 @@ async function main() {
         userId: txUser.id,
         accountId: i % 2 === 0 ? cashAccount.id : savingsAccount.id,
         type: 'INCOME',
-        amountCents: 500000 + (i * 100000), // 500,000 to 1,400,000
+        amountCents: 500000 + i * 100000, // 500,000 to 1,400,000
         currency: 'COP',
         description: `Ingreso de nómina ${i + 1}`,
-        date: new Date(now.getTime() - (i * 86400000)),
+        date: new Date(now.getTime() - i * 86400000),
         createdBy: txUser.id,
         lastModifiedBy: txUser.id,
         isActive: true,
@@ -180,10 +180,10 @@ async function main() {
         userId: txUser.id,
         accountId: i % 2 === 0 ? cashAccount.id : savingsAccount.id,
         type: 'EXPENSE',
-        amountCents: -(200000 + (i * 50000)), // -200,000 to -650,000
+        amountCents: -(200000 + i * 50000), // -200,000 to -650,000
         currency: 'COP',
         description: `Gasto de supermercado ${i + 1}`,
-        date: new Date(now.getTime() - (i * 86400000)),
+        date: new Date(now.getTime() - i * 86400000),
         createdBy: txUser.id,
         lastModifiedBy: txUser.id,
         isActive: true,

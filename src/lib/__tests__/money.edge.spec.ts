@@ -5,13 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  addCents,
-  subtractCents,
-  multiplyCents,
-  divideCents,
-  convertCurrency,
-} from '../money';
+import { addCents, subtractCents, multiplyCents, divideCents, convertCurrency } from '../money';
 
 describe('money.ts edge cases', () => {
   describe('addCents', () => {

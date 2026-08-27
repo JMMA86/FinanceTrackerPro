@@ -224,7 +224,10 @@ function processAssetAccount(
   result.netWorth = addCents(result.netWorth, trueBalance);
 
   if (result.distribution[accountTypeLower] !== undefined) {
-    result.distribution[accountTypeLower] = addCents(result.distribution[accountTypeLower], trueBalance);
+    result.distribution[accountTypeLower] = addCents(
+      result.distribution[accountTypeLower],
+      trueBalance
+    );
   }
 
   if (account.type === 'SAVINGS') {
@@ -232,9 +235,10 @@ function processAssetAccount(
     result.savingsBalance = addCents(result.savingsBalance, trueBalance);
     let rateAsNumber: number | null = null;
     if (account.interestRateEA != null) {
-      rateAsNumber = typeof account.interestRateEA === 'number'
-        ? account.interestRateEA
-        : Number(account.interestRateEA);
+      rateAsNumber =
+        typeof account.interestRateEA === 'number'
+          ? account.interestRateEA
+          : Number(account.interestRateEA);
     }
     updateMaxInterestRate(rateAsNumber, result);
   } else if (account.type === 'INVESTMENT') {
@@ -316,10 +320,7 @@ function buildDistribution(distribution: Record<string, number>): DistributionIt
     pocket: '#8b5cf6',
   };
 
-  const totalDistribution = Object.values(distribution).reduce(
-    (sum, val) => addCents(sum, val),
-    0
-  );
+  const totalDistribution = Object.values(distribution).reduce((sum, val) => addCents(sum, val), 0);
 
   return Object.entries(distribution)
     .filter(([, amount]) => amount > 0)
@@ -335,9 +336,7 @@ function buildDistribution(distribution: Record<string, number>): DistributionIt
 /**
  * Build recent transactions array
  */
-function buildRecentTransactions(
-  transactions: TransactionData[]
-): Array<{
+function buildRecentTransactions(transactions: TransactionData[]): Array<{
   id: string;
   description: string | null;
   amount: number;
@@ -358,10 +357,7 @@ function buildRecentTransactions(
 /**
  * Calculate investment sparkline data (last N months cumulative balance)
  */
-function calculateInvestmentSparkline(
-  transactions: TransactionData[],
-  months: number
-): number[] {
+function calculateInvestmentSparkline(transactions: TransactionData[], months: number): number[] {
   const now = new Date();
   const monthlyTotals: number[] = [];
 
@@ -373,11 +369,7 @@ function calculateInvestmentSparkline(
     // Sum all INVESTMENT transactions for this month
     let monthTotal = 0;
     for (const tx of transactions) {
-      if (
-        tx.type === 'INVESTMENT' &&
-        tx.date >= monthStart &&
-        tx.date <= monthEnd
-      ) {
+      if (tx.type === 'INVESTMENT' && tx.date >= monthStart && tx.date <= monthEnd) {
         monthTotal = addCents(monthTotal, tx.amountCents);
       }
     }
@@ -554,7 +546,10 @@ export async function getDashboardMetrics(lang: string): Promise<DashboardMetric
  * Get dashboard metrics by user ID - 15 Financial Metrics
  * Refactored to reduce cognitive complexity
  */
-export async function getDashboardMetricsByUser(userId: string, lang: string): Promise<DashboardMetrics> {
+export async function getDashboardMetricsByUser(
+  userId: string,
+  lang: string
+): Promise<DashboardMetrics> {
   const transactionRepo = getTransactionRepository();
   const locale = getLocale(lang);
 
@@ -589,7 +584,14 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
     where: { userId, isActive: true },
     orderBy: { date: 'desc' },
     take: 100,
-    select: { id: true, description: true, amountCents: true, currency: true, type: true, date: true },
+    select: {
+      id: true,
+      description: true,
+      amountCents: true,
+      currency: true,
+      type: true,
+      date: true,
+    },
   });
 
   // Early return for empty state
@@ -620,9 +622,7 @@ export async function getDashboardMetricsByUser(userId: string, lang: string): P
     select: { exchangeRate: true },
   });
 
-  const dollarRate = latestInvestmentTx?.exchangeRate
-    ? Number(latestInvestmentTx.exchangeRate)
-    : 0;
+  const dollarRate = latestInvestmentTx?.exchangeRate ? Number(latestInvestmentTx.exchangeRate) : 0;
 
   // Calculate investment sparkline (last 6 months)
   const investmentSparkline = calculateInvestmentSparkline(allTransactions, 6);

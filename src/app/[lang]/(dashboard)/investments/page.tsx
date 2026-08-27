@@ -15,14 +15,17 @@ const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
 };
 
-export async function generateMetadata({ params }: Readonly<InvestmentsPageProps>): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: Readonly<InvestmentsPageProps>): Promise<Metadata> {
   const { lang } = await params;
   const dict = await getDictionary(lang, 'investments');
 
   const title = `${dict.title as string} | FinanceTrackerPro`;
-  const description = lang === 'es'
-    ? 'Gestiona tu portafolio de inversiones, compra y vende activos financieros.'
-    : 'Manage your investment portfolio, buy and sell financial assets.';
+  const description =
+    lang === 'es'
+      ? 'Gestiona tu portafolio de inversiones, compra y vende activos financieros.'
+      : 'Manage your investment portfolio, buy and sell financial assets.';
 
   return {
     title,

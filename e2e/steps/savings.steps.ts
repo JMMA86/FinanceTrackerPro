@@ -41,8 +41,11 @@ Given('que el usuario de ahorros ha iniciado sesión', async ({ page }) => {
 Given('que no tiene metas de ahorro', async ({ page }) => {
   // This is a user with no goals. Use the general E2E test user (auth user)
   // who has no savings goals.
-  await loginAs(page, process.env.E2E_TEST_USER ?? 'e2e@financetrackerpro.com',
-    process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123');
+  await loginAs(
+    page,
+    process.env.E2E_TEST_USER ?? 'e2e@financetrackerpro.com',
+    process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123'
+  );
   await page.goto('/es/savings', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 });
@@ -58,11 +61,14 @@ Given('que tiene metas de ahorro activas y completadas', async ({ page }) => {
   await page.waitForTimeout(2000);
 });
 
-Given('que existe la meta {string} con target COP {int}', async ({ page }, _goalName: string, _targetCents: number) => {
-  await page.goto('/es/savings', { waitUntil: 'domcontentloaded' });
-  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(2000);
-});
+Given(
+  'que existe la meta {string} con target COP {int}',
+  async ({ page }, _goalName: string, _targetCents: number) => {
+    await page.goto('/es/savings', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+  }
+);
 
 Given('que existe la meta {string} con 80% completado', async ({ page }, _goalName: string) => {
   await page.goto('/es/savings', { waitUntil: 'domcontentloaded' });
@@ -95,47 +101,50 @@ When('navega a la página de ahorros', async ({ page }) => {
 // WHEN - Create Modal (used by create scenario)
 // ============================================================================
 
-When('completa el formulario de creación:', async ({ page }, dataTable: { rows: () => string[][] }) => {
-  const rows = dataTable.rows();
-  const dialog = getOpenDialog(page);
-  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+When(
+  'completa el formulario de creación:',
+  async ({ page }, dataTable: { rows: () => string[][] }) => {
+    const rows = dataTable.rows();
+    const dialog = getOpenDialog(page);
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
 
-  for (const [field, value] of rows) {
-    switch (field) {
-      case 'name':
-        await dialog.locator('#savings-name').fill(value);
-        break;
-      case 'type':
-        await dialog.locator('select#savings-type').selectOption({ label: value });
-        break;
-      case 'targetAmount':
-        const targetInput = dialog.locator('#savings-target');
-        await targetInput.click();
-        for (let i = 0; i < 10; i++) {
-          await targetInput.press('Backspace');
-        }
-        for (const digit of value) {
-          await targetInput.press(digit);
-        }
-        break;
-      case 'monthlyContribution':
-        const monthlyInput = dialog.locator('#savings-monthly');
-        await monthlyInput.click();
-        for (let i = 0; i < 10; i++) {
-          await monthlyInput.press('Backspace');
-        }
-        for (const digit of value) {
-          await monthlyInput.press(digit);
-        }
-        break;
-      case 'color':
-        await dialog.locator(`text=${value}`).click();
-        break;
-      default:
-        console.log(`Unknown field: ${field}`);
+    for (const [field, value] of rows) {
+      switch (field) {
+        case 'name':
+          await dialog.locator('#savings-name').fill(value);
+          break;
+        case 'type':
+          await dialog.locator('select#savings-type').selectOption({ label: value });
+          break;
+        case 'targetAmount':
+          const targetInput = dialog.locator('#savings-target');
+          await targetInput.click();
+          for (let i = 0; i < 10; i++) {
+            await targetInput.press('Backspace');
+          }
+          for (const digit of value) {
+            await targetInput.press(digit);
+          }
+          break;
+        case 'monthlyContribution':
+          const monthlyInput = dialog.locator('#savings-monthly');
+          await monthlyInput.click();
+          for (let i = 0; i < 10; i++) {
+            await monthlyInput.press('Backspace');
+          }
+          for (const digit of value) {
+            await monthlyInput.press(digit);
+          }
+          break;
+        case 'color':
+          await dialog.locator(`text=${value}`).click();
+          break;
+        default:
+          console.log(`Unknown field: ${field}`);
+      }
     }
   }
-});
+);
 
 When('envía el formulario de creación de meta', async ({ page }) => {
   // Use form.requestSubmit() to properly trigger React's onSubmit handler
@@ -315,7 +324,9 @@ Then('debe ver la tarjeta {string} con desglose', async ({ page }, cardName: str
 });
 
 Then('debe ver la sección {string} en el desglose', async ({ page }, sectionName: string) => {
-  await expect(page.getByText(sectionName, { exact: false }).first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(sectionName, { exact: false }).first()).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 // ============================================================================
@@ -334,7 +345,9 @@ Then('debe ver la tarjeta de meta con nombre {string}', async ({ page }, goalNam
 });
 
 Then('la barra de progreso debe mostrar {string}', async ({ page }, progressText: string) => {
-  await expect(page.getByText(progressText, { exact: false }).first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(progressText, { exact: false }).first()).toBeVisible({
+    timeout: 5000,
+  });
 });
 
 // ============================================================================
@@ -362,14 +375,19 @@ Then('la barra de progreso de {string} debe actualizarse', async ({ page }, goal
 // THEN - Completion
 // ============================================================================
 
-Then('la tarjeta {string} debe mostrar insignia {string}', async ({ page }, goalName: string, badgeText: string) => {
-  const card = page.getByRole('article').filter({ hasText: goalName }).first();
-  await expect(card).toBeVisible({ timeout: 5000 });
-  await expect(card.getByText(badgeText, { exact: false }).first()).toBeVisible({ timeout: 5000 });
-  // Check progress bar shows 100%
-  const progressBar = card.locator('[role="progressbar"]').first();
-  await expect(progressBar).toHaveAttribute('aria-valuenow', '100');
-});
+Then(
+  'la tarjeta {string} debe mostrar insignia {string}',
+  async ({ page }, goalName: string, badgeText: string) => {
+    const card = page.getByRole('article').filter({ hasText: goalName }).first();
+    await expect(card).toBeVisible({ timeout: 5000 });
+    await expect(card.getByText(badgeText, { exact: false }).first()).toBeVisible({
+      timeout: 5000,
+    });
+    // Check progress bar shows 100%
+    const progressBar = card.locator('[role="progressbar"]').first();
+    await expect(progressBar).toHaveAttribute('aria-valuenow', '100');
+  }
+);
 
 // ============================================================================
 // THEN - Edit Goal
@@ -405,7 +423,7 @@ Then('el modal de eliminación debe cerrarse', async ({ page }) => {
 });
 
 Then('la tarjeta {string} debe desaparecer', async ({ page }, goalName: string) => {
-  await expect(
-    page.getByRole('article').filter({ hasText: goalName }).first()
-  ).not.toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('article').filter({ hasText: goalName }).first()).not.toBeVisible({
+    timeout: 10000,
+  });
 });

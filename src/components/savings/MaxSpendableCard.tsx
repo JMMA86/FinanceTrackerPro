@@ -63,7 +63,10 @@ export function MaxSpendableCard({
 
   const maxIncome = Math.max(
     data.totalIncomeCents,
-    data.totalFixedExpensesCents + data.totalSavingsCommitmentsCents + data.totalVariableExpensesCents + data.maxSpendableCents,
+    data.totalFixedExpensesCents +
+      data.totalSavingsCommitmentsCents +
+      data.totalVariableExpensesCents +
+      data.maxSpendableCents,
     1
   );
 
@@ -143,7 +146,9 @@ export function MaxSpendableCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ArrowRight className="w-4 h-4 text-emerald-400" aria-hidden="true" />
-            <span className="text-sm font-semibold text-white">{get(dictionary, 'maxSpendable')}</span>
+            <span className="text-sm font-semibold text-white">
+              {get(dictionary, 'maxSpendable')}
+            </span>
           </div>
           <span className="text-lg font-bold text-emerald-400 tabular-nums">
             {formatMoney(data.maxSpendableCents, 'COP', locale)}

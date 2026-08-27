@@ -156,15 +156,18 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
       addNotification('success', 'Deposit completed successfully');
       closeModal();
     } else {
-      const msg = result.code === 'SESSION_INVALID'
-        ? get(dictionary, 'errors.sessionInvalid')
-        : get(dictionary, 'errors.depositFailed');
+      const msg =
+        result.code === 'SESSION_INVALID'
+          ? get(dictionary, 'errors.sessionInvalid')
+          : get(dictionary, 'errors.depositFailed');
       setSubmitError(msg);
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
-  const selectCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const selectCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   return (
@@ -212,14 +215,19 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4" noValidate>
             {/* Error alert */}
             {submitError && (
-              <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+              <div
+                role="alert"
+                className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+              >
                 {submitError}
               </div>
             )}
 
             {/* Source bank account */}
             <div>
-              <label htmlFor="dep-from" className={labelCls}>{get(dictionary, 'fromAccount')}</label>
+              <label htmlFor="dep-from" className={labelCls}>
+                {get(dictionary, 'fromAccount')}
+              </label>
               {bankAccounts.length === 0 ? (
                 <p className="text-sm text-slate-500">No bank accounts available in COP.</p>
               ) : (
@@ -240,7 +248,9 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
 
             {/* Destination investment account */}
             <div>
-              <label htmlFor="dep-to" className={labelCls}>{get(dictionary, 'toAccount')}</label>
+              <label htmlFor="dep-to" className={labelCls}>
+                {get(dictionary, 'toAccount')}
+              </label>
               <select
                 id="dep-to"
                 value={selectedInvestmentAccount}
@@ -257,7 +267,9 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
 
             {/* Amount in COP */}
             <div>
-              <label htmlFor="dep-amount" className={labelCls}>{get(dictionary, 'amountCOP')}</label>
+              <label htmlFor="dep-amount" className={labelCls}>
+                {get(dictionary, 'amountCOP')}
+              </label>
               <FormattedNumericInput
                 id="dep-amount"
                 value={amountCents}
@@ -268,7 +280,9 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
 
             {/* Exchange rate */}
             <div>
-              <label htmlFor="dep-rate" className={labelCls}>{get(dictionary, 'exchangeRate')}</label>
+              <label htmlFor="dep-rate" className={labelCls}>
+                {get(dictionary, 'exchangeRate')}
+              </label>
               <input
                 id="dep-rate"
                 type="number"
@@ -279,13 +293,17 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
                 aria-describedby="dep-rate-hint"
                 className={`${inputCls} font-mono tabular-nums`}
               />
-              <p id="dep-rate-hint" className="mt-1 text-xs text-slate-500">{get(dictionary, 'exchangeRateHint')}</p>
+              <p id="dep-rate-hint" className="mt-1 text-xs text-slate-500">
+                {get(dictionary, 'exchangeRateHint')}
+              </p>
             </div>
 
             {/* Estimated receive */}
             {destAccount && estimatedReceiveCents > 0 && (
               <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3">
-                <p className="text-xs text-violet-300 mb-0.5">{get(dictionary, 'estimatedReceive')}</p>
+                <p className="text-xs text-violet-300 mb-0.5">
+                  {get(dictionary, 'estimatedReceive')}
+                </p>
                 <p className="text-lg font-bold text-white tabular-nums">
                   {formatMoney(estimatedReceiveCents, destAccount.currency, locale)}
                 </p>

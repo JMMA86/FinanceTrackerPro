@@ -204,7 +204,7 @@ export function assertConversionMatches(
   if (computed !== convertedCents) {
     throw new Error(
       `Conversion mismatch: ${originalCents} * ${exchangeRate} = ${computed}, ` +
-      `but got ${convertedCents}`
+        `but got ${convertedCents}`
     );
   }
 }

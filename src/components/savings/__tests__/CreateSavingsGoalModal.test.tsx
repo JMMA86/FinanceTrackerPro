@@ -42,19 +42,31 @@ vi.mock('@/lib/i18n', () => ({
 
 // Mock FormattedNumericInput
 vi.mock('@/components/ui/FormattedNumericInput', () => ({
-  FormattedNumericInput: vi.fn(({ id, value, onChange, 'aria-invalid': ariaInvalid, className }: {
-    id?: string; value: number; onChange: (v: number) => void; 'aria-invalid'?: boolean; className?: string;
-  }) => (
-    <input
-      id={id}
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      data-testid={`numeric-input-${id}`}
-      aria-invalid={ariaInvalid}
-      className={className}
-    />
-  )),
+  FormattedNumericInput: vi.fn(
+    ({
+      id,
+      value,
+      onChange,
+      'aria-invalid': ariaInvalid,
+      className,
+    }: {
+      id?: string;
+      value: number;
+      onChange: (v: number) => void;
+      'aria-invalid'?: boolean;
+      className?: string;
+    }) => (
+      <input
+        id={id}
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        data-testid={`numeric-input-${id}`}
+        aria-invalid={ariaInvalid}
+        className={className}
+      />
+    )
+  ),
 }));
 
 // Helper to check if we're in a jsdom environment without dialog support

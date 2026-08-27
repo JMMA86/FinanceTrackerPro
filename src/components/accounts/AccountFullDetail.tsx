@@ -3,7 +3,15 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Wallet, Activity, Plus,
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Wallet,
+  Activity,
+  Plus,
 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import { getAccountTransactions } from '@/actions/account-transactions.actions';
@@ -13,9 +21,13 @@ import { PRESETS, LIGHT_PRESET_KEYS, getPresetGradient } from './CardDesignPicke
 import { PocketDetailModal } from './PocketDetailModal';
 
 const TX_TYPE_LABELS: Record<string, string> = {
-  INCOME: 'Ingreso', EXPENSE: 'Gasto',
-  TRANSFER_OUT: 'Transferencia saliente', TRANSFER_IN: 'Transferencia entrante',
-  INVESTMENT: 'Inversión', LOAN_PAYMENT: 'Cuota préstamo', CREDIT_PAYMENT: 'Pago tarjeta',
+  INCOME: 'Ingreso',
+  EXPENSE: 'Gasto',
+  TRANSFER_OUT: 'Transferencia saliente',
+  TRANSFER_IN: 'Transferencia entrante',
+  INVESTMENT: 'Inversión',
+  LOAN_PAYMENT: 'Cuota préstamo',
+  CREDIT_PAYMENT: 'Pago tarjeta',
 };
 const TX_TYPES = Object.keys(TX_TYPE_LABELS);
 
@@ -42,20 +54,26 @@ function getTopBarBackground(account: AccountCardData, liveColor: string | null)
   const colorKey = liveColor ?? account.cardColor;
   if (colorKey) {
     const preset = PRESETS.find((p) => p.key === colorKey);
-    if (preset) return `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), linear-gradient(135deg, ${preset.from}, ${preset.to})`;
+    if (preset)
+      return `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), linear-gradient(135deg, ${preset.from}, ${preset.to})`;
   }
   const gradient = TYPE_GRADIENTS[account.type];
   if (gradient) return `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), ${gradient}`;
   return 'rgba(12, 30, 68, 0.85)';
 }
 
-function getCardBackgroundWithLive(account: AccountCardData, liveColor: string | null): React.CSSProperties {
+function getCardBackgroundWithLive(
+  account: AccountCardData,
+  liveColor: string | null
+): React.CSSProperties {
   const colorKey = liveColor ?? account.cardColor;
   if (colorKey) {
     const gradient = getPresetGradient(colorKey);
     if (gradient) return { background: gradient };
   }
-  return { background: TYPE_GRADIENTS[account.type] ?? 'linear-gradient(135deg, #475569, #1e293b)' };
+  return {
+    background: TYPE_GRADIENTS[account.type] ?? 'linear-gradient(135deg, #475569, #1e293b)',
+  };
 }
 
 // ── account is guaranteed non-null here ──
@@ -71,8 +89,12 @@ function getInitialClip(overlayEl: HTMLElement, cardRect: DOMRect): string {
 }
 
 interface Transaction {
-  id: string; description: string | null;
-  amountCents: number; currency: string; type: string; date: Date | string;
+  id: string;
+  description: string | null;
+  amountCents: number;
+  currency: string;
+  type: string;
+  date: Date | string;
 }
 
 interface AccountFullDetailProps {
@@ -115,13 +137,27 @@ interface TxTableBodyProps {
 
 function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyProps>) {
   if (isLoading) {
-    const skeletonRows = ['skeleton-row-0', 'skeleton-row-1', 'skeleton-row-2', 'skeleton-row-3', 'skeleton-row-4'];
-    const skeletonCells = ['skeleton-cell-date', 'skeleton-cell-desc', 'skeleton-cell-type', 'skeleton-cell-amount'];
+    const skeletonRows = [
+      'skeleton-row-0',
+      'skeleton-row-1',
+      'skeleton-row-2',
+      'skeleton-row-3',
+      'skeleton-row-4',
+    ];
+    const skeletonCells = [
+      'skeleton-cell-date',
+      'skeleton-cell-desc',
+      'skeleton-cell-type',
+      'skeleton-cell-amount',
+    ];
     return skeletonRows.map((rowKey) => (
       <tr key={rowKey} className="border-b border-white/6">
         {skeletonCells.map((cellKey, idx) => (
           <td key={cellKey} className={`px-4 py-3.5 ${getHeaderAlignClass(idx)}`}>
-            <div className="h-3 bg-white/6 rounded animate-pulse" style={{ width: [100, 300, 100, 80][idx] }} />
+            <div
+              className="h-3 bg-white/6 rounded animate-pulse"
+              style={{ width: [100, 300, 100, 80][idx] }}
+            />
           </td>
         ))}
       </tr>
@@ -134,8 +170,21 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
         <td colSpan={4}>
           <div className="flex flex-col items-center justify-center py-14 gap-3 text-white/20">
             <svg width="56" height="36" viewBox="0 0 56 36" fill="none">
-              <path d="M4 18 Q14 6 28 18 Q42 30 52 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M4 26 Q14 14 28 26 Q42 38 52 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.4" />
+              <path
+                d="M4 18 Q14 6 28 18 Q42 30 52 18"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                fill="none"
+              />
+              <path
+                d="M4 26 Q14 14 28 26 Q42 38 52 26"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                fill="none"
+                opacity="0.4"
+              />
             </svg>
             <p className="text-sm">Sin movimientos</p>
           </div>
@@ -148,15 +197,20 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
     const pos = tx.amountCents > 0;
     return (
       <tr key={tx.id} className="border-b border-white/6 hover:bg-white/[0.03] transition-colors">
-        <td className="px-4 py-3.5 text-xs text-white/40 whitespace-nowrap">{formatDateShort(tx.date)}</td>
+        <td className="px-4 py-3.5 text-xs text-white/40 whitespace-nowrap">
+          {formatDateShort(tx.date)}
+        </td>
         <td className="px-4 py-3.5 text-sm text-white max-w-0">
           <span className="block truncate">{tx.description ?? '—'}</span>
         </td>
         <td className="px-4 py-3.5 hidden lg:table-cell">
           <span className="text-xs text-white/40">{TX_TYPE_LABELS[tx.type] ?? tx.type}</span>
         </td>
-        <td className={`px-4 py-3.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap ${pos ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {pos ? '+' : ''}{formatMoney(tx.amountCents, tx.currency, locale)}
+        <td
+          className={`px-4 py-3.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap ${pos ? 'text-emerald-400' : 'text-rose-400'}`}
+        >
+          {pos ? '+' : ''}
+          {formatMoney(tx.amountCents, tx.currency, locale)}
         </td>
       </tr>
     );
@@ -164,10 +218,18 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
 }
 
 function formatDate(d: Date | string) {
-  return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(d).toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 function formatDateShort(d: Date | string) {
-  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(d).toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function handlePocketCollapsePhase(
@@ -176,7 +238,7 @@ function handlePocketCollapsePhase(
   isLastPocket: boolean,
   COLLAPSE_MS: number,
   EASE_INOUT: string,
-  router: ReturnType<typeof useRouter>,
+  router: ReturnType<typeof useRouter>
 ) {
   cardEl.style.overflow = 'hidden';
   cardEl.style.flexShrink = '0';
@@ -189,19 +251,28 @@ function handlePocketCollapsePhase(
   cardEl.style.paddingLeft = '0';
   cardEl.style.paddingRight = '0';
 
-  setTimeout(() => handleListCollapsePhase(isLastPocket, COLLAPSE_MS, EASE_INOUT, router), COLLAPSE_MS + 20);
+  setTimeout(
+    () => handleListCollapsePhase(isLastPocket, COLLAPSE_MS, EASE_INOUT, router),
+    COLLAPSE_MS + 20
+  );
 }
 
 function handleListCollapsePhase(
   isLastPocket: boolean,
   COLLAPSE_MS: number,
   EASE_INOUT: string,
-  router: ReturnType<typeof useRouter>,
+  router: ReturnType<typeof useRouter>
 ) {
-  if (!isLastPocket) { router.refresh(); return; }
+  if (!isLastPocket) {
+    router.refresh();
+    return;
+  }
 
   const listEl = document.querySelector<HTMLElement>('[data-pockets-list]');
-  if (!listEl) { router.refresh(); return; }
+  if (!listEl) {
+    router.refresh();
+    return;
+  }
 
   const listHeight = listEl.offsetHeight;
   listEl.style.overflow = 'hidden';
@@ -209,12 +280,23 @@ function handleListCollapsePhase(
   forceReflow(listEl);
   listEl.style.transition = `height 300ms ${EASE_INOUT}`;
   listEl.style.height = '0';
-  setTimeout(() => { router.refresh(); }, 320);
+  setTimeout(() => {
+    router.refresh();
+  }, 320);
 }
 
 export function AccountFullDetail({
-  account, pockets, cardRect, isOpen, locale = 'es-CO',
-  onClose, onEdit, onDelete, onCreatePocket, onEditPocket, onDeletePocket,
+  account,
+  pockets,
+  cardRect,
+  isOpen,
+  locale = 'es-CO',
+  onClose,
+  onEdit,
+  onDelete,
+  onCreatePocket,
+  onEditPocket,
+  onDeletePocket,
 }: Readonly<AccountFullDetailProps>) {
   const router = useRouter();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -225,10 +307,14 @@ export function AccountFullDetail({
   const accountRef = useRef(account);
   // Sync refs with the latest prop values using useLayoutEffect (runs before paint, in definition order)
   // Defined BEFORE the Step 1 useLayoutEffect so they are always updated first
-   
-  useLayoutEffect(() => { cardRectRef.current = cardRect; });
-   
-  useLayoutEffect(() => { accountRef.current = account; });
+
+  useLayoutEffect(() => {
+    cardRectRef.current = cardRect;
+  });
+
+  useLayoutEffect(() => {
+    accountRef.current = account;
+  });
   const [contentVisible, setContentVisible] = useState(false);
   const [selectedPocket, setSelectedPocket] = useState<AccountCardData | null>(null);
   // Live color: updated in real-time when user edits via EditAccountModal
@@ -326,7 +412,9 @@ export function AccountFullDetail({
 
   useEffect(() => {
     if (!isOpen) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
   }, [isOpen, handleClose]);
@@ -347,7 +435,10 @@ export function AccountFullDetail({
     const onPocketDeleted = (e: Event) => {
       const pocketId = (e as CustomEvent<{ pocketId: string }>).detail?.pocketId;
       const cardEl = document.querySelector<HTMLElement>(`[data-pocket-id="${pocketId}"]`);
-      if (!cardEl) { router.refresh(); return; }
+      if (!cardEl) {
+        router.refresh();
+        return;
+      }
 
       const isLastPocket = document.querySelectorAll('[data-pocket-id]').length === 1;
 
@@ -362,7 +453,18 @@ export function AccountFullDetail({
       cardEl.style.opacity = '0';
       cardEl.style.transform = 'scale(0.88) translateY(-8px)';
 
-      setTimeout(() => handlePocketCollapsePhase(cardEl, pocketWidth, isLastPocket, COLLAPSE_MS, EASE_INOUT, router), FADE_MS + 20);
+      setTimeout(
+        () =>
+          handlePocketCollapsePhase(
+            cardEl,
+            pocketWidth,
+            isLastPocket,
+            COLLAPSE_MS,
+            EASE_INOUT,
+            router
+          ),
+        FADE_MS + 20
+      );
     };
     document.addEventListener('finance:pocket-deleted', onPocketDeleted);
     return () => document.removeEventListener('finance:pocket-deleted', onPocketDeleted);
@@ -383,7 +485,8 @@ export function AccountFullDetail({
     if (!accountId) return;
     setIsLoading(true);
     const res = await getAccountTransactions({
-      accountId, page,
+      accountId,
+      page,
       search: search || undefined,
       typeFilter: typeFilter || undefined,
     });
@@ -417,16 +520,20 @@ export function AccountFullDetail({
   if (!isOpen || !account || !cardRect) return null;
 
   const safeAcc = safeAccount(account);
-  const light = (liveCardColor ?? safeAcc.cardColor) != null && LIGHT_PRESET_KEYS.has(liveCardColor ?? safeAcc.cardColor ?? '');
+  const light =
+    (liveCardColor ?? safeAcc.cardColor) != null &&
+    LIGHT_PRESET_KEYS.has(liveCardColor ?? safeAcc.cardColor ?? '');
   const network = (safeAcc.cardNetwork ?? 'NONE') as CardNetwork;
   const rateNumber = safeAcc.interestRateEA == null ? 0 : Number(safeAcc.interestRateEA);
-  const projected = rateNumber > 0
-    ? formatMoney(Math.floor(safeAcc.balanceCents * rateNumber / 100), safeAcc.currency, locale)
-    : '—';
+  const projected =
+    rateNumber > 0
+      ? formatMoney(Math.floor((safeAcc.balanceCents * rateNumber) / 100), safeAcc.currency, locale)
+      : '—';
   const cardBg = getCardBackgroundWithLive(safeAcc, liveCardColor);
   const accentColor = getAccentColor(safeAcc, liveCardColor);
 
-  const inputCls = 'bg-white/8 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all';
+  const inputCls =
+    'bg-white/8 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all';
 
   return (
     // Overlay starts at the sidebar's right edge — never covers the sidebar.
@@ -447,8 +554,13 @@ export function AccountFullDetail({
         className="relative z-10 h-full overflow-y-auto transition-opacity duration-200 pb-20 md:pb-0"
         style={{ opacity: contentVisible ? 1 : 0 }}
       >
-        <div className="sticky top-0 z-20 flex items-center gap-3 px-4 sm:px-6 h-14 border-b"
-          style={{ background: getTopBarBackground(safeAcc, liveCardColor), borderColor: 'rgba(255, 255, 255, 0.10)' }}>
+        <div
+          className="sticky top-0 z-20 flex items-center gap-3 px-4 sm:px-6 h-14 border-b"
+          style={{
+            background: getTopBarBackground(safeAcc, liveCardColor),
+            borderColor: 'rgba(255, 255, 255, 0.10)',
+          }}
+        >
           <button
             type="button"
             onClick={handleClose}
@@ -466,12 +578,20 @@ export function AccountFullDetail({
           </div>
 
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => onEdit(safeAcc.id)} aria-label="Editar"
-              className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+            <button
+              type="button"
+              onClick={() => onEdit(safeAcc.id)}
+              aria-label="Editar"
+              className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            >
               <Pencil className="w-4 h-4" />
             </button>
-            <button type="button" onClick={() => onDelete(safeAcc.id, safeAcc.name)} aria-label="Eliminar"
-              className="p-2 rounded-lg text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
+            <button
+              type="button"
+              onClick={() => onDelete(safeAcc.id, safeAcc.name)}
+              aria-label="Eliminar"
+              className="p-2 rounded-lg text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -480,11 +600,17 @@ export function AccountFullDetail({
         <div className="px-4 sm:px-8 lg:px-12 pt-8 pb-6">
           <div className="flex flex-col sm:flex-row items-start gap-6 sm:gap-10 lg:gap-12 xl:gap-16">
             <div className="hidden sm:block flex-shrink-0 w-40 sm:w-44 lg:w-48">
-              <div className="w-full rounded-2xl shadow-2xl overflow-hidden relative"
-                style={{ aspectRatio: '1.586', ...cardBg }}>
+              <div
+                className="w-full rounded-2xl shadow-2xl overflow-hidden relative"
+                style={{ aspectRatio: '1.586', ...cardBg }}
+              >
                 <div
                   className={`relative z-10 flex flex-col justify-between p-4 h-full ${light ? 'text-slate-800' : 'text-white'}`}
-                  style={{ textShadow: light ? '0 1px 2px rgba(255,255,255,0.5)' : '0 1px 3px rgba(0,0,0,0.5)' }}
+                  style={{
+                    textShadow: light
+                      ? '0 1px 2px rgba(255,255,255,0.5)'
+                      : '0 1px 3px rgba(0,0,0,0.5)',
+                  }}
                 >
                   <svg width="30" height="21" viewBox="0 0 40 28" fill="none" aria-hidden="true">
                     <rect width="40" height="28" rx="4" fill="#D4AF37" opacity="0.9" />
@@ -496,7 +622,9 @@ export function AccountFullDetail({
                       <p className="text-[10px] opacity-70 truncate">{safeAcc.name}</p>
                       <p className="text-sm font-bold">{safeAcc.currency}</p>
                     </div>
-                    {network !== 'NONE' && <NetworkLogo network={network} size="sm" onLight={light} />}
+                    {network !== 'NONE' && (
+                      <NetworkLogo network={network} size="sm" onLight={light} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -506,16 +634,23 @@ export function AccountFullDetail({
               <p className="text-[11px] uppercase tracking-widest text-white/40 mb-1">
                 {TYPE_LABELS[safeAcc.type] ?? safeAcc.type}
               </p>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6 leading-tight">{safeAcc.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6 leading-tight">
+                {safeAcc.name}
+              </h1>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                 {[
-                  { label: 'Saldo actual', value: formatMoney(safeAcc.balanceCents, safeAcc.currency, locale) },
+                  {
+                    label: 'Saldo actual',
+                    value: formatMoney(safeAcc.balanceCents, safeAcc.currency, locale),
+                  },
                   { label: 'Tasa EA', value: rateNumber > 0 ? `${rateNumber.toFixed(2)}%` : '—' },
                   { label: 'Interés anual', value: projected },
                   { label: 'Cuenta desde', value: formatDate(safeAcc.createdAt) },
                 ].map(({ label, value }) => (
                   <div key={label}>
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">{label}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
+                      {label}
+                    </p>
                     <p className="text-lg font-bold text-white leading-tight">{value}</p>
                   </div>
                 ))}
@@ -530,22 +665,31 @@ export function AccountFullDetail({
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4" style={{ color: accentColor }} />
                 <h2 className="text-sm font-semibold text-white">Bolsillos</h2>
-                <span className="text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full">{pockets.length}</span>
+                <span className="text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full">
+                  {pockets.length}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => onCreatePocket(safeAcc.id)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                 style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${accentColor}40`; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${accentColor}26`; }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${accentColor}40`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${accentColor}26`;
+                }}
               >
                 <Plus className="w-3.5 h-3.5" />
                 Agregar
               </button>
             </div>
             {pockets.length > 0 ? (
-              <div data-pockets-list className="flex gap-3 overflow-x-auto pb-1 -mx-4 sm:mx-0 px-4 sm:px-0">
+              <div
+                data-pockets-list
+                className="flex gap-3 overflow-x-auto pb-1 -mx-4 sm:mx-0 px-4 sm:px-0"
+              >
                 {pockets.map((p) => (
                   <button
                     key={p.id}
@@ -556,12 +700,16 @@ export function AccountFullDetail({
                     style={{ width: 160, height: 80, background: TYPE_GRADIENTS.POCKET + 'cc' }}
                   >
                     <p className="text-xs font-semibold text-white/80 truncate pr-4">{p.name}</p>
-                    <p className="text-sm font-bold text-white">{formatMoney(p.balanceCents, p.currency, locale)}</p>
+                    <p className="text-sm font-bold text-white">
+                      {formatMoney(p.balanceCents, p.currency, locale)}
+                    </p>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-white/30 py-1">Sin bolsillos. Crea uno para separar tu dinero.</p>
+              <p className="text-xs text-white/30 py-1">
+                Sin bolsillos. Crea uno para separar tu dinero.
+              </p>
             )}
           </section>
 
@@ -574,17 +722,32 @@ export function AccountFullDetail({
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                <input type="text" value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Buscar movimiento..."
-                  className={`${inputCls} w-full pl-9 pr-4 py-2.5 text-sm`} />
+                  className={`${inputCls} w-full pl-9 pr-4 py-2.5 text-sm`}
+                />
               </div>
-              <select value={typeFilter}
-                onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-                className={`${inputCls} px-3 py-2.5 text-sm appearance-none min-w-[160px]`}>
-                <option value="" className="bg-slate-900">Todos los tipos</option>
+              <select
+                value={typeFilter}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className={`${inputCls} px-3 py-2.5 text-sm appearance-none min-w-[160px]`}
+              >
+                <option value="" className="bg-slate-900">
+                  Todos los tipos
+                </option>
                 {TX_TYPES.map((t) => (
-                  <option key={t} value={t} className="bg-slate-900">{TX_TYPE_LABELS[t]}</option>
+                  <option key={t} value={t} className="bg-slate-900">
+                    {TX_TYPE_LABELS[t]}
+                  </option>
                 ))}
               </select>
             </div>
@@ -592,7 +755,7 @@ export function AccountFullDetail({
             {!isLoading && (
               <p className="text-[11px] text-white/30">
                 {total} {total === 1 ? 'movimiento' : 'movimientos'}
-                {(search || typeFilter) ? ' encontrados' : ''}
+                {search || typeFilter ? ' encontrados' : ''}
               </p>
             )}
 
@@ -602,16 +765,22 @@ export function AccountFullDetail({
                   <thead>
                     <tr className="border-b border-white/8">
                       {['Fecha', 'Descripción', 'Tipo', 'Monto'].map((h, i) => (
-                        <th key={h}
+                        <th
+                          key={h}
                           className={`text-left text-[10px] uppercase tracking-widest text-white/40 font-semibold px-4 py-3.5 ${getHeaderAlignClass(i)}`}
-                          style={{ minWidth: getHeaderMinWidth(i) }}>
+                          style={{ minWidth: getHeaderMinWidth(i) }}
+                        >
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    <TxTableBody isLoading={isLoading} transactions={transactions} locale={locale} />
+                    <TxTableBody
+                      isLoading={isLoading}
+                      transactions={transactions}
+                      locale={locale}
+                    />
                   </tbody>
                 </table>
               </div>
@@ -619,16 +788,26 @@ export function AccountFullDetail({
 
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-3 pt-1">
-                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))}
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1 || isLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                  <ChevronLeft className="w-3.5 h-3.5" />Anterior
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Anterior
                 </button>
-                <span className="text-xs text-white/40 min-w-[80px] text-center">{page} / {totalPages}</span>
-                <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                <span className="text-xs text-white/40 min-w-[80px] text-center">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages || isLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                  Siguiente<ChevronRight className="w-3.5 h-3.5" />
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}

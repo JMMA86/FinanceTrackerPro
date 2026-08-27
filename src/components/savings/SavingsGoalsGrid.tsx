@@ -23,10 +23,7 @@ interface SavingsGoalsGridProps {
   locale: string;
 }
 
-export function SavingsGoalsGrid({
-  dictionary,
-  locale,
-}: Readonly<SavingsGoalsGridProps>) {
+export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGridProps>) {
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,11 +68,14 @@ export function SavingsGoalsGrid({
     setEditingGoal(goal);
   }, []);
 
-  const handleDelete = useCallback((goalId: string, goalName: string, hasContributions: boolean) => {
-    setDeletingGoalId(goalId);
-    setDeletingGoalName(goalName);
-    setDeletingHasContributions(hasContributions);
-  }, []);
+  const handleDelete = useCallback(
+    (goalId: string, goalName: string, hasContributions: boolean) => {
+      setDeletingGoalId(goalId);
+      setDeletingGoalName(goalName);
+      setDeletingHasContributions(hasContributions);
+    },
+    []
+  );
 
   const handleModalClose = useCallback(() => {
     loadGoals();
@@ -138,7 +138,10 @@ export function SavingsGoalsGrid({
           dictionary={dictionary}
           locale={locale}
           isOpen={showCreate}
-          onClose={() => { setShowCreate(false); handleModalClose(); }}
+          onClose={() => {
+            setShowCreate(false);
+            handleModalClose();
+          }}
         />
       </div>
     );
@@ -181,7 +184,10 @@ export function SavingsGoalsGrid({
         dictionary={dictionary}
         locale={locale}
         isOpen={showCreate}
-        onClose={() => { setShowCreate(false); handleModalClose(); }}
+        onClose={() => {
+          setShowCreate(false);
+          handleModalClose();
+        }}
       />
 
       {editingGoal && (
@@ -190,7 +196,10 @@ export function SavingsGoalsGrid({
           dictionary={dictionary}
           locale={locale}
           isOpen={!!editingGoal}
-          onClose={() => { setEditingGoal(null); handleModalClose(); }}
+          onClose={() => {
+            setEditingGoal(null);
+            handleModalClose();
+          }}
         />
       )}
 
@@ -200,7 +209,10 @@ export function SavingsGoalsGrid({
           dictionary={dictionary}
           locale={locale}
           isOpen={!!contributingGoalId}
-          onClose={() => { setContributingGoalId(null); handleModalClose(); }}
+          onClose={() => {
+            setContributingGoalId(null);
+            handleModalClose();
+          }}
         />
       )}
 
@@ -211,7 +223,10 @@ export function SavingsGoalsGrid({
           hasContributions={deletingHasContributions}
           dictionary={dictionary}
           isOpen={!!deletingGoalId}
-          onClose={() => { setDeletingGoalId(null); handleModalClose(); }}
+          onClose={() => {
+            setDeletingGoalId(null);
+            handleModalClose();
+          }}
         />
       )}
     </>

@@ -112,9 +112,10 @@ export function CreateSavingsGoalModal({
       if (result.success) {
         onClose();
       } else {
-        const msg = result.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : (result.error ?? get(dictionary, 'errors.createFailed'));
+        const msg =
+          result.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : (result.error ?? get(dictionary, 'errors.createFailed'));
         setSubmitError(msg);
       }
     } catch {
@@ -122,8 +123,10 @@ export function CreateSavingsGoalModal({
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
-  const selectCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const selectCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
   const errorCls = 'mt-1 text-xs text-red-400';
 
@@ -169,14 +172,19 @@ export function CreateSavingsGoalModal({
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4" noValidate>
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
 
           {/* Goal name */}
           <div>
-            <label htmlFor="savings-name" className={labelCls}>{get(dictionary, 'goalName')}</label>
+            <label htmlFor="savings-name" className={labelCls}>
+              {get(dictionary, 'goalName')}
+            </label>
             <input
               id="savings-name"
               type="text"
@@ -188,13 +196,17 @@ export function CreateSavingsGoalModal({
               {...register('name')}
             />
             {errors.name && (
-              <p id="savings-name-error" role="alert" className={errorCls}>{errors.name.message}</p>
+              <p id="savings-name-error" role="alert" className={errorCls}>
+                {errors.name.message}
+              </p>
             )}
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="savings-desc" className={labelCls}>{get(dictionary, 'goalDescription')}</label>
+            <label htmlFor="savings-desc" className={labelCls}>
+              {get(dictionary, 'goalDescription')}
+            </label>
             <textarea
               id="savings-desc"
               rows={2}
@@ -206,7 +218,9 @@ export function CreateSavingsGoalModal({
 
           {/* Goal type */}
           <div>
-            <label htmlFor="savings-type" className={labelCls}>{get(dictionary, 'goalType')}</label>
+            <label htmlFor="savings-type" className={labelCls}>
+              {get(dictionary, 'goalType')}
+            </label>
             <select id="savings-type" className={selectCls} {...register('type')}>
               {GOAL_TYPES.map((t) => (
                 <option key={t} value={t} className="bg-slate-800">
@@ -218,26 +232,37 @@ export function CreateSavingsGoalModal({
 
           {/* Target amount */}
           <div>
-            <label htmlFor="savings-target" className={labelCls}>{get(dictionary, 'targetAmount')}</label>
+            <label htmlFor="savings-target" className={labelCls}>
+              {get(dictionary, 'targetAmount')}
+            </label>
             <FormattedNumericInput
               id="savings-target"
               value={targetCents}
-              onChange={(v) => { setTargetCents(v); setValue('targetAmountCents', v); }}
+              onChange={(v) => {
+                setTargetCents(v);
+                setValue('targetAmountCents', v);
+              }}
               aria-invalid={!!errors.targetAmountCents}
               aria-describedby={errors.targetAmountCents ? 'savings-target-error' : undefined}
               className={`${inputCls} font-mono tabular-nums`}
             />
             {errors.targetAmountCents && (
-              <p id="savings-target-error" role="alert" className={errorCls}>{errors.targetAmountCents.message}</p>
+              <p id="savings-target-error" role="alert" className={errorCls}>
+                {errors.targetAmountCents.message}
+              </p>
             )}
           </div>
 
           {/* Currency */}
           <div>
-            <label htmlFor="savings-currency" className={labelCls}>{get(dictionary, 'currency')}</label>
+            <label htmlFor="savings-currency" className={labelCls}>
+              {get(dictionary, 'currency')}
+            </label>
             <select id="savings-currency" className={selectCls} {...register('currency')}>
               {CURRENCIES.map((c) => (
-                <option key={c} value={c} className="bg-slate-800">{c}</option>
+                <option key={c} value={c} className="bg-slate-800">
+                  {c}
+                </option>
               ))}
             </select>
           </div>
@@ -247,24 +272,33 @@ export function CreateSavingsGoalModal({
             <label htmlFor="savings-monthly" className={labelCls}>
               {get(dictionary, 'monthlyContribution')}
             </label>
-            <p className="text-[10px] text-slate-500 mb-1.5">{get(dictionary, 'monthlyContributionHint')}</p>
+            <p className="text-[10px] text-slate-500 mb-1.5">
+              {get(dictionary, 'monthlyContributionHint')}
+            </p>
             <FormattedNumericInput
               id="savings-monthly"
               value={monthlyCents}
-              onChange={(v) => { setMonthlyCents(v); setValue('monthlyContributionCents', v || undefined); }}
+              onChange={(v) => {
+                setMonthlyCents(v);
+                setValue('monthlyContributionCents', v || undefined);
+              }}
               className={`${inputCls} font-mono tabular-nums`}
             />
           </div>
 
           {/* Deadline */}
           <div>
-            <label htmlFor="savings-deadline" className={labelCls}>{get(dictionary, 'deadline')}</label>
+            <label htmlFor="savings-deadline" className={labelCls}>
+              {get(dictionary, 'deadline')}
+            </label>
             <p className="text-[10px] text-slate-500 mb-1.5">{get(dictionary, 'deadlineHint')}</p>
             <input
               id="savings-deadline"
               type="date"
               className={inputCls}
-              {...register('deadline', { setValueAs: (v: string) => v ? new Date(v) : undefined })}
+              {...register('deadline', {
+                setValueAs: (v: string) => (v ? new Date(v) : undefined),
+              })}
             />
           </div>
 
@@ -277,7 +311,10 @@ export function CreateSavingsGoalModal({
                   key={preset}
                   type="button"
                   aria-label={preset}
-                  onClick={() => { setSelectedColor(preset); setValue('color', preset); }}
+                  onClick={() => {
+                    setSelectedColor(preset);
+                    setValue('color', preset);
+                  }}
                   className={`w-7 h-7 rounded-full bg-gradient-to-r ${preset} transition-all ${
                     selectedColor === preset
                       ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'

@@ -7,13 +7,16 @@ import { getPresetGradient, LIGHT_PRESET_KEYS } from './CardDesignPicker';
 
 export const TYPE_GRADIENTS: Record<string, string> = {
   CHECKING: 'linear-gradient(135deg, #1d4ed8, #1e3a8a)',
-  CASH:     'linear-gradient(135deg, #059669, #065f46)',
-  SAVINGS:  'linear-gradient(135deg, #7c3aed, #4c1d95)',
-  POCKET:   'linear-gradient(135deg, #d97706, #92400e)',
+  CASH: 'linear-gradient(135deg, #059669, #065f46)',
+  SAVINGS: 'linear-gradient(135deg, #7c3aed, #4c1d95)',
+  POCKET: 'linear-gradient(135deg, #d97706, #92400e)',
 };
 
 export const TYPE_LABELS: Record<string, string> = {
-  CHECKING: 'Corriente', CASH: 'Efectivo', SAVINGS: 'Ahorros', POCKET: 'Bolsillo',
+  CHECKING: 'Corriente',
+  CASH: 'Efectivo',
+  SAVINGS: 'Ahorros',
+  POCKET: 'Bolsillo',
 };
 
 export type CardNetwork = 'NONE' | 'VISA' | 'MASTERCARD' | 'AMEX';
@@ -21,8 +24,18 @@ export type CardNetwork = 'NONE' | 'VISA' | 'MASTERCARD' | 'AMEX';
 function VisaLogo({ className, onLight }: Readonly<{ className: string; onLight?: boolean }>) {
   return (
     <svg viewBox="0 0 60 22" className={className} aria-label="Visa">
-      <text x="0" y="18" fontFamily="Arial, sans-serif" fontSize="22" fontWeight="900"
-        fontStyle="italic" fill={onLight ? '#1e293b' : 'white'} letterSpacing="-1">VISA</text>
+      <text
+        x="0"
+        y="18"
+        fontFamily="Arial, sans-serif"
+        fontSize="22"
+        fontWeight="900"
+        fontStyle="italic"
+        fill={onLight ? '#1e293b' : 'white'}
+        letterSpacing="-1"
+      >
+        VISA
+      </text>
     </svg>
   );
 }
@@ -30,8 +43,8 @@ function VisaLogo({ className, onLight }: Readonly<{ className: string; onLight?
 function MastercardLogo({ className }: Readonly<{ className: string }>) {
   return (
     <svg viewBox="0 0 46 30" className={className} aria-label="Mastercard">
-      <circle cx="15" cy="15" r="15" fill="#EB001B"/>
-      <circle cx="31" cy="15" r="15" fill="#F79E1B" opacity="0.9"/>
+      <circle cx="15" cy="15" r="15" fill="#EB001B" />
+      <circle cx="31" cy="15" r="15" fill="#F79E1B" opacity="0.9" />
     </svg>
   );
 }
@@ -40,9 +53,18 @@ function AmexLogo({ className, onLight }: Readonly<{ className: string; onLight?
   const ink = onLight ? '#1e293b' : 'white';
   return (
     <svg viewBox="0 0 52 22" className={className} aria-label="American Express">
-      <rect width="52" height="22" rx="3" fill={ink} opacity={onLight ? 0.12 : 0.25}/>
-      <text x="4" y="16" fontFamily="Arial, sans-serif" fontSize="13" fontWeight="800"
-        fill={ink} letterSpacing="1.5">AMEX</text>
+      <rect width="52" height="22" rx="3" fill={ink} opacity={onLight ? 0.12 : 0.25} />
+      <text
+        x="4"
+        y="16"
+        fontFamily="Arial, sans-serif"
+        fontSize="13"
+        fontWeight="800"
+        fill={ink}
+        letterSpacing="1.5"
+      >
+        AMEX
+      </text>
     </svg>
   );
 }
@@ -51,9 +73,13 @@ export function isLightCard(account: AccountCardData): boolean {
   return account.cardColor != null && LIGHT_PRESET_KEYS.has(account.cardColor);
 }
 
-export function NetworkLogo({ network, size = 'md', onLight }: Readonly<{ network: CardNetwork; size?: 'sm' | 'md'; onLight?: boolean }>) {
+export function NetworkLogo({
+  network,
+  size = 'md',
+  onLight,
+}: Readonly<{ network: CardNetwork; size?: 'sm' | 'md'; onLight?: boolean }>) {
   const visa = size === 'sm' ? 'h-5 w-auto' : 'h-8 w-auto';
-  const mc   = size === 'sm' ? 'h-6 w-auto' : 'h-9 w-auto';
+  const mc = size === 'sm' ? 'h-6 w-auto' : 'h-9 w-auto';
   const amex = size === 'sm' ? 'h-5 w-auto' : 'h-8 w-auto';
   if (network === 'VISA') return <VisaLogo className={visa} onLight={onLight} />;
   if (network === 'MASTERCARD') return <MastercardLogo className={mc} />;
@@ -101,7 +127,12 @@ export function getCardBackground(account: AccountCardData): React.CSSProperties
 }
 
 export function AccountCard({
-  account, parentName, isAnySelected = false, dictionary, locale = 'es-CO', onSelect,
+  account,
+  parentName,
+  isAnySelected = false,
+  dictionary,
+  locale = 'es-CO',
+  onSelect,
 }: Readonly<AccountCardProps>) {
   const cardRef = useRef<HTMLDivElement>(null);
   const rateNumber = account.interestRateEA == null ? null : Number(account.interestRateEA);
@@ -144,7 +175,8 @@ export function AccountCard({
           <div
             className="absolute inset-0 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
             style={{
-              background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)',
+              background:
+                'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)',
             }}
             aria-hidden="true"
           />
@@ -156,14 +188,16 @@ export function AccountCard({
             <div className="flex items-start justify-between">
               {/* Chip with shimmer highlight */}
               <svg width="40" height="28" viewBox="0 0 40 28" fill="none" aria-hidden="true">
-                <rect width="40" height="28" rx="4" fill="#c9a84c" opacity="0.85"/>
-                <rect x="0" y="10" width="40" height="8" fill="#8a6b1e" opacity="0.55"/>
-                <rect x="13" y="0" width="14" height="28" fill="#8a6b1e" opacity="0.35"/>
-                <rect x="13" y="10" width="14" height="8" rx="1" fill="#8a6b1e" opacity="0.5"/>
+                <rect width="40" height="28" rx="4" fill="#c9a84c" opacity="0.85" />
+                <rect x="0" y="10" width="40" height="8" fill="#8a6b1e" opacity="0.55" />
+                <rect x="13" y="0" width="14" height="28" fill="#8a6b1e" opacity="0.35" />
+                <rect x="13" y="10" width="14" height="8" rx="1" fill="#8a6b1e" opacity="0.5" />
                 {/* Highlight sheen */}
-                <rect x="2" y="2" width="36" height="5" rx="2" fill="white" opacity="0.15"/>
+                <rect x="2" y="2" width="36" height="5" rx="2" fill="white" opacity="0.15" />
               </svg>
-              <span className={`text-[10px] font-semibold uppercase tracking-wider ${badgeBg} px-2 py-0.5 rounded-md`}>
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider ${badgeBg} px-2 py-0.5 rounded-md`}
+              >
                 {TYPE_LABELS[account.type] ?? account.type}
               </span>
             </div>

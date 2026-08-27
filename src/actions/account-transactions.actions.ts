@@ -11,8 +11,13 @@ import { CUID } from './account.schema';
 const PAGE_SIZE = 10;
 
 const TX_TYPE = z.enum([
-  'INCOME', 'EXPENSE', 'TRANSFER_OUT', 'TRANSFER_IN',
-  'INVESTMENT', 'LOAN_PAYMENT', 'CREDIT_PAYMENT',
+  'INCOME',
+  'EXPENSE',
+  'TRANSFER_OUT',
+  'TRANSFER_IN',
+  'INVESTMENT',
+  'LOAN_PAYMENT',
+  'CREDIT_PAYMENT',
 ]);
 
 const GetTransactionsSchema = z.object({

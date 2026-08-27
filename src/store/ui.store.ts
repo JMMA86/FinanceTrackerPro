@@ -14,7 +14,7 @@ import { create } from 'zustand';
 
 type Theme = 'light' | 'dark' | 'system';
 
-type ModalId = 
+type ModalId =
   | 'create-account'
   | 'create-transaction'
   | 'create-transfer'

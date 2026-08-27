@@ -93,15 +93,18 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
       addNotification('success', 'Investment account created');
       closeModal();
     } else {
-      const msg = result.code === 'SESSION_INVALID'
-        ? get(dictionary, 'errors.sessionInvalid')
-        : get(dictionary, 'errors.createFailed');
+      const msg =
+        result.code === 'SESSION_INVALID'
+          ? get(dictionary, 'errors.sessionInvalid')
+          : get(dictionary, 'errors.createFailed');
       setSubmitError(msg);
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
-  const selectCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const selectCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all appearance-none';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   return (
@@ -148,14 +151,19 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
 
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
 
           {/* Account name */}
           <div>
-            <label htmlFor="inv-name" className={labelCls}>{get(dictionary, 'accountName')}</label>
+            <label htmlFor="inv-name" className={labelCls}>
+              {get(dictionary, 'accountName')}
+            </label>
             <input
               id="inv-name"
               type="text"
@@ -165,31 +173,46 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
               className={inputCls}
               {...register('name')}
             />
-            {errors.name && <p role="alert" className="mt-1 text-xs text-red-400">{errors.name.message}</p>}
+            {errors.name && (
+              <p role="alert" className="mt-1 text-xs text-red-400">
+                {errors.name.message}
+              </p>
+            )}
           </div>
 
           {/* Currency */}
           <div>
-            <label htmlFor="inv-currency" className={labelCls}>{get(dictionary, 'currency')}</label>
+            <label htmlFor="inv-currency" className={labelCls}>
+              {get(dictionary, 'currency')}
+            </label>
             <select id="inv-currency" className={selectCls} {...register('currency')}>
               {CURRENCIES.map((c) => (
-                <option key={c} value={c} className="bg-slate-800">{c}</option>
+                <option key={c} value={c} className="bg-slate-800">
+                  {c}
+                </option>
               ))}
             </select>
           </div>
 
           {/* Initial balance */}
           <div>
-            <label htmlFor="inv-balance" className={labelCls}>{get(dictionary, 'initialBalance')}</label>
+            <label htmlFor="inv-balance" className={labelCls}>
+              {get(dictionary, 'initialBalance')}
+            </label>
             <FormattedNumericInput
               id="inv-balance"
               value={balanceCents}
-              onChange={(v) => { setBalanceCents(v); setValue('initialBalanceCents', v); }}
+              onChange={(v) => {
+                setBalanceCents(v);
+                setValue('initialBalanceCents', v);
+              }}
               aria-invalid={!!errors.initialBalanceCents}
               className={`${inputCls} font-mono tabular-nums`}
             />
             {errors.initialBalanceCents && (
-              <p role="alert" className="mt-1 text-xs text-red-400">{errors.initialBalanceCents.message}</p>
+              <p role="alert" className="mt-1 text-xs text-red-400">
+                {errors.initialBalanceCents.message}
+              </p>
             )}
           </div>
 

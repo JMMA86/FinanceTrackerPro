@@ -51,7 +51,10 @@ export async function generateMetadata({ params }: TransactionsPageProps): Promi
   };
 }
 
-export default async function TransactionsPage({ params, searchParams }: Readonly<TransactionsPageProps>) {
+export default async function TransactionsPage({
+  params,
+  searchParams,
+}: Readonly<TransactionsPageProps>) {
   const { lang } = await params;
   const sp = await searchParams;
 
@@ -60,9 +63,10 @@ export default async function TransactionsPage({ params, searchParams }: Readonl
     getBankAccounts({} as Record<string, never>),
   ]);
 
-  const accounts = accountsRes.success && accountsRes.data
-    ? (accountsRes.data as Array<{ id: string; name: string; currency: string }>)
-    : [];
+  const accounts =
+    accountsRes.success && accountsRes.data
+      ? (accountsRes.data as Array<{ id: string; name: string; currency: string }>)
+      : [];
   const locale = LOCALE_MAP[lang] ?? 'es-CO';
 
   const input = {
@@ -75,9 +79,7 @@ export default async function TransactionsPage({ params, searchParams }: Readonl
   };
 
   const transactionsRes = await getAllTransactions(input);
-  const pageData = transactionsRes.success && transactionsRes.data
-    ? transactionsRes.data
-    : null;
+  const pageData = transactionsRes.success && transactionsRes.data ? transactionsRes.data : null;
 
   const transactions = pageData?.transactions ?? [];
   const total = pageData?.total ?? 0;
@@ -93,9 +95,7 @@ export default async function TransactionsPage({ params, searchParams }: Readonl
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-white">
-          {get(dictionary, 'title')}
-        </h1>
+        <h1 className="text-xl font-semibold text-white">{get(dictionary, 'title')}</h1>
         <NewTransactionButton dictionary={dictionary} />
       </div>
 
@@ -118,10 +118,7 @@ export default async function TransactionsPage({ params, searchParams }: Readonl
               <>
                 {(currentPage - 1) * 10 + 1}
                 &ndash;
-                {Math.min(currentPage * 10, total)}
-                {' '}de{' '}
-                {total}
-                {' '}transacciones
+                {Math.min(currentPage * 10, total)} de {total} transacciones
               </>
             )}
           </p>

@@ -38,13 +38,16 @@ interface DashboardContentProps {
   readonly dashboard: Record<string, unknown>;
 }
 
-const categoryColors: Record<string, {
-  bg: string;
-  border: string;
-  glow: string;
-  accent: string;
-  accentBg: string;
-}> = {
+const categoryColors: Record<
+  string,
+  {
+    bg: string;
+    border: string;
+    glow: string;
+    accent: string;
+    accentBg: string;
+  }
+> = {
   executive: {
     bg: 'from-blue-600/20 via-blue-500/10 to-blue-600/5',
     border: 'border-blue-500/25',
@@ -94,7 +97,15 @@ interface HeroMetricCardProps {
   readonly onToggleMask?: () => void;
 }
 
-function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onToggleMask }: HeroMetricCardProps) {
+function HeroMetricCard({
+  label,
+  value,
+  subValue,
+  trend,
+  t,
+  masked = false,
+  onToggleMask,
+}: HeroMetricCardProps) {
   const getTrendStyles = (trendValue: 'up' | 'down' | 'neutral' | undefined) => {
     if (trendValue === 'up') return 'bg-emerald-500/15 text-emerald-300';
     if (trendValue === 'down') return 'bg-rose-500/15 text-rose-300';
@@ -103,7 +114,8 @@ function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onTo
   const trendStyles = getTrendStyles(trend);
 
   return (
-    <div className="
+    <div
+      className="
       group relative overflow-hidden rounded-2xl sm:rounded-3xl
       bg-gradient-to-br from-blue-600/25 via-blue-500/12 to-blue-700/8
       border border-blue-400/30
@@ -112,7 +124,8 @@ function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onTo
       hover:border-blue-300/40
       transition-all duration-700
       backdrop-blur-sm
-    ">
+    "
+    >
       <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/15 rounded-full blur-[80px] group-hover:bg-blue-400/20 transition-all duration-1000" />
       <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-blue-400/10 rounded-full blur-[60px]" />
 
@@ -127,13 +140,19 @@ function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onTo
           className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 p-2 sm:p-2.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 hover:text-blue-200 transition-all duration-200"
           aria-label={masked ? 'Show values' : 'Hide values'}
         >
-          {masked ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
+          {masked ? (
+            <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+          ) : (
+            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+          )}
         </button>
       )}
 
       <div className="relative z-10">
         <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-5">
-          <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-300 ${categoryColors.executive.accentBg} ${categoryColors.executive.accent} group-hover:text-blue-300`}>
+          <div
+            className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-300 ${categoryColors.executive.accentBg} ${categoryColors.executive.accent} group-hover:text-blue-300`}
+          >
             <Wallet className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
           <div>
@@ -149,8 +168,10 @@ function HeroMetricCard({ label, value, subValue, trend, t, masked = false, onTo
             <p className="text-4xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tighter mb-2 sm:mb-3">
               {masked ? '***' : value}
             </p>
-{subValue && (
-              <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg backdrop-blur-sm ${trendStyles}`}>
+            {subValue && (
+              <div
+                className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg backdrop-blur-sm ${trendStyles}`}
+              >
                 {trend === 'up' && <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />}
                 {trend === 'down' && <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />}
                 <span className="text-xs sm:text-sm font-semibold">{subValue}</span>
@@ -183,7 +204,17 @@ interface MetricCardProps {
   readonly masked?: boolean;
 }
 
-function MetricCard({ label, value, subValue, category, icon, trend, sparklineData, t, masked = false }: MetricCardProps) {
+function MetricCard({
+  label,
+  value,
+  subValue,
+  category,
+  icon,
+  trend,
+  sparklineData,
+  t,
+  masked = false,
+}: MetricCardProps) {
   const colors = categoryColors[category] || categoryColors.executive;
   const trendColorMap: Record<string, string> = {
     up: 'emerald',
@@ -193,15 +224,19 @@ function MetricCard({ label, value, subValue, category, icon, trend, sparklineDa
   const trendColor = trendColorMap[trend ?? 'neutral'] ?? 'slate';
 
   return (
-    <div className={`
+    <div
+      className={`
       group relative overflow-hidden rounded-xl sm:rounded-2xl border ${colors.border} p-3 sm:p-5
       bg-gradient-to-br ${colors.bg} ${colors.glow}
       transition-all duration-400 ease-out
       transform hover:-translate-y-1
       backdrop-blur-sm
-    `}>
+    `}
+    >
       <div className="absolute -inset-20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-        <div className={`absolute inset-0 rounded-2xl blur-2xl from-${trendColor}-500/20 to-transparent bg-gradient-to-br`} />
+        <div
+          className={`absolute inset-0 rounded-2xl blur-2xl from-${trendColor}-500/20 to-transparent bg-gradient-to-br`}
+        />
       </div>
 
       <div className="relative z-10">
@@ -212,8 +247,12 @@ function MetricCard({ label, value, subValue, category, icon, trend, sparklineDa
             </span>
             <span className="text-[10px] sm:text-xs text-slate-500">{t('currentMonth')}</span>
           </div>
-          <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex-shrink-0 transition-all duration-300 ${colors.accentBg} ${colors.accent} group-hover:scale-110`}>
-            <span className="block [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-5 sm:[&>svg]:h-5">{icon}</span>
+          <div
+            className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex-shrink-0 transition-all duration-300 ${colors.accentBg} ${colors.accent} group-hover:scale-110`}
+          >
+            <span className="block [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-5 sm:[&>svg]:h-5">
+              {icon}
+            </span>
           </div>
         </div>
 
@@ -226,7 +265,9 @@ function MetricCard({ label, value, subValue, category, icon, trend, sparklineDa
           </div>
 
           {subValue && (
-            <div className={`inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 rounded text-[10px] sm:text-xs font-semibold bg-${trendColor}-500/12 text-${trendColor}-300`}>
+            <div
+              className={`inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 rounded text-[10px] sm:text-xs font-semibold bg-${trendColor}-500/12 text-${trendColor}-300`}
+            >
               {trend === 'up' && <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               {trend === 'down' && <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
               {trend === 'neutral' && <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />}
@@ -250,7 +291,9 @@ function SectionHeader({ title, icon, action }: SectionHeaderProps) {
     <div className="flex items-center justify-between mb-3 sm:mb-4">
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/20">
-          <span className="block [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-5 sm:[&>svg]:h-5">{icon}</span>
+          <span className="block [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-5 sm:[&>svg]:h-5">
+            {icon}
+          </span>
         </div>
         <h3 className="text-base sm:text-xl font-semibold text-white tracking-tight">{title}</h3>
       </div>
@@ -271,9 +314,7 @@ function EmptyState({ icon, title, description, action }: EmptyStateProps) {
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="relative mb-4">
         <div className="absolute inset-0 bg-blue-500/10 rounded-full blur-2xl" />
-        <div className="relative p-4 rounded-2xl bg-blue-500/10 text-blue-400">
-          {icon}
-        </div>
+        <div className="relative p-4 rounded-2xl bg-blue-500/10 text-blue-400">{icon}</div>
       </div>
       <h4 className="text-lg font-medium text-white mb-2">{title}</h4>
       <p className="text-sm text-slate-400 max-w-xs mb-4">{description}</p>
@@ -507,10 +548,7 @@ export function DashboardContent({ metrics, lang, dashboard }: DashboardContentP
 
       {/* TIER 4: Distribución Patrimonial */}
       <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 pt-4">
-        <SectionHeader
-          title={t('netWorthDistribution')}
-          icon={<PieChart className="w-5 h-5" />}
-        />
+        <SectionHeader title={t('netWorthDistribution')} icon={<PieChart className="w-5 h-5" />} />
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 app-shell rounded-2xl p-6 flex items-center justify-center min-h-[340px] border border-white/[0.08]">
             {netWorthDistribution.length > 0 ? (

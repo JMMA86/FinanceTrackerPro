@@ -21,11 +21,7 @@ import { addCents } from '@/lib/money';
 import { Decimal } from 'decimal.js';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
-import {
-  NotFoundError,
-  UnauthorizedError,
-  InsufficientFundsError,
-} from '@/lib/errors/api-errors';
+import { NotFoundError, UnauthorizedError, InsufficientFundsError } from '@/lib/errors/api-errors';
 import {
   CreateSavingsGoalSchema,
   UpdateSavingsGoalSchema,
@@ -47,10 +43,7 @@ import {
 
 async function getAuditMetadata() {
   const headersList = await headers();
-  const ipAddress =
-    headersList.get('x-forwarded-for') ??
-    headersList.get('x-real-ip') ??
-    'unknown';
+  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
   const userAgent = headersList.get('user-agent') ?? 'unknown';
   return { ipAddress, userAgent };
 }
@@ -223,9 +216,7 @@ async function deleteSavingsGoalInternal(input: unknown) {
   }
 
   if (existing._count.contributions > 0) {
-    throw new Error(
-      'Cannot delete a goal that has contributions. Deactivate it instead.'
-    );
+    throw new Error('Cannot delete a goal that has contributions. Deactivate it instead.');
   }
 
   await prisma.savingsGoal.update({
@@ -317,10 +308,7 @@ async function contributeToGoalInternal(input: unknown) {
 
       // Use true balance for safety (Rule 13)
       const transactionRepo = getTransactionRepository();
-      const trueBalance = await getTrueBalance(
-        validated.sourceAccountId,
-        transactionRepo
-      );
+      const trueBalance = await getTrueBalance(validated.sourceAccountId, transactionRepo);
 
       if (trueBalance < validated.amountCents) {
         throw new InsufficientFundsError(validated.amountCents, trueBalance);
@@ -385,11 +373,7 @@ async function getSavingsSummaryInternal(input: unknown) {
 
   const validated = GetSavingsSummarySchema.parse(input);
 
-  const summary = await getSavingsSummaryService(
-    session.userId,
-    validated.month,
-    validated.year
-  );
+  const summary = await getSavingsSummaryService(session.userId, validated.month, validated.year);
 
   return summary;
 }
@@ -406,11 +390,7 @@ async function calculateMaxSpendableInternal(input: unknown) {
 
   const validated = CalculateMaxSpendableSchema.parse(input);
 
-  const breakdown = await getMaxSpendable(
-    session.userId,
-    validated.month,
-    validated.year
-  );
+  const breakdown = await getMaxSpendable(session.userId, validated.month, validated.year);
 
   return breakdown;
 }

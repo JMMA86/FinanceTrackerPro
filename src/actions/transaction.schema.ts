@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import {
-  CreateTransactionSchemaBase,
-  TransactionTypeSchema,
-} from '@/lib/validations/finance';
+import { CreateTransactionSchemaBase, TransactionTypeSchema } from '@/lib/validations/finance';
 import { CUID } from './account.schema';
 
 /**
@@ -25,13 +22,10 @@ export const GetAllTransactionsSchema = z.object({
  * Restricted to INCOME and EXPENSE only with correct amount signs
  */
 export const CreateTransactionActionSchema = CreateTransactionSchemaBase.omit({ userId: true })
-  .refine(
-    (data) => ['INCOME', 'EXPENSE'].includes(data.type),
-    {
-      message: 'Only INCOME and EXPENSE transactions are allowed',
-      path: ['type'],
-    }
-  )
+  .refine((data) => ['INCOME', 'EXPENSE'].includes(data.type), {
+    message: 'Only INCOME and EXPENSE transactions are allowed',
+    path: ['type'],
+  })
   .refine(
     (data) => {
       if (data.type === 'INCOME' && data.amountCents <= 0) return false;

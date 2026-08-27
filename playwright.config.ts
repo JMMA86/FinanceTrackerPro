@@ -27,11 +27,7 @@ export default defineConfig({
   // 4+ workers cause cascading timeouts (browser context saturation, server overload).
   // In CI, use 1 worker for reliability.
   workers: process.env.CI ? 1 : 2,
-  reporter: [
-    ['html', { open: 'never' }],
-    ['list'],
-    ['json', { outputFile: 'e2e-results.json' }],
-  ],
+  reporter: [['html', { open: 'never' }], ['list'], ['json', { outputFile: 'e2e-results.json' }]],
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:3000',
     trace: 'on-first-retry',

@@ -36,7 +36,9 @@ vi.mock('@/lib/repositories', () => ({
 }));
 
 vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn().mockImplementation((cents: number, currency: string) => `${currency}:${cents}`),
+  formatMoney: vi
+    .fn()
+    .mockImplementation((cents: number, currency: string) => `${currency}:${cents}`),
   addCents: vi.fn().mockImplementation((a: number, b: number) => a + b),
   subtractCents: vi.fn().mockImplementation((a: number, b: number) => a - b),
 }));
@@ -171,7 +173,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('returns empty metrics when session has no userId', async () => {
-      mockGetSession.mockResolvedValue({} as ReturnType<typeof getSession> extends Promise<infer T> ? T : never);
+      mockGetSession.mockResolvedValue(
+        {} as ReturnType<typeof getSession> extends Promise<infer T> ? T : never
+      );
 
       const result = await getDashboardMetrics('en');
 
@@ -180,12 +184,16 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('queries the database with the correct userId when session exists', async () => {
-      mockGetSession.mockResolvedValue({ userId: USER_ID, email: 'test@example.com', name: 'Test' });
+      mockGetSession.mockResolvedValue({
+        userId: USER_ID,
+        email: 'test@example.com',
+        name: 'Test',
+      });
 
       await getDashboardMetrics('en');
 
       expect(mockAccount).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: USER_ID, isActive: true } }),
+        expect.objectContaining({ where: { userId: USER_ID, isActive: true } })
       );
     });
   });
@@ -207,7 +215,7 @@ describe('dashboard.actions.ts', () => {
       expect(mockFormatMoney).toHaveBeenCalledWith(
         expect.any(Number),
         expect.any(String),
-        expectedLocale,
+        expectedLocale
       );
     });
   });
@@ -242,7 +250,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('adds absolute value of negative balance to creditCardDebt', async () => {
-      mockAccount.mockResolvedValue([makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: 5_000_000 })]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: 5_000_000 }),
+      ]);
       mockGetTrueBalance.mockResolvedValue(-200_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
@@ -251,7 +261,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('calculates creditAvailable as limit minus debt', async () => {
-      mockAccount.mockResolvedValue([makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: 5_000_000 })]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: 5_000_000 }),
+      ]);
       mockGetTrueBalance.mockResolvedValue(-1_000_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
@@ -260,7 +272,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('adds positive credit card balance to netWorth without affecting debt', async () => {
-      mockAccount.mockResolvedValue([makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: null })]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: null }),
+      ]);
       mockGetTrueBalance.mockResolvedValue(50_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
@@ -270,7 +284,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('does not add to creditLimitTotal when creditLimitCents is null', async () => {
-      mockAccount.mockResolvedValue([makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: null })]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ id: 'cc', type: 'CREDIT_CARD', creditLimitCents: null }),
+      ]);
       mockGetTrueBalance.mockResolvedValue(-100_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
@@ -299,7 +315,9 @@ describe('dashboard.actions.ts', () => {
     });
 
     it('converts Decimal interestRateEA to number for SAVINGS account', async () => {
-      mockAccount.mockResolvedValue([makeAccount({ type: 'SAVINGS', interestRateEA: new Decimal('12.5') })]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ type: 'SAVINGS', interestRateEA: new Decimal('12.5') }),
+      ]);
       mockGetTrueBalance.mockResolvedValue(500_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
@@ -411,9 +429,12 @@ describe('dashboard.actions.ts', () => {
 
   describe('calculateTransactionMetrics', () => {
     // Dates relative to FIXED_NOW = 2024-06-15
-    const juneTx = (overrides = {}) => makeTxRow({ date: new Date('2024-06-10T00:00:00.000Z'), ...overrides });
-    const mayTx = (overrides = {}) => makeTxRow({ date: new Date('2024-05-10T00:00:00.000Z'), ...overrides });
-    const aprilTx = (overrides = {}) => makeTxRow({ date: new Date('2024-04-10T00:00:00.000Z'), ...overrides });
+    const juneTx = (overrides = {}) =>
+      makeTxRow({ date: new Date('2024-06-10T00:00:00.000Z'), ...overrides });
+    const mayTx = (overrides = {}) =>
+      makeTxRow({ date: new Date('2024-05-10T00:00:00.000Z'), ...overrides });
+    const aprilTx = (overrides = {}) =>
+      makeTxRow({ date: new Date('2024-04-10T00:00:00.000Z'), ...overrides });
 
     it('accumulates current-month INCOME into monthlyIncome', async () => {
       mockTx.mockResolvedValue([juneTx({ id: 'i1', amountCents: 5_000_000, type: 'INCOME' })]);
@@ -482,8 +503,10 @@ describe('dashboard.actions.ts', () => {
   // ── formatMetricsResult — savings comparison ──────────────────────────────
 
   describe('formatMetricsResult — savings comparison', () => {
-    const juneTx = (overrides = {}) => makeTxRow({ date: new Date('2024-06-10T00:00:00.000Z'), ...overrides });
-    const mayTx = (overrides = {}) => makeTxRow({ date: new Date('2024-05-10T00:00:00.000Z'), ...overrides });
+    const juneTx = (overrides = {}) =>
+      makeTxRow({ date: new Date('2024-06-10T00:00:00.000Z'), ...overrides });
+    const mayTx = (overrides = {}) =>
+      makeTxRow({ date: new Date('2024-05-10T00:00:00.000Z'), ...overrides });
 
     it('returns 0% when there are no last-month expenses', async () => {
       mockTx.mockResolvedValue([juneTx({ amountCents: -200_000, type: 'EXPENSE' })]);
@@ -566,9 +589,7 @@ describe('dashboard.actions.ts', () => {
         makeAccount({ id: 'a1', type: 'SAVINGS' }),
         makeAccount({ id: 'a2', type: 'POCKET' }),
       ]);
-      mockGetTrueBalance
-        .mockResolvedValueOnce(750_000)
-        .mockResolvedValueOnce(250_000);
+      mockGetTrueBalance.mockResolvedValueOnce(750_000).mockResolvedValueOnce(250_000);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
 
@@ -608,7 +629,7 @@ describe('dashboard.actions.ts', () => {
   describe('buildRecentTransactions', () => {
     it('limits recent transactions to 10', async () => {
       const transactions = Array.from({ length: 15 }, (_, i) =>
-        makeTxRow({ id: `tx-${i}`, date: new Date('2024-06-10T00:00:00.000Z') }),
+        makeTxRow({ id: `tx-${i}`, date: new Date('2024-06-10T00:00:00.000Z') })
       );
       mockTx.mockResolvedValue(transactions);
 

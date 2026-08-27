@@ -38,7 +38,9 @@ export function ExpandableMetricSection({
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className={`p-1.5 sm:p-2 rounded-md bg-white/6 ${accent} [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4`}>
+          <div
+            className={`p-1.5 sm:p-2 rounded-md bg-white/6 ${accent} [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4`}
+          >
             {icon}
           </div>
           <h3 className="text-sm sm:text-base font-semibold text-white tracking-tight">{title}</h3>
@@ -54,9 +56,7 @@ export function ExpandableMetricSection({
           isOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="border-t border-white/6">
-          {children}
-        </div>
+        <div className="border-t border-white/6">{children}</div>
       </div>
     </section>
   );

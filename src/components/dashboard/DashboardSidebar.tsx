@@ -40,7 +40,7 @@ export function DashboardSidebar({
     // Update CSS var synchronously — this drives layout, preventing flash
     document.documentElement.style.setProperty(
       '--sidebar-width',
-      stored ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded,
+      stored ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded
     );
     if (stored) {
       // setState inside a callback satisfies react-hooks/set-state-in-effect
@@ -52,7 +52,7 @@ export function DashboardSidebar({
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--sidebar-width',
-      collapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded,
+      collapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded
     );
   }, [collapsed]);
 
@@ -144,10 +144,11 @@ export function DashboardSidebar({
                   className={`
                   group relative flex items-center gap-3 px-4 py-3.5 rounded-xl
                   transition-all duration-200
-                  ${isActive
+                  ${
+                    isActive
                       ? 'bg-theme-primary/20 text-white'
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }
+                  }
                 `}
                   title={navigationLabels[item.descKey] || item.descKey}
                 >
@@ -155,18 +156,21 @@ export function DashboardSidebar({
                     <span
                       className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
                       style={{
-                        background: 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)',
+                        background:
+                          'linear-gradient(180deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)',
                         boxShadow: '0 0 12px rgba(59, 130, 246, 0.6)',
                       }}
                       aria-hidden="true"
                     />
                   )}
 
-                  <span className={`relative flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-105' : 'group-hover:-translate-y-0.5'}`}>
+                  <span
+                    className={`relative flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-105' : 'group-hover:-translate-y-0.5'}`}
+                  >
                     <Icon
                       className={`w-5 h-5 transition-all duration-200 ${isActive ? 'text-blue-400 drop-shadow-lg' : 'text-gray-400 group-hover:text-white'}`}
                     />
-                    </span>
+                  </span>
 
                   <span
                     className={`text-sm font-medium whitespace-nowrap transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
@@ -178,7 +182,8 @@ export function DashboardSidebar({
                     <span
                       className="absolute inset-0 rounded-xl pointer-events-none"
                       style={{
-                        boxShadow: '0 0 20px rgba(59, 130, 246, 0.3), inset 0 0 20px rgba(59, 130, 246, 0.1)',
+                        boxShadow:
+                          '0 0 20px rgba(59, 130, 246, 0.3), inset 0 0 20px rgba(59, 130, 246, 0.1)',
                       }}
                       aria-hidden="true"
                     />
@@ -204,10 +209,11 @@ export function DashboardSidebar({
               disabled:opacity-50 disabled:cursor-not-allowed
             "
             >
-              {loggingOut
-                ? <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
-                : <LogOut className="w-5 h-5 flex-shrink-0" />
-              }
+              {loggingOut ? (
+                <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+              ) : (
+                <LogOut className="w-5 h-5 flex-shrink-0" />
+              )}
               <span
                 className={`transition-all duration-200 ${collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-full'}`}
               >

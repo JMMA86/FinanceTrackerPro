@@ -100,33 +100,36 @@ export function AssetSearchModal({
   };
 
   // Phase 1: search symbols via autocomplete
-  const doSearch = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      setMatches([]);
-      setSearchError(null);
-      return;
-    }
-
-    setSearching(true);
-    setSearchError(null);
-    setMatches([]);
-    setSelectedStock(null);
-    setPricedStock(null);
-
-    try {
-      const res = await searchStocksAction({ symbol: trimmed });
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setMatches(res.data as StockMatch[]);
-      } else {
-        setSearchError(get(dictionary, 'stockNotFound'));
+  const doSearch = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        setMatches([]);
+        setSearchError(null);
+        return;
       }
-    } catch {
-      setSearchError(get(dictionary, 'stockNotFound'));
-    } finally {
-      setSearching(false);
-    }
-  }, [dictionary]);
+
+      setSearching(true);
+      setSearchError(null);
+      setMatches([]);
+      setSelectedStock(null);
+      setPricedStock(null);
+
+      try {
+        const res = await searchStocksAction({ symbol: trimmed });
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setMatches(res.data as StockMatch[]);
+        } else {
+          setSearchError(get(dictionary, 'stockNotFound'));
+        }
+      } catch {
+        setSearchError(get(dictionary, 'stockNotFound'));
+      } finally {
+        setSearching(false);
+      }
+    },
+    [dictionary]
+  );
 
   function handleQueryChange(value: string) {
     setQuery(value);
@@ -145,7 +148,12 @@ export function AssetSearchModal({
     try {
       const res = await getStockPrice({ symbol: stock.symbol });
       if (res.success && res.data) {
-        const data = res.data as { symbol: string; price: number; priceCents: number; currency: string };
+        const data = res.data as {
+          symbol: string;
+          price: number;
+          priceCents: number;
+          currency: string;
+        };
         const priced: PricedStock = {
           symbol: data.symbol,
           name: stock.name,
@@ -190,9 +198,10 @@ export function AssetSearchModal({
         addNotification('success', `Bought ${qty} ${pricedStock.symbol}`);
         closeModal();
       } else {
-        const msg = res.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : get(dictionary, 'errors.buyFailed');
+        const msg =
+          res.code === 'SESSION_INVALID'
+            ? get(dictionary, 'errors.sessionInvalid')
+            : get(dictionary, 'errors.buyFailed');
         setSubmitError(msg);
       }
     } catch {
@@ -203,11 +212,11 @@ export function AssetSearchModal({
   }
 
   const qtyNum = Number.parseFloat(quantity) || 0;
-  const totalCostCents = qtyNum > 0 && pricePerShareCents > 0
-    ? Math.round(qtyNum * pricePerShareCents)
-    : 0;
+  const totalCostCents =
+    qtyNum > 0 && pricePerShareCents > 0 ? Math.round(qtyNum * pricePerShareCents) : 0;
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
+  const inputCls =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   return (
@@ -255,23 +264,32 @@ export function AssetSearchModal({
             <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3">
               <p className="text-xs text-violet-300 mb-0.5">{account.name}</p>
               <p className="text-sm font-semibold text-white">
-                {get(dictionary, 'availableBalance')}: {formatMoney(account.balanceCents, account.currency, locale)}
+                {get(dictionary, 'availableBalance')}:{' '}
+                {formatMoney(account.balanceCents, account.currency, locale)}
               </p>
             </div>
           )}
 
           {/* Error alert */}
           {submitError && (
-            <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+            >
               {submitError}
             </div>
           )}
 
           {/* Search input with dropdown */}
           <div>
-            <label htmlFor="asset-search" className={labelCls}>{get(dictionary, 'searchStocks')}</label>
+            <label htmlFor="asset-search" className={labelCls}>
+              {get(dictionary, 'searchStocks')}
+            </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" aria-hidden="true" />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+                aria-hidden="true"
+              />
               <input
                 ref={searchInputRef}
                 id="asset-search"
@@ -287,7 +305,10 @@ export function AssetSearchModal({
                 aria-autocomplete="list"
               />
               {searching && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400 animate-spin" aria-hidden="true" />
+                <Loader2
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400 animate-spin"
+                  aria-hidden="true"
+                />
               )}
             </div>
 
@@ -322,10 +343,15 @@ export function AssetSearchModal({
           {/* Search error */}
           {searchError && !selectedStock && !fetchingPrice && (
             <div className="bg-white/5 rounded-xl px-4 py-3 flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <AlertCircle
+                className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"
+                aria-hidden="true"
+              />
               <div>
                 <p className="text-sm text-slate-300">{searchError}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{get(dictionary, 'stockNotFoundHint')}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {get(dictionary, 'stockNotFoundHint')}
+                </p>
               </div>
             </div>
           )}
@@ -333,9 +359,13 @@ export function AssetSearchModal({
           {/* Loading price after selection */}
           {fetchingPrice && selectedStock && (
             <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4 flex items-center gap-3">
-              <Loader2 className="w-4 h-4 text-violet-400 animate-spin flex-shrink-0" aria-hidden="true" />
+              <Loader2
+                className="w-4 h-4 text-violet-400 animate-spin flex-shrink-0"
+                aria-hidden="true"
+              />
               <p className="text-sm text-slate-300">
-                {get(dictionary, 'searching')} <span className="font-semibold text-white">{selectedStock.symbol}</span>
+                {get(dictionary, 'searching')}{' '}
+                <span className="font-semibold text-white">{selectedStock.symbol}</span>
               </p>
             </div>
           )}
@@ -350,7 +380,9 @@ export function AssetSearchModal({
                     <TrendingUp className="w-4 h-4" aria-hidden="true" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{pricedStock.symbol}</p>
+                    <p className="text-sm font-semibold text-white truncate">
+                      {pricedStock.symbol}
+                    </p>
                     <p className="text-xs text-slate-400 truncate">{pricedStock.name}</p>
                   </div>
                 </div>
@@ -362,7 +394,9 @@ export function AssetSearchModal({
               {/* Buy form */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="buy-qty" className={labelCls}>{get(dictionary, 'quantity')}</label>
+                  <label htmlFor="buy-qty" className={labelCls}>
+                    {get(dictionary, 'quantity')}
+                  </label>
                   <input
                     id="buy-qty"
                     type="number"
@@ -376,7 +410,9 @@ export function AssetSearchModal({
                   />
                 </div>
                 <div>
-                  <label htmlFor="buy-price" className={labelCls}>{get(dictionary, 'pricePerShare')}</label>
+                  <label htmlFor="buy-price" className={labelCls}>
+                    {get(dictionary, 'pricePerShare')}
+                  </label>
                   <input
                     id="buy-price"
                     type="number"
@@ -384,7 +420,9 @@ export function AssetSearchModal({
                     step="0.01"
                     min="0"
                     value={(pricePerShareCents / 100).toFixed(2)}
-                    onChange={(e) => setPricePerShareCents(Math.round(Number.parseFloat(e.target.value) * 100))}
+                    onChange={(e) =>
+                      setPricePerShareCents(Math.round(Number.parseFloat(e.target.value) * 100))
+                    }
                     className={`${inputCls} font-mono tabular-nums`}
                   />
                 </div>
@@ -408,9 +446,14 @@ export function AssetSearchModal({
                 className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
               >
                 {buying ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> {get(dictionary, 'buying')}</>
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />{' '}
+                    {get(dictionary, 'buying')}
+                  </>
                 ) : (
-                  <><Plus className="w-4 h-4" aria-hidden="true" /> {get(dictionary, 'confirmBuy')}</>
+                  <>
+                    <Plus className="w-4 h-4" aria-hidden="true" /> {get(dictionary, 'confirmBuy')}
+                  </>
                 )}
               </button>
             </div>

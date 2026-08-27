@@ -18,7 +18,10 @@ interface BankAccountsSectionProps {
 
 function animateCardDeletion(accountId: string, onDone: () => void) {
   const cardEl = document.querySelector<HTMLElement>(`[data-account-id="${accountId}"]`);
-  if (!cardEl) { onDone(); return; }
+  if (!cardEl) {
+    onDone();
+    return;
+  }
 
   const FADE_MS = 400;
   const COLLAPSE_MS = 360;
@@ -50,7 +53,11 @@ function animateCardDeletion(accountId: string, onDone: () => void) {
   }, FADE_MS + 20);
 }
 
-export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<BankAccountsSectionProps>) {
+export function BankAccountsSection({
+  accounts,
+  dictionary,
+  locale,
+}: Readonly<BankAccountsSectionProps>) {
   const router = useRouter();
   const openModal = useUIStore((s) => s.openModal);
   // Track which account is being deleted so handleClose can animate it
@@ -109,16 +116,14 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
     <>
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">
-            {get(dictionary, 'sections.bank')}
-          </h2>
+          <h2 className="text-xl font-semibold text-white">{get(dictionary, 'sections.bank')}</h2>
           <button
             type="button"
             onClick={() => openModal('create-account')}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-              {get(dictionary, 'addAccount')}
+            {get(dictionary, 'addAccount')}
           </button>
         </div>
 
@@ -128,7 +133,9 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
               <Landmark className="w-8 h-8" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white mb-1">{get(dictionary, 'noAccounts')}</p>
+              <p className="text-sm font-semibold text-white mb-1">
+                {get(dictionary, 'noAccounts')}
+              </p>
               <p className="text-xs text-slate-400 max-w-xs">{get(dictionary, 'noAccountsDesc')}</p>
             </div>
             <button
@@ -137,7 +144,7 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
-            {get(dictionary, 'addAccount')}
+              {get(dictionary, 'addAccount')}
             </button>
           </div>
         ) : (
@@ -164,10 +171,14 @@ export function BankAccountsSection({ accounts, dictionary, locale }: Readonly<B
         locale={locale}
         onClose={handleClose}
         onEdit={(id) => openModal('edit-account', { accountId: id })}
-        onDelete={(id, name) => openModal('delete-confirm', { accountId: id, accountName: name, isPocket: false })}
+        onDelete={(id, name) =>
+          openModal('delete-confirm', { accountId: id, accountName: name, isPocket: false })
+        }
         onCreatePocket={handleCreatePocket}
         onEditPocket={handleEditPocket}
-        onDeletePocket={(id, name) => openModal('delete-confirm', { accountId: id, accountName: name, isPocket: true })}
+        onDeletePocket={(id, name) =>
+          openModal('delete-confirm', { accountId: id, accountName: name, isPocket: true })
+        }
       />
 
       <EditPocketModal pockets={accounts} dictionary={dictionary} />

@@ -31,7 +31,7 @@ jobs:
           cache: npm
 
       - name: Create .env
-        shell: pwsh
+        shell: powershell
         run: |
           @'
           POSTGRES_HOST=${{ vars.POSTGRES_HOST }}
@@ -48,7 +48,7 @@ jobs:
           '@ | Set-Content -Path .env -Encoding utf8
 
       - name: Create .env.e2e
-        shell: pwsh
+        shell: powershell
         run: |
           @'
           POSTGRES_HOST=127.0.0.1
@@ -68,7 +68,7 @@ jobs:
           '@ | Set-Content -Path .env.e2e -Encoding utf8
 
       - name: Create .env.test
-        shell: pwsh
+        shell: powershell
         run: |
           @'
           DATABASE_URL=postgresql://postgres:admin@localhost:5434/financetrackerpro_test?schema=public
@@ -76,13 +76,13 @@ jobs:
           '@ | Set-Content -Path .env.test -Encoding utf8
 
       - name: Start infrastructure (Postgres dev/e2e/test + SonarQube)
-        shell: pwsh
+        shell: powershell
         run: |
           docker compose -f docker-compose.postgres.yml up -d
           docker compose -f docker-compose.sonarqube.yml up -d
 
       - name: Wait for SonarQube
-        shell: pwsh
+        shell: powershell
         run: |
           $deadline = (Get-Date).AddMinutes(3)
           do {
@@ -107,7 +107,7 @@ jobs:
         run: npx prisma generate
 
       - name: Apply migrations to test database
-        shell: pwsh
+        shell: powershell
         run: npx dotenv -e .env.test -- npx prisma migrate deploy
 
       - name: Lint
@@ -132,7 +132,7 @@ jobs:
         run: npm run sonar
 
       - name: Quality gate check
-        shell: pwsh
+        shell: powershell
         run: |
           $r = Invoke-RestMethod 'http://localhost:9000/api/qualitygates/project_status?projectKey=financetrackerpro'
           if ($r.projectStatus.status -ne 'OK') {

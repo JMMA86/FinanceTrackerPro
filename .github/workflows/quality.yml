@@ -24,6 +24,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Normalize line endings (LF)
+        shell: powershell
+        run: |
+          git config core.autocrlf false
+          git rm --cached -r . --quiet
+          git reset --hard --quiet
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

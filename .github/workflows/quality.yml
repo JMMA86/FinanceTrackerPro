@@ -1,0 +1,145 @@
+name: Full Quality Gate
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: [self-hosted, windows, x64]
+    # Self-hosted runner on a personal machine: never execute code from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Create .env
+        shell: pwsh
+        run: |
+          @'
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_SCHEMA=public
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          BASE_URL=http://localhost:3000
+          NEXT_PUBLIC_SITE_URL=http://localhost:3000
+          SONAR_TOKEN=${{ secrets.SONAR_TOKEN }}
+          '@ | Set-Content -Path .env -Encoding utf8
+
+      - name: Create .env.e2e
+        shell: pwsh
+        run: |
+          @'
+          POSTGRES_HOST=127.0.0.1
+          POSTGRES_PORT=5433
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=admin
+          POSTGRES_DB=financetracker-postgres-e2e
+          POSTGRES_SCHEMA=public
+          PRISMA_E2E=1
+          DATABASE_URL=postgresql://postgres:admin@127.0.0.1:5433/financetracker-postgres-e2e?schema=public
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          BASE_URL=http://localhost:3000
+          E2E_TEST_USER=e2e@financetrackerpro.com
+          E2E_ACCOUNTS_USER=accounts@e2e.financetrackerpro.com
+          E2E_DASHBOARD_USER=dashboard@e2e.financetrackerpro.com
+          E2E_TEST_PASSWORD=E2ePassword123
+          '@ | Set-Content -Path .env.e2e -Encoding utf8
+
+      - name: Create .env.test
+        shell: pwsh
+        run: |
+          @'
+          DATABASE_URL=postgresql://postgres:admin@localhost:5434/financetrackerpro_test?schema=public
+          PRISMA_E2E=1
+          '@ | Set-Content -Path .env.test -Encoding utf8
+
+      - name: Start infrastructure (Postgres dev/e2e/test + SonarQube)
+        shell: pwsh
+        run: |
+          docker compose -f docker-compose.postgres.yml up -d
+          docker compose -f docker-compose.sonarqube.yml up -d
+
+      - name: Wait for SonarQube
+        shell: pwsh
+        run: |
+          $deadline = (Get-Date).AddMinutes(3)
+          do {
+            try {
+              $r = Invoke-RestMethod 'http://localhost:9000/api/system/status' -TimeoutSec 5
+              if ($r.status -eq 'UP') {
+                Write-Host 'SonarQube is UP'
+                exit 0
+              }
+            } catch {
+              # not ready yet
+            }
+            Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          Write-Error 'SonarQube did not become ready in time'
+          exit 1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply migrations to test database
+        shell: pwsh
+        run: npx dotenv -e .env.test -- npx prisma migrate deploy
+
+      - name: Lint
+        run: npx eslint . --max-warnings=0
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Unit tests with coverage
+        run: npx vitest run --coverage --exclude '**/*.integration.test.ts'
+
+      - name: Integration tests
+        run: npx vitest run integration
+
+      - name: E2E tests (Playwright + Cucumber BDD)
+        run: npm run test:e2e
+
+      - name: SonarQube analysis
+        run: npm run sonar
+
+      - name: Quality gate check
+        shell: pwsh
+        run: |
+          $r = Invoke-RestMethod 'http://localhost:9000/api/qualitygates/project_status?projectKey=financetrackerpro'
+          if ($r.projectStatus.status -ne 'OK') {
+            Write-Error "Quality gate failed: $($r.projectStatus.status)"
+            exit 1
+          }
+          Write-Host 'Quality gate: OK'
+
+      - name: Production build
+        run: npm run build

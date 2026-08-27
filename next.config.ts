@@ -60,8 +60,7 @@ const nextConfig: NextConfig = {
   },
 
   // Allowed dev origins
-  allowedDevOrigins: [process.env.NEXT_PUBLIC_SITE_URL!],
-
+  allowedDevOrigins: process.env.NEXT_PUBLIC_SITE_URL ? [process.env.NEXT_PUBLIC_SITE_URL] : [],
 
   // Experimental features
   experimental: {

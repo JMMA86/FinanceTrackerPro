@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
-import '@/lib/env';
 import { PrismaClient, Currency, AccountType, Language, Theme } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -61,7 +60,14 @@ vi.mock('next/cache', () => {
 });
 
 vi.mock('@/lib/logger', () => ({
-  log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn() },
+  log: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/utils/action-wrapper', () => ({
@@ -87,12 +93,15 @@ async function createTestUser() {
   });
 }
 
-async function createBankAccount(userId: string, overrides: Partial<{
-  name: string;
-  type: AccountType;
-  balanceCents: number;
-  currency: Currency;
-}> = {}) {
+async function createBankAccount(
+  userId: string,
+  overrides: Partial<{
+    name: string;
+    type: AccountType;
+    balanceCents: number;
+    currency: Currency;
+  }> = {}
+) {
   return prisma.account.create({
     data: {
       userId,
@@ -107,12 +116,15 @@ async function createBankAccount(userId: string, overrides: Partial<{
   });
 }
 
-async function createInvestmentAccount(userId: string, overrides: Partial<{
-  name: string;
-  balanceCents: number;
-  currency: Currency;
-  idempotencyKey: string | null;
-}> = {}) {
+async function createInvestmentAccount(
+  userId: string,
+  overrides: Partial<{
+    name: string;
+    balanceCents: number;
+    currency: Currency;
+    idempotencyKey: string | null;
+  }> = {}
+) {
   return prisma.account.create({
     data: {
       userId,
@@ -128,15 +140,18 @@ async function createInvestmentAccount(userId: string, overrides: Partial<{
   });
 }
 
-async function createHolding(accountId: string, overrides: Partial<{
-  symbol: string;
-  name: string;
-  quantity: number;
-  avgCostCents: number;
-  currentPriceCents: number;
-  currency: Currency;
-  isActive: boolean;
-}> = {}) {
+async function createHolding(
+  accountId: string,
+  overrides: Partial<{
+    symbol: string;
+    name: string;
+    quantity: number;
+    avgCostCents: number;
+    currentPriceCents: number;
+    currency: Currency;
+    isActive: boolean;
+  }> = {}
+) {
   return prisma.investmentAssetHolding.create({
     data: {
       accountId,
@@ -570,7 +585,7 @@ describe('Investment Actions Integration', () => {
       const oldAvgCost = 15000;
       const newPrice = 16000;
       const totalCostOld = oldQty * oldAvgCost; // 150000
-      const totalCostNew = newQty * newPrice;   // 80000
+      const totalCostNew = newQty * newPrice; // 80000
       const totalCost = totalCostOld + totalCostNew; // 230000
       const totalQty = oldQty + newQty; // 15
       const weightedAvgCost = Math.round(totalCost / totalQty); // 15333

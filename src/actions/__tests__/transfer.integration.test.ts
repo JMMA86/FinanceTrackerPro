@@ -12,7 +12,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import '@/lib/env';
 import { PrismaClient, Currency, AccountType, Language, Theme } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';

@@ -86,12 +86,13 @@ Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
 
 ## 🗄️ Database Architecture
 
-FinanceTrackerPro uses **two fully isolated PostgreSQL containers** — dev data never leaks into tests.
+FinanceTrackerPro uses **three fully isolated PostgreSQL containers** — dev data never leaks into tests.
 
-| Container                     | Host Port | Database                      | Purpose                  |
-| ----------------------------- | --------- | ----------------------------- | ------------------------ |
-| `financetracker-postgres`     | `5432`    | Configurable via `.env`       | Development & production |
-| `financetracker-postgres-e2e` | `5433`    | `financetracker-postgres-e2e` | E2E tests only           |
+| Container                      | Host Port | Database                      | Purpose                  |
+| ------------------------------ | --------- | ----------------------------- | ------------------------ |
+| `financetracker-postgres`      | `5432`    | Configurable via `.env`       | Development & production |
+| `financetracker-postgres-e2e`  | `5433`    | `financetracker-postgres-e2e` | E2E tests only           |
+| `financetracker-postgres-test` | `5434`    | `financetrackerpro_test`      | Integration tests only   |
 
 Both use the `public` schema. There is no schema-based isolation — the E2E container is a fully independent PostgreSQL instance.
 
@@ -252,47 +253,48 @@ e2e/                  # Playwright BDD suite
 
 ## 🔒 CI/CD Pipeline
 
+The full quality suite runs on **every push or PR to `main`/`dev`** using a **self-hosted GitHub Actions runner** (Windows, on the developer machine) because SonarQube runs locally — not in the cloud.
+
+### Workflow: `.github/workflows/quality.yml`
+
 ```yaml
-# .github/workflows/quality.yml
-name: Quality Gate Suite
-on: [pull_request, push]
-
-jobs:
-  verify-quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - run: npm ci
-
-      - name: Lint & Format
-        run: |
-          npm run lint
-          npm run format:check
-
-      - name: Coverage
-        run: npm run test:coverage
-
-      - name: SonarQube Analysis
-        run: npm run sonar
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: Quality Gate Check
-        run: |
-          STATUS=$(curl -s -u $SONAR_TOKEN: \
-            "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=financetrackerpro" \
-            | jq -r '.projectStatus.status')
-          if [ "$STATUS" != "OK" ]; then
-            echo "❌ Quality gate failed: $STATUS"
-            exit 1
-          fi
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+runs-on: [self-hosted, windows, x64]
 ```
+
+| Step                 | Command / Action                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Env setup            | Creates `.env`, `.env.e2e`, `.env.test` from secrets                                 |
+| Infrastructure       | `docker compose` up: Postgres dev (5432), e2e (5433), test (5434) + SonarQube (9000) |
+| Dependencies         | `npm ci` + `npx prisma generate`                                                     |
+| Migrations (test DB) | `prisma migrate deploy` against `financetrackerpro_test`                             |
+| Lint                 | `eslint . --max-warnings=0`                                                          |
+| Format               | `npm run format:check`                                                               |
+| TypeScript           | `npm run type-check`                                                                 |
+| Unit + coverage      | `vitest run --coverage` (excludes integration)                                       |
+| Integration          | `vitest run integration` → DB test (5434)                                            |
+| E2E                  | `npm run test:e2e` (Playwright + BDD, DB e2e 5433)                                   |
+| SonarQube            | `npm run sonar` + Quality Gate API check                                             |
+| Build                | `npm run build`                                                                      |
+
+### Self-hosted runner setup
+
+1. GitHub → **Settings → Actions → Runners → New self-hosted runner** → Windows x64.
+2. Extract to e.g. `C:\actions-runner` and register:
+   ```powershell
+   .\config.cmd --url https://github.com/JMMA86/FinanceTrackerPro --token <REG_TOKEN> --labels self-hosted,windows,x64 --name financetracker-runner
+   .\svc.cmd install   # run as a user account with Docker Desktop access
+   ```
+3. Add repository **secrets**: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `JWT_SECRET`, `SONAR_TOKEN`.
+
+### Prerequisites on the runner machine
+
+- Node.js 22, Docker Desktop running, Java (sonar-scanner), Playwright browsers (`npx playwright install`)
+- **Port 3000 free** while the pipeline runs (the E2E suite starts its own dev server; stop `npm run dev` first)
+- SonarQube container up with a valid `SONAR_TOKEN` (generate at SonarQube → My Account → Security)
+
+> ⚠️ **Security**: fork PRs are skipped (`head.repo.full_name` guard) — never run untrusted code on a self-hosted runner.

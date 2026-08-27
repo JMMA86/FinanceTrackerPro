@@ -15,8 +15,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
-import '@/lib/env';
-import { PrismaClient, Currency, Language, Theme, SavingsGoalType, SavingsGoalStatus, AccountType, TransactionType, FixedExpenseFrequency } from '@prisma/client';
+import {
+  PrismaClient,
+  Currency,
+  Language,
+  Theme,
+  SavingsGoalType,
+  SavingsGoalStatus,
+  AccountType,
+  TransactionType,
+  FixedExpenseFrequency,
+} from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ZodError } from 'zod';
@@ -137,19 +146,21 @@ async function createTestUser() {
   });
 }
 
-async function createSavingsGoal(overrides: {
-  name?: string;
-  targetAmountCents?: number;
-  currency?: Currency;
-  currentAmountCents?: number;
-  status?: SavingsGoalStatus;
-  monthlyContributionCents?: number | null;
-  type?: SavingsGoalType;
-  deadline?: Date | null;
-  linkedAccountId?: string | null;
-  color?: string | null;
-  isActive?: boolean;
-} = {}) {
+async function createSavingsGoal(
+  overrides: {
+    name?: string;
+    targetAmountCents?: number;
+    currency?: Currency;
+    currentAmountCents?: number;
+    status?: SavingsGoalStatus;
+    monthlyContributionCents?: number | null;
+    type?: SavingsGoalType;
+    deadline?: Date | null;
+    linkedAccountId?: string | null;
+    color?: string | null;
+    isActive?: boolean;
+  } = {}
+) {
   return prisma.savingsGoal.create({
     data: {
       userId: TEST_USER_ID,
@@ -170,11 +181,13 @@ async function createSavingsGoal(overrides: {
   });
 }
 
-async function createBankAccount(overrides: {
-  name?: string;
-  balanceCents?: number;
-  currency?: Currency;
-} = {}) {
+async function createBankAccount(
+  overrides: {
+    name?: string;
+    balanceCents?: number;
+    currency?: Currency;
+  } = {}
+) {
   return prisma.account.create({
     data: {
       userId: TEST_USER_ID,
@@ -189,12 +202,15 @@ async function createBankAccount(overrides: {
   });
 }
 
-async function createContribution(goalId: string, overrides: {
-  amountCents?: number;
-  currency?: Currency;
-  idempotencyKey?: string;
-  notes?: string;
-} = {}) {
+async function createContribution(
+  goalId: string,
+  overrides: {
+    amountCents?: number;
+    currency?: Currency;
+    idempotencyKey?: string;
+    notes?: string;
+  } = {}
+) {
   return prisma.savingsContribution.create({
     data: {
       goalId,
@@ -861,8 +877,16 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should return correct counts with active goals', async () => {
-      await createSavingsGoal({ name: 'Goal 1', targetAmountCents: 100000, currentAmountCents: 50000 });
-      await createSavingsGoal({ name: 'Goal 2', targetAmountCents: 200000, currentAmountCents: 100000 });
+      await createSavingsGoal({
+        name: 'Goal 1',
+        targetAmountCents: 100000,
+        currentAmountCents: 50000,
+      });
+      await createSavingsGoal({
+        name: 'Goal 2',
+        targetAmountCents: 200000,
+        currentAmountCents: 100000,
+      });
 
       const result = await savingsActions.getSavingsSummary({});
 
@@ -1075,7 +1099,7 @@ describe('Savings Actions Integration', () => {
       expect(result.data!.maxSpendableCents).toBe(400000);
     });
 
-    it('should not be negative (floor at 0)', async () => {
+    it('can be negative (overdraft) — frontend renders warning', async () => {
       const account = await createBankAccount({ name: 'Low Income Acc' });
       // Small income
       await prisma.transaction.create({
@@ -1108,7 +1132,9 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.maxSpendableCents).toBe(0);
+      expect(result.data!.totalIncomeCents).toBe(50000);
+      expect(result.data!.totalSavingsCommitmentsCents).toBe(200000);
+      expect(result.data!.maxSpendableCents).toBe(-150000);
     });
 
     it('should subtract variable expenses', async () => {

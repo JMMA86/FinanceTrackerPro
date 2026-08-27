@@ -14,7 +14,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
-import '@/lib/env';
 import { PrismaClient, Currency, AccountType, Language, Theme, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -56,7 +55,14 @@ vi.mock('next/cache', () => {
 });
 
 vi.mock('@/lib/logger', () => ({
-  log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn() },
+  log: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/utils/action-wrapper', () => ({
@@ -82,13 +88,16 @@ async function createTestUser(id: string, emailSuffix: string) {
   });
 }
 
-async function createTestAccount(userId: string, overrides: Partial<{
-  name: string;
-  type: AccountType;
-  balanceCents: number;
-  currency: Currency;
-  isActive: boolean;
-}> = {}) {
+async function createTestAccount(
+  userId: string,
+  overrides: Partial<{
+    name: string;
+    type: AccountType;
+    balanceCents: number;
+    currency: Currency;
+    isActive: boolean;
+  }> = {}
+) {
   return prisma.account.create({
     data: {
       userId,
@@ -281,7 +290,10 @@ describe('Transaction Actions Integration', () => {
 
     it('should filter by accountId', async () => {
       const account1 = await createTestAccount(TEST_USER_ID, { name: 'Account 1' });
-      const account2 = await createTestAccount(TEST_USER_ID, { name: 'Account 2', balanceCents: 20000 });
+      const account2 = await createTestAccount(TEST_USER_ID, {
+        name: 'Account 2',
+        balanceCents: 20000,
+      });
 
       await setupTransactions(TEST_USER_ID, account1.id);
       await prisma.transaction.create({

@@ -10,6 +10,7 @@ Feature: Gestión de Cuentas de Inversión — Visual y Modal
   @investments @visual @happy-path
   Scenario: Página de inversiones carga con header y estado vacío
     Given que el usuario de inversiones ha iniciado sesión
+    And que no existen cuentas de inversión
     When navega a la página de inversiones
     Then debe ver el título de sección "Inversiones"
     And debe ver el mensaje de empty state "Sin cuentas de inversión"

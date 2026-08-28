@@ -8,6 +8,9 @@ const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { INVESTMENTS_TEST_USER } from '../fixtures';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 // ============================================================================
 // CONSTANTS
@@ -110,6 +113,29 @@ async function createInvestmentAccount(
 
 Given('que el usuario de inversiones ha iniciado sesión', async ({ page }) => {
   await loginAs(page, INVESTMENTS_TEST_USER.email, INVESTMENTS_TEST_USER.password);
+});
+
+// Dedicated DB client for state cleanup — the test worker points at the E2E
+// database (DATABASE_URL from .env.e2e), so direct deletion is isolated.
+const e2ePool = new Pool({ connectionString: process.env.DATABASE_URL! });
+const e2ePrisma = new PrismaClient({ adapter: new PrismaPg(e2ePool) });
+
+Given('que no existen cuentas de inversión', async () => {
+  const user = await e2ePrisma.user.findUnique({
+    where: { email: INVESTMENTS_TEST_USER.email },
+  });
+  if (!user) return;
+
+  const accounts = await e2ePrisma.account.findMany({
+    where: { userId: user.id, type: 'INVESTMENT' },
+    select: { id: true },
+  });
+  const accountIds = accounts.map((account) => account.id);
+  if (accountIds.length === 0) return;
+
+  await e2ePrisma.transaction.deleteMany({ where: { accountId: { in: accountIds } } });
+  await e2ePrisma.investmentAssetHolding.deleteMany({ where: { accountId: { in: accountIds } } });
+  await e2ePrisma.account.deleteMany({ where: { id: { in: accountIds } } });
 });
 
 Given('que existe una cuenta de inversión con saldo', async ({ page }) => {

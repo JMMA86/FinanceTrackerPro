@@ -25,12 +25,11 @@ Feature: Gestión de Cuentas Bancarias
     And debe ver el mensaje descriptivo en el empty state
 
   @accounts @visual
-  Scenario: Secciones placeholder de Inversiones y Tarjetas son visibles
+  Scenario: Sección placeholder de Tarjetas de Crédito es visible
     Given que el usuario de cuentas ha iniciado sesión
     And que no existen cuentas bancarias
     When navega a la página de cuentas
-    Then debe ver la sección "Cuentas de Inversión" con label "En desarrollo"
-    And debe ver la sección "Tarjetas de Crédito" con label "En desarrollo"
+    Then debe ver la sección "Tarjetas de Crédito" con label "En desarrollo"
 
   @accounts @visual @navigation
   Scenario: Sidebar marca Cuentas como activo

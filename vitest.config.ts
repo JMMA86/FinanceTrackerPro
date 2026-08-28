@@ -36,7 +36,7 @@ export default defineConfig({
         'src/components/investments/__tests__/**',
         'coverage/**',
         '.next/**',
-        'proxy.ts',
+        'middleware.ts',
       ],
       thresholds: {
         lines: 85,

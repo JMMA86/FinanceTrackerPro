@@ -52,11 +52,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    // Runs the PRODUCTION build: the Next.js 16.2.x Turbopack dev server does not
+    // execute middleware (empty middleware-manifest — vercel/next.js#93320),
+    // which breaks auth redirects in the E2E suite. Production mode works.
+    command: 'npm run build && npm run start',
     url: 'http://localhost:3000',
     // Never reuse an existing server — it may be pointing at the dev database.
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
     env: {
       DATABASE_URL: process.env.DATABASE_URL!,
       JWT_SECRET: process.env.JWT_SECRET!,

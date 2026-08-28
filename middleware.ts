@@ -1,6 +1,11 @@
 /**
- * Proxy for route protection
+ * Middleware for route protection
  * Handles authentication checks and redirects
+ *
+ * NOTE: Named `middleware.ts` instead of `proxy.ts` due to a known Next.js 16.2.x
+ * Turbopack bug on Windows that silently skips `proxy.ts` (empty
+ * middleware-manifest — vercel/next.js#93320). `middleware` convention still
+ * works. Revert to `proxy.ts` once the bug fix ships.
  */
 
 import { NextResponse } from 'next/server';
@@ -21,7 +26,7 @@ const PROTECTED_ROUTES = [
   '/settings',
 ];
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const pathSegment = pathname.split('/').find(Boolean);
@@ -66,5 +71,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [String.raw`/((?!api|_next/static|_next/image|favicon.ico|.*\..*).*)`],
+  matcher: [String.raw`/((?!api|_next/static|_next/image|favicon.ico|.*\..*).*)`, '/:path*'],
 };

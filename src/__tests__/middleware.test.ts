@@ -4,14 +4,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { proxy } from '../../proxy';
+import { middleware } from '../../middleware';
 import type { SessionData } from '@/lib/auth/session';
 
 vi.mock('@/lib/auth/session', () => ({
   verifySession: vi.fn(),
 }));
 
-describe('proxy middleware', () => {
+describe('middleware', () => {
   let verifySession: (token: string) => Promise<SessionData | null>;
 
   const authenticatedSession: SessionData = {
@@ -45,7 +45,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/login');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).not.toBe(307);
@@ -57,7 +57,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/register');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).not.toBe(307);
@@ -69,7 +69,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).not.toBe(307);
@@ -81,7 +81,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/dashboard');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).toBe(307);
@@ -94,7 +94,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/dashboard/analytics');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       const location = response.headers.get('location');
@@ -107,7 +107,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/settings/profile/security');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.headers.get('location')).toContain(
@@ -123,7 +123,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/login', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).toBe(307);
@@ -136,7 +136,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/register', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).toBe(307);
@@ -149,7 +149,7 @@ describe('proxy middleware', () => {
       const request = createRequest('/', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).not.toBe(307);
@@ -176,7 +176,7 @@ describe('proxy middleware', () => {
         const request = createRequest(route, 'valid-token');
 
         // When
-        const response = await proxy(request);
+        const response = await middleware(request);
 
         // Then
         expect(response.status).not.toBe(307);
@@ -188,7 +188,7 @@ describe('proxy middleware', () => {
         const request = createRequest(route);
 
         // When
-        const response = await proxy(request);
+        const response = await middleware(request);
 
         // Then
         expect(response.status).toBe(307);
@@ -209,7 +209,7 @@ describe('proxy middleware', () => {
       request.cookies.set('locale', 'en');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).toBe(307);
@@ -224,7 +224,7 @@ describe('proxy middleware', () => {
       request.cookies.set('locale', 'fr');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then
       expect(response.status).not.toBe(307);
@@ -237,7 +237,7 @@ describe('proxy middleware', () => {
       request.cookies.set('session', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then: authenticated user should be redirected away from login to dashboard
       expect(response.status).toBe(307);
@@ -251,7 +251,7 @@ describe('proxy middleware', () => {
       request.cookies.set('session', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then: should allow access (route check uses pathnameWithoutLang)
       expect(response.status).not.toBe(307);
@@ -264,7 +264,7 @@ describe('proxy middleware', () => {
       request.cookies.set('session', 'valid-token');
 
       // When
-      const response = await proxy(request);
+      const response = await middleware(request);
 
       // Then: should redirect to dashboard preserving locale prefix
       expect(response.status).toBe(307);

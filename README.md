@@ -142,7 +142,7 @@ npm run db:studio:e2e    # E2E database  → http://localhost:5556
 
 ### End-to-End (Playwright + Cucumber BDD)
 
-> ⚠️ **Important:** Shut down any active `npm run dev` before launching E2E tests. Playwright mounts its own development server on port `3000` pointed at the isolated E2E database (port `5433`).
+> ⚠️ **Important:** Shut down any active `npm run dev` before launching E2E tests. Playwright builds and mounts its own **production server** on port `3000` pointed at the isolated E2E database (port `5433`).
 
 The E2E database is **automatically wiped, re-migrated, and re-seeded** before each test run via `e2e/global-setup.ts`. No manual reset needed.
 
@@ -313,7 +313,7 @@ runs-on: [self-hosted, windows, x64]
 ### Prerequisites on the runner machine
 
 - Node.js 22, Docker Desktop running, Java (sonar-scanner), Playwright browsers (`npx playwright install`)
-- **Port 3000 free** while the pipeline runs (the E2E suite starts its own dev server; stop `npm run dev` first)
+- **Port 3000 free** while the pipeline runs (the E2E suite builds and starts its own production server; stop `npm run dev` first)
 - SonarQube container up with a valid `SONAR_TOKEN` (generate at SonarQube → My Account → Security)
 
 > ⚠️ **Security**: fork PRs are skipped (`head.repo.full_name` guard) — never run untrusted code on a self-hosted runner.

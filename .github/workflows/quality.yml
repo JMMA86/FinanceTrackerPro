@@ -141,12 +141,14 @@ jobs:
       - name: Quality gate check
         shell: powershell
         run: |
-          $r = Invoke-RestMethod 'http://localhost:9000/api/qualitygates/project_status?projectKey=financetrackerpro'
+          $pair = "${{ secrets.SONAR_TOKEN }}:"
+          $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+          $r = Invoke-RestMethod 'http://localhost:9000/api/qualitygates/project_status?projectKey=financetrackerpro' -Headers @{ Authorization = "Basic $b64" }
           if ($r.projectStatus.status -ne 'OK') {
             Write-Error "Quality gate failed: $($r.projectStatus.status)"
             exit 1
           }
-          Write-Host 'Quality gate: OK'
+          Write-Host "Quality gate: $($r.projectStatus.status)"
 
       - name: Production build
         run: npm run build

@@ -1,5 +1,19 @@
 # Database Architecture - FinanceTrackerPro
 
+## Environments
+
+FinanceTrackerPro uses **three fully isolated PostgreSQL containers** (see `docker-compose.postgres.yml`):
+
+| Container                      | Host Port | Database                      | Purpose                |
+| ------------------------------ | --------- | ----------------------------- | ---------------------- |
+| `financetracker-postgres`      | `5432`    | Configurable via `.env`       | Development            |
+| `financetracker-postgres-e2e`  | `5433`    | `financetracker-postgres-e2e` | E2E tests (Playwright) |
+| `financetracker-postgres-test` | `5434`    | `financetrackerpro_test`      | Integration tests      |
+
+- Dev data never leaks into tests — each environment uses its own container.
+- The E2E database is wiped and re-seeded automatically by `e2e/global-setup.ts` before each run.
+- Integration tests point at the test database via `vitest.db-setup.ts` (top-level `DATABASE_URL` override).
+
 ## Entity Relationship Diagram
 
 ```mermaid
@@ -9,18 +23,26 @@ erDiagram
     User ||--o{ Loan : has
     User ||--o{ FixedExpense : manages
     User ||--o{ BiometricCredential : authenticates
+    User ||--o{ SavingsGoal : sets
+    User ||--o{ InvestmentAssetHolding : "holds (via Account)"
 
     Account ||--o{ Transaction : records
     Account ||--o{ Account : "contains (pockets)"
+    Account ||--o{ InvestmentAssetHolding : "holds assets"
+    Account ||--o{ SavingsGoal : "linked (optional)"
+    Account ||--o{ SavingsContribution : "funds"
 
     Transaction }o--|| Account : "belongs to"
     Transaction }o--o| VariableExpenseCategory : categorized
     Transaction }o--o| FixedExpensePayment : "pays for"
     Transaction }o--o| LoanInstallment : "pays installment"
+    Transaction ||--o{ SavingsContribution : "linked"
 
     FixedExpense ||--o{ FixedExpensePayment : "generates payments"
 
     Loan ||--o{ LoanInstallment : "amortization schedule"
+
+    SavingsGoal ||--o{ SavingsContribution : "tracks progress"
 
     User {
         string id PK
@@ -186,6 +208,72 @@ erDiagram
         string createdBy
         string lastModifiedBy
     }
+
+    InvestmentAssetHolding {
+        string id PK
+        string accountId FK
+        string symbol
+        string name
+        decimal quantity "fractional shares"
+        int avgCostCents
+        enum currency
+        int currentPriceCents "market price"
+        datetime lastPriceUpdate
+        enum originalCurrency
+        int originalCostCents
+        decimal exchangeRate
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+    }
+
+    SavingsGoal {
+        string id PK
+        string userId FK
+        string name
+        string description
+        enum type
+        int targetAmountCents
+        enum currency
+        int currentAmountCents "CACHE"
+        datetime deadline
+        int monthlyContributionCents
+        string linkedAccountId FK
+        enum status
+        int priority
+        string color
+        string icon
+        string idempotencyKey UK
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+    }
+
+    SavingsContribution {
+        string id PK
+        string goalId FK
+        int amountCents
+        enum currency
+        datetime date
+        string sourceAccountId FK
+        string transactionId FK
+        string notes
+        string idempotencyKey UK
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+        string ipAddress
+        string userAgent
+    }
 ```
 
 ## Core Models
@@ -197,7 +285,7 @@ Central entity for authentication and configuration.
 **Key Fields**:
 
 - `baseSalaryCents`: Monthly salary in cents for budget calculations
-- `baseCurrency`: Primary currency (COP, USD, EUR, GBP, MXN)
+- `baseCurrency`: Primary currency (COP, USD, EUR)
 - `language`: UI language preference
 - `theme`: Dark/Light/System
 
@@ -264,6 +352,46 @@ Core entity implementing **double-entry bookkeeping**.
 - `isActive` (soft delete filter)
 - `idempotencyKey` (duplicate prevention)
 - `transferId` (paired transaction lookup)
+
+### InvestmentAssetHolding
+
+Stock positions per investment account.
+
+**Key Fields**:
+
+- `symbol`: Ticker (e.g. `AAPL`), unique per account
+- `quantity`: `Decimal(20, 8)` — supports fractional shares
+- `avgCostCents`: Average purchase cost in cents
+- `currentPriceCents`: Last known market price (updated by price service)
+- `originalCostCents` / `originalCurrency` / `exchangeRate`: Currency traceability (Rule 11)
+
+**Constraint**: `@@unique([accountId, symbol])` — one position per symbol per account.
+
+### SavingsGoal
+
+Savings targets with progress tracking.
+
+**Key Fields**:
+
+- `targetAmountCents`: Goal in cents
+- `currentAmountCents`: **CACHE** — reconciled from contributions
+- `monthlyContributionCents`: Planned monthly contribution (used by max-spendable calc)
+- `status`: `ACTIVE` | `COMPLETED` | `CANCELLED`
+- `linkedAccountId`: Optional linked savings account
+- `idempotencyKey`: UUID v4 for network safety
+
+### SavingsContribution
+
+Individual deposits into a savings goal.
+
+**Key Fields**:
+
+- `amountCents`: Contribution in cents
+- `sourceAccountId`: Optional bank account the funds came from
+- `transactionId`: Optional link to the created `Transaction`
+- `idempotencyKey`: UUID v4 for network safety
+
+**Note**: `currentAmountCents` is a cache — the true balance is the sum of active contributions (Rule 13).
 
 ## Double-Entry Bookkeeping
 
@@ -652,11 +780,11 @@ Zod schemas enforce:
 ### Initial Setup
 
 ```bash
-# Dev: Quick sync
-npm run db:push
-
-# Prod: Create migration
+# Dev: Apply migrations
 npm run db:migrate
+
+# Prod: Apply pending migrations without prompts
+npx prisma migrate deploy
 ```
 
 ### Data Migration
@@ -744,10 +872,9 @@ const unpaid = await prisma.fixedExpensePayment.findMany({
 1. **Tags/Labels**: Many-to-many with transactions
 2. **Budgets**: Monthly spending limits per category
 3. **Recurring Investments**: Auto-invest schedules
-4. **Goals**: Savings targets with progress tracking
-5. **Multi-User Accounts**: Shared accounts (family)
-6. **Import/Export**: CSV, OFX, QIF formats
-7. **Notifications**: Payment reminders, low balance alerts
+4. **Multi-User Accounts**: Shared accounts (family)
+5. **Import/Export**: CSV, OFX, QIF formats
+6. **Notifications**: Payment reminders, low balance alerts
 
 ### Performance Optimizations
 

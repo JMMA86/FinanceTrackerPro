@@ -3,7 +3,7 @@
   "permission": {
     // Seguridad global: validación humana requerida para cambios destructivos
     "edit": "allow",
-    "bash": "allow",
+    "bash": "allow"
   },
   "agent": {
     "build": {
@@ -12,16 +12,16 @@
       "tools": {
         "write": true,
         "edit": true,
-        "bash": true,
+        "bash": true
       },
       "permission": {
         "bash": {
           "*": "allow",
           "git status *": "allow",
           "git log *": "allow",
-          "git diff *": "allow",
-        },
-      },
+          "git diff *": "allow"
+        }
+      }
     },
     "plan": {
       "mode": "primary",
@@ -31,25 +31,25 @@
       "tools": {
         "write": false,
         "edit": false,
-        "bash": false,
-      },
-    },
+        "bash": false
+      }
+    }
   },
   "mcp": {
     "playwright": {
       "type": "local",
       "enabled": true,
       "command": ["npx", "@playwright/mcp@latest"],
-      "timeout": 30000,
+      "timeout": 30000
     },
     "postgres": {
       "type": "local",
       "enabled": true,
       "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "{env:DATABASE_URL}"],
       "environment": {
-        "DATABASE_URL": "{env:DATABASE_URL}",
+        "DATABASE_URL": "{env:DATABASE_URL}"
       },
-      "timeout": 15000,
+      "timeout": 15000
     },
     "sonarqube": {
       "type": "local",
@@ -63,13 +63,13 @@
         "SONARQUBE_URL",
         "-e",
         "SONARQUBE_TOKEN",
-        "mcp/sonarqube",
+        "mcp/sonarqube"
       ],
       "environment": {
         "SONARQUBE_URL": "http://host.docker.internal:9000",
-        "SONARQUBE_TOKEN": "{env:SONAR_TOKEN}",
+        "SONARQUBE_TOKEN": "{env:SONAR_TOKEN}"
       },
-      "timeout": 15000,
-    },
-  },
+      "timeout": 15000
+    }
+  }
 }

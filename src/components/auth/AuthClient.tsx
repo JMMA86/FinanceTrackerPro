@@ -9,13 +9,8 @@ import DesktopAuthPanel from '@/components/auth/DesktopAuthPanel';
 import RegisterForm from '@/components/auth/RegisterForm';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
-
-const PASSWORD_REQUIREMENTS = [
-  { id: 'min-length', test: (p: string) => p.length >= 8 },
-  { id: 'uppercase', test: (p: string) => /[A-Z]/.test(p) },
-  { id: 'lowercase', test: (p: string) => /[a-z]/.test(p) },
-  { id: 'number', test: (p: string) => /\d/.test(p) },
-];
+import { isPasswordValid } from '@/lib/password-rules';
+import { sanitizeRedirect } from '@/lib/validations/redirect';
 
 interface AuthClientProps {
   lang: Locale;
@@ -47,16 +42,30 @@ export default function AuthClient({
       : '';
 
   const isRegisterValid = useMemo(() => {
-    const allPasswordChecksPassed = PASSWORD_REQUIREMENTS.every((req) =>
-      req.test(registerData.password)
-    );
     return (
       registerData.name.trim().length >= 2 &&
       registerData.email.includes('@') &&
       registerData.password.length > 0 &&
-      allPasswordChecksPassed
+      isPasswordValid(registerData.password)
     );
   }, [registerData]);
+
+  function getLocalizedError(result: { code?: string }, mode: 'login' | 'register'): string {
+    switch (result.code) {
+      case 'AUTH_ERROR':
+        return mode === 'login'
+          ? get(auth, 'errors.invalidCredentials')
+          : get(auth, 'errors.registerError');
+      case 'RATE_LIMITED':
+        return get(auth, 'errors.rateLimitError');
+      case 'VALIDATION_ERROR':
+        return get(auth, 'errors.validationError');
+      default:
+        return mode === 'login'
+          ? get(auth, 'errors.loginError')
+          : get(auth, 'errors.registerError');
+    }
+  }
 
   async function handleLoginSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,10 +75,10 @@ export default function AuthClient({
     const result = await loginAction(loginData);
 
     if (result.success) {
-      const redirect = redirectPath || `/${lang}/dashboard`;
+      const redirect = sanitizeRedirect(redirectPath, lang);
       router.push(redirect);
     } else {
-      setError(result.error || get(auth, 'errors.loginError'));
+      setError(getLocalizedError(result, 'login'));
       setLoading(false);
     }
   }
@@ -87,7 +96,7 @@ export default function AuthClient({
       setSuccessMessage(get(auth, 'login.successMessage'));
       setRegisterData({ name: '', email: '', password: '' });
     } else {
-      setError(result.error || get(auth, 'errors.registerError'));
+      setError(getLocalizedError(result, 'register'));
       setLoading(false);
     }
   }
@@ -151,6 +160,8 @@ export default function AuthClient({
                         type="email"
                         required
                         disabled={loading}
+                        aria-invalid={error ? 'true' : 'false'}
+                        aria-describedby={error ? 'login-error-desktop' : undefined}
                         value={loginData.email}
                         onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                         className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50"
@@ -166,6 +177,8 @@ export default function AuthClient({
                         type="password"
                         required
                         disabled={loading}
+                        aria-invalid={error ? 'true' : 'false'}
+                        aria-describedby={error ? 'login-error-desktop' : undefined}
                         value={loginData.password}
                         onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                         className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white transition-all disabled:opacity-50"
@@ -180,7 +193,10 @@ export default function AuthClient({
                     )}
 
                     {error && mode === 'login' && (
-                      <div className="bg-red-900/20 border border-red-800 rounded-xl p-4">
+                      <div
+                        id="login-error-desktop"
+                        className="bg-red-900/20 border border-red-800 rounded-xl p-4"
+                      >
                         <p className="text-sm text-red-200 font-medium">{error}</p>
                       </div>
                     )}
@@ -191,26 +207,6 @@ export default function AuthClient({
                       className="w-full bg-gradient-to-br from-blue-800 to-blue-950 hover:from-blue-700 hover:to-blue-900 text-white font-semibold py-3.5 px-4 rounded-xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-6"
                     >
                       {loading ? get(auth, 'login.submitting') : get(auth, 'login.submit')}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3.5 px-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 mt-3"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                        />
-                      </svg>
-                      {get(auth, 'login.passkeyButton')}
                     </button>
                   </form>
                 </div>

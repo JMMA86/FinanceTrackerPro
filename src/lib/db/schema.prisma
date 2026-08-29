@@ -592,3 +592,21 @@ model SavingsContribution {
   @@index([date])
   @@index([isActive])
 }
+
+// ============================================================================
+// LOGIN ATTEMPTS (Security audit & rate limiting)
+// ============================================================================
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  userId    String?  // null if email doesn't exist (anti-enumeration)
+  email     String   // normalized lowercase
+  ipAddress String
+  userAgent String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([ipAddress, createdAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}

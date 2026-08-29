@@ -7,11 +7,11 @@ import { z } from 'zod';
 
 /**
  * Password validation
- * Min 8 chars, at least 1 uppercase, 1 lowercase, 1 number
+ * Min 12 chars, at least 1 uppercase, 1 lowercase, 1 number
  */
 const PasswordSchema = z
   .string()
-  .min(8, { message: 'Password must be at least 8 characters' })
+  .min(12, { message: 'Password must be at least 12 characters' })
   .regex(/[A-Z]/, { message: 'Password must contain at least one uppercase letter' })
   .regex(/[a-z]/, { message: 'Password must contain at least one lowercase letter' })
   .regex(/\d/, { message: 'Password must contain at least one number' });

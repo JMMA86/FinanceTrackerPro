@@ -1,4 +1,6 @@
 import { get } from '@/lib/i18n';
+import { PASSWORD_RULES } from '@/lib/password-rules';
+import type { PasswordRuleId } from '@/lib/password-rules';
 
 interface PasswordRequirementsProps {
   password: string;
@@ -9,28 +11,18 @@ export default function PasswordRequirements({
   password,
   auth,
 }: Readonly<PasswordRequirementsProps>) {
-  const requirements = [
-    {
-      id: 'min',
-      test: password.length >= 8,
-      label: get(auth, 'register.passwordMinLength'),
-    },
-    {
-      id: 'upper',
-      test: /[A-Z]/.test(password),
-      label: get(auth, 'register.passwordUppercase'),
-    },
-    {
-      id: 'lower',
-      test: /[a-z]/.test(password),
-      label: get(auth, 'register.passwordLowercase'),
-    },
-    {
-      id: 'num',
-      test: /\d/.test(password),
-      label: get(auth, 'register.passwordNumber'),
-    },
-  ];
+  const requirementLabels: Record<PasswordRuleId, string> = {
+    'min-length': get(auth, 'register.passwordMinLength'),
+    uppercase: get(auth, 'register.passwordUppercase'),
+    lowercase: get(auth, 'register.passwordLowercase'),
+    number: get(auth, 'register.passwordNumber'),
+  };
+
+  const requirements = PASSWORD_RULES.map((rule) => ({
+    id: rule.id,
+    test: rule.test(password),
+    label: requirementLabels[rule.id],
+  }));
 
   return (
     <div className="mb-4 transition-all duration-300">

@@ -3,8 +3,11 @@
  * Shared form fields for mobile and desktop layouts
  */
 
+import { PASSWORD_RULES, MIN_PASSWORD_LENGTH } from '@/lib/password-rules';
+import type { PasswordRuleId } from '@/lib/password-rules';
+
 interface PasswordRequirement {
-  id: string;
+  id: PasswordRuleId;
   label: string;
   test: (password: string) => boolean;
 }
@@ -50,12 +53,18 @@ export default function RegisterForm({
   const checklistBgClass = 'bg-gray-700/50 border-gray-600';
   const errorBgClass = isMobile ? 'bg-red-900/30' : 'bg-red-900/20';
 
-  const passwordRequirements: PasswordRequirement[] = [
-    { id: 'min-length', label: labels.passwordMinLength, test: (p) => p.length >= 8 },
-    { id: 'uppercase', label: labels.passwordUppercase, test: (p) => /[A-Z]/.test(p) },
-    { id: 'lowercase', label: labels.passwordLowercase, test: (p) => /[a-z]/.test(p) },
-    { id: 'number', label: labels.passwordNumber, test: (p) => /\d/.test(p) },
-  ];
+  const requirementLabels: Record<PasswordRuleId, string> = {
+    'min-length': labels.passwordMinLength,
+    uppercase: labels.passwordUppercase,
+    lowercase: labels.passwordLowercase,
+    number: labels.passwordNumber,
+  };
+
+  const passwordRequirements: PasswordRequirement[] = PASSWORD_RULES.map((rule) => ({
+    id: rule.id,
+    label: requirementLabels[rule.id],
+    test: rule.test,
+  }));
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -117,7 +126,7 @@ export default function RegisterForm({
           aria-required="true"
           aria-invalid={hasError ? 'true' : 'false'}
           aria-describedby={hasError ? `error${suffix}` : undefined}
-          minLength={8}
+          minLength={MIN_PASSWORD_LENGTH}
           disabled={loading}
           value={formData.password}
           onChange={(e) => onFieldChange('password', e.target.value)}

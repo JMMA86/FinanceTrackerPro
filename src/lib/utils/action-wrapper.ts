@@ -70,17 +70,20 @@ export function safeAction<TInput, TOutput>(
       }
 
       // Handle unexpected errors
-      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      const isProduction = process.env.NODE_ENV === 'production';
+      const rawMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      const message = isProduction ? 'An unexpected error occurred' : rawMessage;
+      const code = 'INTERNAL_SERVER_ERROR';
 
       log.error(
-        { error: error instanceof Error ? error : { message } },
+        { error: error instanceof Error ? error : { message: rawMessage } },
         '[ACTION] Unexpected error'
       );
 
       return {
         success: false,
         error: message,
-        code: 'INTERNAL_SERVER_ERROR',
+        code,
       };
     }
   };

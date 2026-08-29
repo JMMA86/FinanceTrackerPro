@@ -1,4 +1,5 @@
 import { get } from '@/lib/i18n';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password-rules';
 
 interface MobileFormInputsProps {
   mode: 'login' | 'register';
@@ -72,7 +73,7 @@ export default function MobileFormInputs({
         <input
           type="password"
           required
-          minLength={mode === 'register' ? 8 : undefined}
+          minLength={mode === 'register' ? MIN_PASSWORD_LENGTH : undefined}
           disabled={loading}
           value={mode === 'login' ? loginData.password : registerData.password}
           onChange={(e) =>

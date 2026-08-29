@@ -7,7 +7,6 @@ interface AuthPageLayoutProps {
   languageLabels: {
     es: string;
     en: string;
-    de: string;
   };
   children: React.ReactNode;
 }

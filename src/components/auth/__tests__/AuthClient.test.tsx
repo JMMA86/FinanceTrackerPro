@@ -40,7 +40,6 @@ vi.mock('@/lib/i18n', () => ({
       'login.passwordPlaceholder': '••••••••',
       'login.submit': 'Iniciar sesión',
       'login.submitting': 'Iniciando sesión...',
-      'login.passkeyButton': 'Iniciar con passkey',
       'login.successMessage': '¡Sesión iniciada!',
       'register.title': 'Crear cuenta',
       'register.subtitleDesktop': 'Crea tu cuenta gratis',
@@ -51,7 +50,7 @@ vi.mock('@/lib/i18n', () => ({
       'register.password': 'Contraseña',
       'register.passwordPlaceholder': '••••••••',
       'register.passwordRequirements': 'Requisitos',
-      'register.passwordMinLength': 'Mínimo 8 caracteres',
+      'register.passwordMinLength': 'Mínimo 12 caracteres',
       'register.passwordUppercase': 'Una mayúscula',
       'register.passwordLowercase': 'Una minúscula',
       'register.passwordNumber': 'Un número',
@@ -59,6 +58,9 @@ vi.mock('@/lib/i18n', () => ({
       'register.submitting': 'Registrando...',
       'errors.loginError': 'Error al iniciar sesión',
       'errors.registerError': 'Error al registrarse',
+      'errors.invalidCredentials': 'Credenciales inválidas',
+      'errors.rateLimitError': 'Demasiados intentos. Intenta más tarde.',
+      'errors.validationError': 'Revisa los datos del formulario',
     };
     return keyMap[key] ?? key;
   }),
@@ -208,14 +210,14 @@ describe('AuthClient', () => {
       target: { value: 'ana@example.com' },
     });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {
-      target: { value: 'Password1' },
+      target: { value: 'Password12345' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
 
     await waitFor(() => {
       expect(mockLoginAction).toHaveBeenCalledWith({
         email: 'ana@example.com',
-        password: 'Password1',
+        password: 'Password12345',
       });
     });
     expect(mockPush).toHaveBeenCalledWith('/es/dashboard');
@@ -228,7 +230,7 @@ describe('AuthClient', () => {
       target: { value: 'ana@example.com' },
     });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {
-      target: { value: 'Password1' },
+      target: { value: 'Password12345' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
 
@@ -238,7 +240,11 @@ describe('AuthClient', () => {
   });
 
   it('should show the login error message on failed login', async () => {
-    mockLoginAction.mockResolvedValue({ success: false, error: 'Invalid credentials' });
+    mockLoginAction.mockResolvedValue({
+      success: false,
+      error: 'Invalid credentials',
+      code: 'AUTH_ERROR',
+    });
 
     renderAuth();
 
@@ -251,7 +257,7 @@ describe('AuthClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
+      expect(screen.getByText('Credenciales inválidas')).toBeInTheDocument();
     });
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -264,7 +270,7 @@ describe('AuthClient', () => {
 
     fireEvent.change(screen.getByTestId('reg-name'), { target: { value: 'Ana Torres' } });
     fireEvent.change(screen.getByTestId('reg-email'), { target: { value: 'ana@example.com' } });
-    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password1' } });
+    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password12345' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Register Submit' }));
 
@@ -272,7 +278,7 @@ describe('AuthClient', () => {
       expect(mockRegisterAction).toHaveBeenCalledWith({
         name: 'Ana Torres',
         email: 'ana@example.com',
-        password: 'Password1',
+        password: 'Password12345',
       });
     });
 
@@ -283,7 +289,11 @@ describe('AuthClient', () => {
   });
 
   it('should show the register error message on failed registration', async () => {
-    mockRegisterAction.mockResolvedValue({ success: false, error: 'Registration failed' });
+    mockRegisterAction.mockResolvedValue({
+      success: false,
+      error: 'Registration failed',
+      code: 'AUTH_ERROR',
+    });
 
     renderAuth();
 
@@ -291,12 +301,12 @@ describe('AuthClient', () => {
 
     fireEvent.change(screen.getByTestId('reg-name'), { target: { value: 'Ana Torres' } });
     fireEvent.change(screen.getByTestId('reg-email'), { target: { value: 'ana@example.com' } });
-    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password1' } });
+    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password12345' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Register Submit' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('register-error')).toHaveTextContent('Registration failed');
+      expect(screen.getByTestId('register-error')).toHaveTextContent('Error al registrarse');
     });
   });
 
@@ -313,7 +323,7 @@ describe('AuthClient', () => {
 
     expect(screen.getByTestId('register-valid')).toHaveTextContent('invalid');
 
-    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password1' } });
+    fireEvent.change(screen.getByTestId('reg-password'), { target: { value: 'Password12345' } });
 
     expect(screen.getByTestId('register-valid')).toHaveTextContent('valid');
   });
@@ -340,5 +350,40 @@ describe('AuthClient', () => {
     renderAuth({ isRegistered: true });
 
     expect(screen.getByText('¡Sesión iniciada!')).toBeInTheDocument();
+  });
+
+  it('should sanitize an external redirect URL to the dashboard on login success', async () => {
+    renderAuth({ redirectPath: 'https://evil.com' });
+
+    fireEvent.change(screen.getByPlaceholderText('tucorreo@ejemplo.com'), {
+      target: { value: 'ana@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
+      target: { value: 'Password12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+    await waitFor(() => {
+      expect(mockLoginAction).toHaveBeenCalled();
+    });
+    expect(mockPush).toHaveBeenCalledWith('/es/dashboard');
+    expect(mockPush).not.toHaveBeenCalledWith('https://evil.com');
+  });
+
+  it('should sanitize a protocol-relative redirect URL to the dashboard on login success', async () => {
+    renderAuth({ redirectPath: '//evil.com' });
+
+    fireEvent.change(screen.getByPlaceholderText('tucorreo@ejemplo.com'), {
+      target: { value: 'ana@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
+      target: { value: 'Password12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/es/dashboard');
+    });
+    expect(mockPush).not.toHaveBeenCalledWith('//evil.com');
   });
 });

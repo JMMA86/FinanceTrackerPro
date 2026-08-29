@@ -6,6 +6,7 @@
 import AuthClient from '@/components/auth/AuthClient';
 import AuthPageLayout from '@/components/auth/AuthPageLayout';
 import { getDictionary, get } from '@/lib/i18n';
+import { sanitizeRedirect } from '@/lib/validations/redirect';
 import type { Locale } from '@/lib/i18n';
 
 interface LoginPageProps {
@@ -28,7 +29,6 @@ export default async function LoginPage({ params, searchParams }: Readonly<Login
       languageLabels={{
         es: get(common, 'language.spanish'),
         en: get(common, 'language.english'),
-        de: get(common, 'language.german'),
       }}
     >
       <AuthClient
@@ -37,7 +37,7 @@ export default async function LoginPage({ params, searchParams }: Readonly<Login
         common={common}
         initialMode="login"
         isRegistered={query.registered === 'true'}
-        redirectPath={query.redirect}
+        redirectPath={sanitizeRedirect(query.redirect, lang)}
       />
     </AuthPageLayout>
   );

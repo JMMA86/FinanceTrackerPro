@@ -26,7 +26,6 @@ export default async function RegisterPage({ params }: Readonly<RegisterPageProp
       languageLabels={{
         es: get(common, 'language.spanish'),
         en: get(common, 'language.english'),
-        de: get(common, 'language.german'),
       }}
     >
       <AuthClient

@@ -85,6 +85,26 @@ export class IdempotencyError extends AppError {
 }
 
 /**
+ * 401 - Authentication Error
+ * Thrown when credentials are invalid (prevents user enumeration)
+ */
+export class AuthError extends AppError {
+  constructor(message: string = 'Invalid email or password') {
+    super(message, 401, 'AUTH_ERROR');
+  }
+}
+
+/**
+ * 429 - Rate Limit Error
+ * Thrown when too many requests are made
+ */
+export class RateLimitError extends AppError {
+  constructor(message: string = 'Too many attempts. Please try again later.') {
+    super(message, 429, 'RATE_LIMITED');
+  }
+}
+
+/**
  * 400 - Currency Mismatch
  * Thrown when currencies don't match in operations
  */

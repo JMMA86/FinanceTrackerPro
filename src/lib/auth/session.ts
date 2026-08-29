@@ -4,13 +4,12 @@
  */
 
 import 'server-only';
+import '@/lib/env'; // Ensure JWT_SECRET fail-fast validation runs before any session operation
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { log } from '@/lib/logger';
 
-const SECRET_KEY = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production-min-32-chars-long'
-);
+const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET!);
 
 const SESSION_COOKIE_NAME = 'session';
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days

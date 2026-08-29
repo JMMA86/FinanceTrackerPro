@@ -105,6 +105,16 @@ export const registerAction = safeAction(async (input: unknown) => {
   await verifyPasswordWithTimingProtection(existing?.passwordHash || null, validated.password);
 
   if (existing) {
+    // Record failed registration attempt before throwing (Fix S2)
+    await recordLoginAttempt({
+      userId: existing.id,
+      email: validated.email,
+      ipAddress,
+      userAgent: _userAgent,
+      success: false,
+      type: 'REGISTER',
+    });
+
     log.info(
       { action: 'auth.register.duplicate', email: validated.email, ipAddress },
       'Duplicate registration attempt'
@@ -116,6 +126,16 @@ export const registerAction = safeAction(async (input: unknown) => {
     email: validated.email,
     name: validated.name,
     passwordHash,
+  });
+
+  // Record successful registration attempt (Fix S2)
+  await recordLoginAttempt({
+    userId: user.id,
+    email: validated.email,
+    ipAddress,
+    userAgent: _userAgent,
+    success: true,
+    type: 'REGISTER',
   });
 
   log.info(

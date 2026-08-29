@@ -79,15 +79,17 @@ describe('rate-limit.service', () => {
       expect(result.retryAfterMs).toBe(LOGIN_WINDOW_MS);
     });
 
-    it('counts only failed attempts and lowercases the email', async () => {
+    it('counts only failed LOGIN attempts and lowercases the email', async () => {
       mockPrisma.loginAttempt.count.mockResolvedValue(0);
 
       await checkLoginRateLimit('1.2.3.4', 'TEST@EXAMPLE.COM');
 
       const [ipCall, emailCall] = mockPrisma.loginAttempt.count.mock.calls;
       expect(ipCall[0].where.success).toBe(false);
+      expect(ipCall[0].where.type).toBe('LOGIN');
       expect(ipCall[0].where.ipAddress).toBe('1.2.3.4');
       expect(emailCall[0].where.success).toBe(false);
+      expect(emailCall[0].where.type).toBe('LOGIN');
       expect(emailCall[0].where.email).toBe('test@example.com');
       expect(emailCall[0].where.createdAt).toBeDefined();
     });
@@ -119,20 +121,33 @@ describe('rate-limit.service', () => {
       expect(result.allowed).toBe(false);
     });
 
-    it('counts ALL attempts (not only failures) and lowercases the email', async () => {
+    it('counts only REGISTER attempts (not LOGIN) and lowercases the email', async () => {
       mockPrisma.loginAttempt.count.mockResolvedValue(0);
 
       await checkRegisterRateLimit('1.2.3.4', 'Test@Example.COM');
 
       const [ipCall, emailCall] = mockPrisma.loginAttempt.count.mock.calls;
+      expect(ipCall[0].where.type).toBe('REGISTER');
       expect(ipCall[0].where).not.toHaveProperty('success');
+      expect(emailCall[0].where.type).toBe('REGISTER');
       expect(emailCall[0].where).not.toHaveProperty('success');
       expect(emailCall[0].where.email).toBe('test@example.com');
+    });
+
+    it('does NOT count LOGIN attempts against REGISTER limit', async () => {
+      // Simulate that there are LOGIN attempts but they should not affect REGISTER
+      mockPrisma.loginAttempt.count.mockResolvedValue(0);
+
+      const result = await checkRegisterRateLimit('1.2.3.4', 'test@example.com');
+
+      expect(result.allowed).toBe(true);
+      const [ipCall] = mockPrisma.loginAttempt.count.mock.calls;
+      expect(ipCall[0].where.type).toBe('REGISTER');
     });
   });
 
   describe('recordLoginAttempt', () => {
-    it('creates a record with normalized email and null userId when not provided', async () => {
+    it('creates a record with normalized email, null userId, and default type LOGIN when not provided', async () => {
       mockPrisma.loginAttempt.create.mockResolvedValue({ id: 'attempt-1' });
 
       await recordLoginAttempt({
@@ -148,11 +163,12 @@ describe('rate-limit.service', () => {
           ipAddress: '1.2.3.4',
           userAgent: null,
           success: false,
+          type: 'LOGIN',
         },
       });
     });
 
-    it('passes userId and userAgent through when provided', async () => {
+    it('passes userId, userAgent, and explicit type through when provided', async () => {
       mockPrisma.loginAttempt.create.mockResolvedValue({ id: 'attempt-2' });
 
       await recordLoginAttempt({
@@ -161,6 +177,7 @@ describe('rate-limit.service', () => {
         ipAddress: '1.2.3.4',
         userAgent: 'Mozilla/5.0',
         success: true,
+        type: 'REGISTER',
       });
 
       expect(mockPrisma.loginAttempt.create).toHaveBeenCalledWith({
@@ -170,6 +187,7 @@ describe('rate-limit.service', () => {
           ipAddress: '1.2.3.4',
           userAgent: 'Mozilla/5.0',
           success: true,
+          type: 'REGISTER',
         },
       });
     });

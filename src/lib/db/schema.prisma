@@ -41,6 +41,11 @@ enum AccountType {
   CREDIT_CARD   // Reservado — sección Tarjetas
 }
 
+enum AuthAttemptType {
+  LOGIN
+  REGISTER
+}
+
 enum CardNetwork {
   NONE
   VISA
@@ -604,6 +609,7 @@ model LoginAttempt {
   ipAddress String
   userAgent String?
   success   Boolean
+  type      AuthAttemptType @default(LOGIN)
   createdAt DateTime @default(now())
 
   @@index([ipAddress, createdAt])

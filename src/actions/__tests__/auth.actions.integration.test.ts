@@ -220,7 +220,7 @@ describe('Auth Actions Integration', () => {
       expect(result.code).toBe('AUTH_ERROR');
 
       const attempts = await prisma.loginAttempt.findMany({
-        where: { email },
+        where: { email, type: 'LOGIN' },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -245,7 +245,7 @@ describe('Auth Actions Integration', () => {
       });
 
       const attempts = await prisma.loginAttempt.findMany({
-        where: { email, success: true },
+        where: { email, success: true, type: 'LOGIN' },
       });
 
       expect(attempts).toHaveLength(1);
@@ -276,6 +276,91 @@ describe('Auth Actions Integration', () => {
 
       // 6th attempt should be rate limited
       const result = await loginAction({ email, password: 'WrongPassword123' });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('RATE_LIMITED');
+    });
+
+    it('should block register after 5 attempts from the same IP', async () => {
+      const { registerAction } = await import('../auth.actions');
+
+      // 5 successful registration attempts with unique emails
+      for (let i = 0; i < 5; i++) {
+        const r = await registerAction({
+          email: genEmail(),
+          name: 'Rate Limit Test',
+          password: 'SecurePass1234',
+        });
+        expect(r.success).toBe(true);
+      }
+
+      // 6th attempt should be rate limited
+      const result = await registerAction({
+        email: genEmail(),
+        name: 'Rate Limit Test',
+        password: 'SecurePass1234',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('RATE_LIMITED');
+    });
+
+    it('should allow registration even after multiple successful logins (CI bug fix)', async () => {
+      const { registerAction, loginAction } = await import('../auth.actions');
+      const email = genEmail();
+
+      const regResult = await registerAction({
+        email,
+        name: 'CI Bug Test',
+        password: 'SecurePass1234',
+      });
+      expect(regResult.success).toBe(true);
+
+      // 4 successful logins (simulating CI warmup + logins)
+      for (let i = 0; i < 4; i++) {
+        const r = await loginAction({ email, password: 'SecurePass1234' });
+        expect(r.success).toBe(true);
+      }
+
+      // Registration should still be allowed because logins are type=LOGIN
+      const newEmail = genEmail();
+      const result = await registerAction({
+        email: newEmail,
+        name: 'CI Bug Test New',
+        password: 'SecurePass1234',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({ email: newEmail });
+    });
+
+    it('should accumulate duplicate registration attempts and rate limit', async () => {
+      const { registerAction } = await import('../auth.actions');
+      const email = genEmail();
+
+      // Register first user successfully
+      await registerAction({
+        email,
+        name: 'First User',
+        password: 'SecurePass1234',
+      });
+
+      // 3 duplicate registration attempts (failures)
+      for (let i = 0; i < 3; i++) {
+        const r = await registerAction({
+          email,
+          name: 'Duplicate User',
+          password: 'SecurePass1234',
+        });
+        expect(r.success).toBe(false);
+      }
+
+      // 4th duplicate should be rate limited (REGISTER_MAX_EMAIL = 3)
+      const result = await registerAction({
+        email,
+        name: 'Duplicate User',
+        password: 'SecurePass1234',
+      });
 
       expect(result.success).toBe(false);
       expect(result.code).toBe('RATE_LIMITED');

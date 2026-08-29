@@ -6,6 +6,7 @@
 import 'server-only';
 import { prisma } from '@/lib/db';
 import { log } from '@/lib/logger';
+import { AuthAttemptType } from '@prisma/client';
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const LOGIN_MAX_IP_FAILURES = 10;
@@ -37,6 +38,7 @@ export async function checkLoginRateLimit(
     prisma.loginAttempt.count({
       where: {
         ipAddress,
+        type: 'LOGIN',
         success: false,
         createdAt: { gte: windowStart },
       },
@@ -44,6 +46,7 @@ export async function checkLoginRateLimit(
     prisma.loginAttempt.count({
       where: {
         email: email.toLowerCase(),
+        type: 'LOGIN',
         success: false,
         createdAt: { gte: windowStart },
       },
@@ -74,12 +77,14 @@ export async function checkRegisterRateLimit(
     prisma.loginAttempt.count({
       where: {
         ipAddress,
+        type: 'REGISTER',
         createdAt: { gte: windowStart },
       },
     }),
     prisma.loginAttempt.count({
       where: {
         email: email.toLowerCase(),
+        type: 'REGISTER',
         createdAt: { gte: windowStart },
       },
     }),
@@ -105,6 +110,7 @@ export async function recordLoginAttempt(params: {
   ipAddress: string;
   userAgent?: string;
   success: boolean;
+  type?: AuthAttemptType;
 }): Promise<void> {
   try {
     await prisma.loginAttempt.create({
@@ -114,6 +120,7 @@ export async function recordLoginAttempt(params: {
         ipAddress: params.ipAddress,
         userAgent: params.userAgent ?? null,
         success: params.success,
+        type: params.type ?? 'LOGIN',
       },
     });
   } catch (error) {

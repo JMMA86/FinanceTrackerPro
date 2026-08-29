@@ -1,6 +1,0 @@
-npm notice run financetrackerpro@0.1.0 start
-npm notice run next start
-▲ Next.js 16.2.4
-- Local:         http://localhost:3000
-- Network:       http://169.254.83.107:3000
-✓ Ready in 111ms

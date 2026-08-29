@@ -60,9 +60,7 @@ describe('SavingsSummaryCards', () => {
     mockCalculateMaxSpendable.mockResolvedValue({ success: true, data: maxSpendable });
   });
 
-  const renderCards = () => (
-    <SavingsSummaryCards dictionary={defaultDictionary} locale="es-CO" />
-  );
+  const renderCards = () => <SavingsSummaryCards dictionary={defaultDictionary} locale="es-CO" />;
 
   it('should show a skeleton while data is loading', () => {
     mockGetSavingsSummary.mockReturnValue(new Promise<never>(() => {}));

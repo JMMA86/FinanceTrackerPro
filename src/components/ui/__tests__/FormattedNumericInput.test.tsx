@@ -36,7 +36,8 @@ describe('FormattedNumericInput', () => {
     expect(input).toHaveAttribute('inputMode', 'numeric');
   });
 
-  it('should append a typed digit to the internal cents value', () => { // NOSONAR: descriptive test names preferred over parameterized tests for BDD readability
+  it('should append a typed digit to the internal cents value', () => {
+    // NOSONAR: descriptive test names preferred over parameterized tests for BDD readability
     const onChange = vi.fn();
     render(<FormattedNumericInput value={12} onChange={onChange} />);
 

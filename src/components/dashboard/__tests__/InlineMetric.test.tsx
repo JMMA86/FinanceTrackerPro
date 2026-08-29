@@ -8,15 +8,17 @@ import { render, screen } from '@testing-library/react';
 import { InlineMetric } from '../InlineMetric';
 
 describe('InlineMetric', () => {
-  const renderMetric = (props: {
-    label?: string;
-    value?: string;
-    subValue?: string;
-    trend?: 'up' | 'down' | 'neutral';
-    sparklineData?: readonly number[];
-    masked?: boolean;
-    sublabel?: string;
-  } = {}) =>
+  const renderMetric = (
+    props: {
+      label?: string;
+      value?: string;
+      subValue?: string;
+      trend?: 'up' | 'down' | 'neutral';
+      sparklineData?: readonly number[];
+      masked?: boolean;
+      sublabel?: string;
+    } = {}
+  ) =>
     render(
       <InlineMetric
         label={props.label ?? 'Ingresos'}

@@ -165,15 +165,15 @@ describe('CreateAccountModal', () => {
 
     // Hidden fields carry the pocket prefill data (currency inherited from parent)
     await waitFor(() => {
-      expect(
-        (document.querySelector('input[name="type"]') as HTMLInputElement)?.value
-      ).toBe('POCKET');
+      expect((document.querySelector('input[name="type"]') as HTMLInputElement)?.value).toBe(
+        'POCKET'
+      );
       expect(
         (document.querySelector('input[name="parentAccountId"]') as HTMLInputElement)?.value
       ).toBe(MOCK_PARENT.id);
-      expect(
-        (document.querySelector('input[name="currency"]') as HTMLInputElement)?.value
-      ).toBe('USD');
+      expect((document.querySelector('input[name="currency"]') as HTMLInputElement)?.value).toBe(
+        'USD'
+      );
     });
   });
 
@@ -222,7 +222,9 @@ describe('CreateAccountModal', () => {
 
     fireEvent.change(screen.getByLabelText('accountName'), { target: { value: 'Mi Cuenta' } });
     fireEvent.change(screen.getByLabelText('accountType'), { target: { value: 'SAVINGS' } });
-    fireEvent.change(screen.getByTestId('numeric-input-acc-balance'), { target: { value: '5000' } });
+    fireEvent.change(screen.getByTestId('numeric-input-acc-balance'), {
+      target: { value: '5000' },
+    });
 
     const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     fireEvent.click(submitBtn);

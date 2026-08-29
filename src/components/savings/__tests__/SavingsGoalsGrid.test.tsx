@@ -175,9 +175,7 @@ describe('SavingsGoalsGrid', () => {
     mockGetSavingsGoals.mockResolvedValue({ success: true, data: [] });
   });
 
-  const renderGrid = () => (
-    <SavingsGoalsGrid dictionary={defaultDictionary} locale="es-CO" />
-  );
+  const renderGrid = () => <SavingsGoalsGrid dictionary={defaultDictionary} locale="es-CO" />;
 
   it('should show a skeleton while goals are loading', () => {
     mockGetSavingsGoals.mockReturnValue(new Promise<never>(() => {}));
@@ -219,10 +217,7 @@ describe('SavingsGoalsGrid', () => {
   it('should show the goal count header and cards when goals exist', async () => {
     mockGetSavingsGoals.mockResolvedValue({
       success: true,
-      data: [
-        makeGoal(),
-        makeGoal({ id: 'clh99999999999999999999', name: 'Fondo de Emergencia' }),
-      ],
+      data: [makeGoal(), makeGoal({ id: 'clh99999999999999999999', name: 'Fondo de Emergencia' })],
     });
 
     render(renderGrid());

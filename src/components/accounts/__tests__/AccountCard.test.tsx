@@ -163,7 +163,9 @@ describe('AccountCard', () => {
 
   it('should have the account id as data attribute', () => {
     const { container } = renderCard({ id: 'clh1234567890abcdefghij' });
-    expect(container.querySelector('[data-account-id="clh1234567890abcdefghij"]')).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-account-id="clh1234567890abcdefghij"]')
+    ).toBeInTheDocument();
   });
 });
 

@@ -90,9 +90,7 @@ describe('BankAccountsSection', () => {
   const dictionary = {};
 
   const renderSection = (accounts: AccountCardData[]) =>
-    render(
-      <BankAccountsSection accounts={accounts} dictionary={dictionary} locale="es-CO" />
-    );
+    render(<BankAccountsSection accounts={accounts} dictionary={dictionary} locale="es-CO" />);
 
   beforeEach(() => {
     useUIStore.setState({ activeModal: null, modalData: null, notifications: [] });
@@ -157,7 +155,9 @@ describe('BankAccountsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cuenta Principal' }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('Agregar'));
@@ -174,7 +174,9 @@ describe('BankAccountsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cuenta Principal' }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByLabelText('Editar'));
@@ -188,7 +190,9 @@ describe('BankAccountsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cuenta Principal' }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByLabelText('Eliminar'));
@@ -206,7 +210,9 @@ describe('BankAccountsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cuenta Principal' }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })
+      ).toBeInTheDocument();
     });
 
     const pocketCard = document.querySelector('[data-pocket-id]') as HTMLButtonElement;

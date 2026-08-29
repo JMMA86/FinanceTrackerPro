@@ -63,11 +63,7 @@ describe('InvestmentTransactionsList', () => {
   it('should show a loading spinner while fetching', () => {
     mockGetInvestmentTransactions.mockImplementation(() => new Promise(() => {}));
     const { container } = render(
-      <InvestmentTransactionsList
-        accountId="acc-1"
-        currency="USD"
-        dictionary={dictionary}
-      />
+      <InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />
     );
 
     expect(container.querySelector('svg.animate-spin')).toBeInTheDocument();
@@ -117,7 +113,13 @@ describe('InvestmentTransactionsList', () => {
   it('should render transaction labels for buy/sell/other types', async () => {
     mockGetInvestmentTransactions.mockResolvedValue({
       success: true,
-      data: { transactions: [buyTx, sellTx, otherTx], totalPages: 1, total: 3, page: 1, pageSize: 20 },
+      data: {
+        transactions: [buyTx, sellTx, otherTx],
+        totalPages: 1,
+        total: 3,
+        page: 1,
+        pageSize: 20,
+      },
     });
 
     render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);

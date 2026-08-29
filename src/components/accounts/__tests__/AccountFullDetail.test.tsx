@@ -84,7 +84,14 @@ const POCKET_TWO: AccountCardData = {
   balanceCents: 15000,
 };
 
-const cardRect = { top: 100, left: 200, right: 340, bottom: 220, width: 140, height: 120 } as DOMRect;
+const cardRect = {
+  top: 100,
+  left: 200,
+  right: 340,
+  bottom: 220,
+  width: 140,
+  height: 120,
+} as DOMRect;
 
 const noop = () => undefined;
 
@@ -195,9 +202,7 @@ describe('AccountFullDetail', () => {
   it('should render the account detail when open', async () => {
     const { container } = renderDetail();
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Cuenta Principal' })).toBeInTheDocument();
     expect(screen.getAllByText('Corriente').length).toBeGreaterThan(0);
     expect(screen.getByText('Saldo actual')).toBeInTheDocument();
     expect(screen.getByText('Tasa EA')).toBeInTheDocument();

@@ -105,7 +105,9 @@ describe('DeleteGoalModal', () => {
       expect(screen.getByText('Eliminar Meta')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/No se puede eliminar una meta con contribuciones/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No se puede eliminar una meta con contribuciones/)
+    ).toBeInTheDocument();
   });
 
   it('should disable the delete button when hasContributions=true', async () => {

@@ -233,9 +233,7 @@ describe('DeleteConfirmModal', () => {
 
     // Spinner replaces the delete label while pending
     expect(screen.queryByText('delete')).not.toBeInTheDocument();
-    const deleteBtn = screen.getAllByRole('button').find((b) =>
-      b.querySelector('.animate-spin')
-    );
+    const deleteBtn = screen.getAllByRole('button').find((b) => b.querySelector('.animate-spin'));
     expect(deleteBtn).toBeDefined();
     expect(deleteBtn).toBeDisabled();
 

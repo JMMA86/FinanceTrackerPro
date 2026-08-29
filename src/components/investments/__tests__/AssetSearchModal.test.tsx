@@ -134,9 +134,12 @@ describe('AssetSearchModal', () => {
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ZZZ' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('stockNotFound')).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText('stockNotFound')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('should show stockNotFound error when the search request fails', async () => {
@@ -148,9 +151,12 @@ describe('AssetSearchModal', () => {
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('stockNotFound')).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText('stockNotFound')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('should fetch price and render the buy form when a stock is picked', async () => {
@@ -168,7 +174,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
 
     await waitFor(() => {
@@ -195,7 +203,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
 
     await waitFor(() => {
@@ -220,7 +230,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
 
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
@@ -249,7 +261,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
 
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
@@ -269,9 +283,9 @@ describe('AssetSearchModal', () => {
     });
 
     await waitFor(() => {
-      expect(
-        useUIStore.getState().notifications.some((n) => n.message === 'Bought 2 AAPL')
-      ).toBe(true);
+      expect(useUIStore.getState().notifications.some((n) => n.message === 'Bought 2 AAPL')).toBe(
+        true
+      );
       expect(useUIStore.getState().activeModal).toBeNull();
     });
   });
@@ -292,7 +306,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
@@ -319,7 +335,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
@@ -346,7 +364,9 @@ describe('AssetSearchModal', () => {
 
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
-    expect(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });

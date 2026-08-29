@@ -311,9 +311,9 @@ describe('DepositModal', () => {
 
     await waitFor(() => {
       expect(
-        useUIStore.getState().notifications.some(
-          (n) => n.message === 'Deposit completed successfully'
-        )
+        useUIStore
+          .getState()
+          .notifications.some((n) => n.message === 'Deposit completed successfully')
       ).toBe(true);
       expect(useUIStore.getState().activeModal).toBeNull();
     });

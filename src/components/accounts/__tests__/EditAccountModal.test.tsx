@@ -90,7 +90,8 @@ function getLastNotification() {
 
 describe('EditAccountModal', () => {
   const dictionary = {};
-  const renderModal = () => render(<EditAccountModal accounts={MOCK_ACCOUNTS} dictionary={dictionary} />);
+  const renderModal = () =>
+    render(<EditAccountModal accounts={MOCK_ACCOUNTS} dictionary={dictionary} />);
 
   beforeEach(() => {
     useUIStore.setState({ activeModal: null, modalData: null, notifications: [] });
@@ -212,7 +213,11 @@ describe('EditAccountModal', () => {
     expect(useUIStore.getState().activeModal).toBeNull();
     expect(updatedListener).toHaveBeenCalled();
     const event = updatedListener.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toMatchObject({ accountId: SAVINGS_ACCOUNT.id, cardColor: 'blue', cardNetwork: 'VISA' });
+    expect(event.detail).toMatchObject({
+      accountId: SAVINGS_ACCOUNT.id,
+      cardColor: 'blue',
+      cardNetwork: 'VISA',
+    });
 
     document.removeEventListener('finance:account-updated', updatedListener);
   });

@@ -50,12 +50,7 @@ describe('MaxSpendableCard', () => {
   });
 
   const renderCard = () => (
-    <MaxSpendableCard
-      dictionary={defaultDictionary}
-      locale="es-CO"
-      month={8}
-      year={2026}
-    />
+    <MaxSpendableCard dictionary={defaultDictionary} locale="es-CO" month={8} year={2026} />
   );
 
   it('should show a skeleton while data is loading', () => {

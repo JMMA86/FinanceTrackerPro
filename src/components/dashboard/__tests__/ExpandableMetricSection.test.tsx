@@ -9,11 +9,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ExpandableMetricSection } from '../ExpandableMetricSection';
 
 describe('ExpandableMetricSection', () => {
-  const renderSection = (props: {
-    title?: string;
-    defaultOpen?: boolean;
-    category?: string;
-  } = {}) =>
+  const renderSection = (
+    props: {
+      title?: string;
+      defaultOpen?: boolean;
+      category?: string;
+    } = {}
+  ) =>
     render(
       <ExpandableMetricSection
         title={props.title ?? 'Liquidez'}

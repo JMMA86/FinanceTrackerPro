@@ -34,7 +34,9 @@ describe('PieChartComponent', () => {
     const legendButtons = screen.getAllByRole('button', { name: /Mostrar detalles de/ });
     expect(legendButtons).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Mostrar detalles de Salud' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mostrar detalles de Vivienda' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Mostrar detalles de Vivienda' })
+    ).toBeInTheDocument();
   });
 
   it('should render the total in the center', () => {

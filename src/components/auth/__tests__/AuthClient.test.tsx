@@ -81,12 +81,7 @@ type MobileAuthFormMockProps = {
 };
 
 vi.mock('../MobileAuthForm', () => ({
-  default: ({
-    mode,
-    onLoginSubmit,
-    onRegisterSubmit,
-    onSwitchMode,
-  }: MobileAuthFormMockProps) => (
+  default: ({ mode, onLoginSubmit, onRegisterSubmit, onSwitchMode }: MobileAuthFormMockProps) => (
     <div>
       <form
         data-testid="mobile-form"

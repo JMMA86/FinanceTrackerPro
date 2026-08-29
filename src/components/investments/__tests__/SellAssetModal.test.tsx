@@ -149,9 +149,9 @@ describe('SellAssetModal', () => {
     });
 
     await waitFor(() => {
-      expect(
-        useUIStore.getState().notifications.some((n) => n.message === 'Sold 2 AAPL')
-      ).toBe(true);
+      expect(useUIStore.getState().notifications.some((n) => n.message === 'Sold 2 AAPL')).toBe(
+        true
+      );
       expect(useUIStore.getState().activeModal).toBeNull();
     });
   });

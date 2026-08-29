@@ -285,8 +285,9 @@ Then(
 );
 
 Then('la nueva cuenta debe aparecer en el grid', async ({ page }) => {
-  // After successful creation, the page refreshes and shows the account card
-  await expect(page.locator('[data-account-id]').first()).toBeVisible({ timeout: 10000 });
+  // After successful creation, the page refreshes and shows the account card.
+  // 30s: first creation in the suite pays the worker/compile cold start on CI.
+  await expect(page.locator('[data-account-id]').first()).toBeVisible({ timeout: 30000 });
 });
 
 // ============================================================================

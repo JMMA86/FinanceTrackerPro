@@ -8,7 +8,7 @@
 
 import 'server-only';
 import * as argon2 from 'argon2';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { headers } from 'next/headers';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { RegisterSchema, LoginSchema } from '@/lib/validations/auth';

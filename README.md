@@ -197,7 +197,7 @@ npm run sonar
 **Quality Gate blocks merge if:**
 
 - Quality Gate status is `ERROR`
-- Coverage drops below `70%` on new code
+- Overall coverage drops below `70%`
 - TypeScript strict `any` count rises above zero
 - Any `BLOCKER` or `CRITICAL` vulnerability is detected
 

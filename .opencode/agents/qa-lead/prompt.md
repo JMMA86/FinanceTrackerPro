@@ -194,7 +194,7 @@ Requieren revisión manual (escalar a `sec-ops`):
 | Quality Gate       | `OK` requerido | Bloqueante si `ERROR` |
 | BLOCKER issues     | 0              | Bloqueante si > 0     |
 | CRITICAL issues    | 0              | Bloqueante si > 0     |
-| Cobertura new code | ≥ 70%          | Bloqueante si < 70%   |
+| Cobertura global (overall) | ≥ 70%          | Bloqueante si < 70%   |
 | Código duplicado   | ≤ 3%           | Bloqueante si > 3%    |
 | Bugs               | 0              | Bloqueante si > 0     |
 | Vulnerabilidades   | 0              | Bloqueante si > 0     |

@@ -125,7 +125,7 @@ export function DepositModal({ dictionary, locale = 'es-CO' }: Readonly<DepositM
 
   const destAccount = investmentAccounts.find((a) => a.id === selectedInvestmentAccount);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
 

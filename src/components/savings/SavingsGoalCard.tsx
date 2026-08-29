@@ -95,7 +95,7 @@ export function SavingsGoalCard({
     >
       {/* Colored header bar */}
       <div
-        className={`h-1.5 ${isHexColor ? '' : `bg-gradient-to-r ${gradient}`}`}
+        className={isHexColor ? 'h-1.5' : `h-1.5 bg-gradient-to-r ${gradient}`}
         style={solidStyle}
       />
 

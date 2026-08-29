@@ -13,7 +13,7 @@ describe('logger.ts PII masking and sanitization', () => {
 
     it('should return invalid input as-is', () => {
       expect(maskEmail('not-an-email')).toBe('not-an-email');
-      expect(maskEmail(null as unknown as string)).toBe(null);
+      expect(maskEmail(null as unknown as string)).toBeNull();
     });
   });
 
@@ -50,8 +50,8 @@ describe('logger.ts PII masking and sanitization', () => {
     });
 
     it('should handle non-string input', () => {
-      expect(maskString(null as unknown as string, 4)).toBe(null);
-      expect(maskString(undefined as unknown as string, 4)).toBe(undefined);
+      expect(maskString(null as unknown as string, 4)).toBeNull();
+      expect(maskString(undefined as unknown as string, 4)).toBeUndefined();
     });
   });
 

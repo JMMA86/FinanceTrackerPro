@@ -323,7 +323,7 @@ describe('Transaction Actions (real actions)', () => {
     expect(expenses.data!.transactions).toHaveLength(1);
 
     const page2 = await getAllTransactions({ page: 2, pageSize: 2 });
-    expect(page2.data!.transactions.length).toBe(1);
+    expect(page2.data!.transactions).toHaveLength(1);
     expect(page2.data!.totalPages).toBe(2);
   });
 

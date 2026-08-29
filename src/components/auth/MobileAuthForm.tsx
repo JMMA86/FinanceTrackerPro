@@ -143,6 +143,7 @@ export default function MobileAuthForm({
         {/* Toggle link with crossfade */}
         <div className="mt-6 text-center">
           <button
+            type="button"
             onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
             className="text-sm text-gray-300 hover:text-white transition-colors"
           >

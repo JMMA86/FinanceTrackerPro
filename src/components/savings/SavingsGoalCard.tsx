@@ -158,17 +158,21 @@ export function SavingsGoalCard({
               {progress.toFixed(1)}%
             </span>
           </div>
-          <div
-            className="h-2.5 bg-white/5 rounded-full overflow-hidden"
-            role="progressbar"
-            aria-valuenow={progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${goal.name}: ${progress.toFixed(1)}%`}
-          >
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ease-out ${isHexColor ? '' : `bg-gradient-to-r ${gradient}`}`}
-              style={{ width: `${progress}%`, ...solidStyle }}
+          <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
+            <progress
+              value={progress}
+              max={100}
+              aria-label={`${goal.name}: ${progress.toFixed(1)}%`}
+              className={`block h-full w-full appearance-none bg-transparent [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-gradient-to-r [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-gradient-to-r ${
+                isHexColor
+                  ? '[&::-webkit-progress-value]:bg-[var(--progress-color)] [&::-moz-progress-bar]:bg-[var(--progress-color)]'
+                  : gradient
+              }`}
+              style={
+                isHexColor && goal.color
+                  ? { ['--progress-color' as string]: goal.color }
+                  : undefined
+              }
             />
           </div>
         </div>

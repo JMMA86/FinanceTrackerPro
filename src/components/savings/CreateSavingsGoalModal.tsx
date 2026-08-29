@@ -86,7 +86,6 @@ export function CreateSavingsGoalModal({
       setMonthlyCents(0);
       setSelectedColor(undefined);
       setCustomColor('#6366f1');
-      setSubmitError(null);
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
@@ -95,6 +94,9 @@ export function CreateSavingsGoalModal({
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
     if (!dialog?.open) return;
+    // Clear the server error here (on close) instead of in the open effect —
+    // an rAF-delayed reset could clobber an error set by a fast submit.
+    setSubmitError(null);
     setIsVisible(false);
     setTimeout(() => {
       if (dialog.open) dialog.close();
@@ -102,6 +104,7 @@ export function CreateSavingsGoalModal({
   }, []);
 
   const handleDialogClose = useCallback(() => {
+    setSubmitError(null);
     onClose();
   }, [onClose]);
 

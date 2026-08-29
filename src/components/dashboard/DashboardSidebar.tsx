@@ -76,6 +76,7 @@ export function DashboardSidebar({
     <>
       {/* Toggle Button — outside aside's stacking context so it stays above overlays */}
       <button
+        type="button"
         onClick={toggleSidebar}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-expanded={!collapsed}
@@ -200,6 +201,7 @@ export function DashboardSidebar({
             }}
           >
             <button
+              type="button"
               onClick={handleLogout}
               disabled={loggingOut}
               className="

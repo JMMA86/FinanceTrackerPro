@@ -126,11 +126,8 @@ jobs:
       - name: Type check
         run: npm run type-check
 
-      - name: Unit tests with coverage
-        run: npx vitest run --coverage --exclude '**/*.integration.test.ts'
-
-      - name: Integration tests
-        run: npx vitest run integration
+      - name: Tests with coverage (unit + integration)
+        run: npx vitest run --coverage
 
       - name: E2E tests (Playwright + Cucumber BDD)
         run: npm run test:e2e

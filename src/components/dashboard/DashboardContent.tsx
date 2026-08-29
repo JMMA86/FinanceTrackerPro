@@ -136,6 +136,7 @@ function HeroMetricCard({
 
       {onToggleMask && (
         <button
+          type="button"
           onClick={onToggleMask}
           className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 p-2 sm:p-2.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 hover:text-blue-200 transition-all duration-200"
           aria-label={masked ? 'Show values' : 'Hide values'}

@@ -101,6 +101,16 @@ export function MaxSpendableCard({
     },
   ];
 
+  // Fill color for native <progress> pseudo-elements (webkit/moz)
+  const BAR_FILL: Record<string, string> = {
+    'bg-emerald-500':
+      '[&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500',
+    'bg-red-500': '[&::-webkit-progress-value]:bg-red-500 [&::-moz-progress-bar]:bg-red-500',
+    'bg-violet-500':
+      '[&::-webkit-progress-value]:bg-violet-500 [&::-moz-progress-bar]:bg-violet-500',
+    'bg-amber-500': '[&::-webkit-progress-value]:bg-amber-500 [&::-moz-progress-bar]:bg-amber-500',
+  };
+
   return (
     <div className="app-shell rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -114,7 +124,6 @@ export function MaxSpendableCard({
 
       <div className="space-y-3">
         {bars.map((bar) => {
-          const percentage = (bar.value / bar.max) * 100;
           return (
             <div key={bar.label}>
               <div className="flex items-center justify-between mb-1">
@@ -127,14 +136,13 @@ export function MaxSpendableCard({
                 </span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${bar.color}`}
-                  style={{ width: `${Math.min(percentage, 100)}%` }}
-                  role="progressbar"
-                  aria-valuenow={bar.value}
-                  aria-valuemin={0}
-                  aria-valuemax={bar.max}
+                <progress
+                  value={bar.value}
+                  max={bar.max}
                   aria-label={`${bar.label}: ${formatMoney(bar.value, 'COP', locale)}`}
+                  className={`block h-full w-full appearance-none bg-transparent [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:rounded-full [&::-moz-progress-bar]:rounded-full ${
+                    BAR_FILL[bar.color] ?? ''
+                  }`}
                 />
               </div>
             </div>

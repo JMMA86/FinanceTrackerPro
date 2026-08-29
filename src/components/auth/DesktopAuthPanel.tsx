@@ -86,6 +86,7 @@ export default function DesktopAuthPanel({
           </div>
 
           <button
+            type="button"
             onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
             className="inline-block w-full max-w-xs bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-8 rounded-xl transition-all duration-500 transform hover:scale-105 shadow-xl"
           >

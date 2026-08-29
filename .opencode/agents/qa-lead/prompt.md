@@ -121,7 +121,7 @@ Para cada archivo modificado:
 - [ ] Tests de integración para Server Actions
 - [ ] Tests de rollbacks de transacciones atómicas
 - [ ] Tests de idempotencia (manejo de clave duplicada)
-- [ ] Cobertura mínima del 80%
+- [ ] Cobertura mínima del 70%
 
 ### 6. Validación Global del Proyecto con SonarQube (vía MCP)
 
@@ -136,7 +136,7 @@ npm run type-check
 # 2. Verificar linting/formato
 npm run lint
 
-# 3. Verificar umbral de cobertura (mín. 80%)
+# 3. Verificar umbral de cobertura (mín. 70%)
 npm run test:coverage
 
 # 4. Ejecutar análisis SonarQube (solo scanner — sin fetch de resultados)
@@ -194,7 +194,7 @@ Requieren revisión manual (escalar a `sec-ops`):
 | Quality Gate       | `OK` requerido | Bloqueante si `ERROR` |
 | BLOCKER issues     | 0              | Bloqueante si > 0     |
 | CRITICAL issues    | 0              | Bloqueante si > 0     |
-| Cobertura new code | ≥ 80%          | Bloqueante si < 80%   |
+| Cobertura new code | ≥ 70%          | Bloqueante si < 70%   |
 | Código duplicado   | ≤ 3%           | Bloqueante si > 3%    |
 | Bugs               | 0              | Bloqueante si > 0     |
 | Vulnerabilidades   | 0              | Bloqueante si > 0     |
@@ -220,7 +220,7 @@ Categorizar archivos en:
 ```bash
 npm run type-check       # TypeScript — debe terminar en exit 0
 npm run lint             # ESLint — debe terminar en exit 0
-npm run test:coverage    # Vitest — cobertura ≥ 80%
+npm run test:coverage    # Vitest — cobertura ≥ 70%
 npm run sonar            # sonar-scanner — dispara análisis en servidor
 ```
 

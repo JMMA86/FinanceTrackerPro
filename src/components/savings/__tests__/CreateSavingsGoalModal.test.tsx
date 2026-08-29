@@ -71,8 +71,14 @@ vi.mock('@/components/ui/FormattedNumericInput', () => ({
 
 // Helper to check if we're in a jsdom environment without dialog support
 beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = vi.fn();
-  HTMLDialogElement.prototype.close = vi.fn();
+  // jsdom dialogs are inert unless open — mirror the browser so content inside
+  // the dialog is exposed to role/accessibility queries (getByRole).
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+    this.removeAttribute('open');
+  });
 });
 
 describe('CreateSavingsGoalModal', () => {
@@ -214,7 +220,7 @@ describe('CreateSavingsGoalModal', () => {
 
   it('should submit form and display server error', async () => {
     const { createSavingsGoal } = await import('@/actions/savings.actions');
-    (createSavingsGoal as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (createSavingsGoal as ReturnType<typeof vi.fn>).mockResolvedValue({
       success: false,
       error: 'Server error occurred',
     });
@@ -228,25 +234,19 @@ describe('CreateSavingsGoalModal', () => {
       />
     );
 
-    // Fill in valid fields manually via react-hook-form
+    // Fill in valid fields so client-side validation passes
     const nameInput = screen.getByLabelText('Nombre de la meta');
     fireEvent.change(nameInput, { target: { value: 'Test Goal' } });
+    const targetInput = screen.getByTestId('numeric-input-savings-target');
+    fireEvent.change(targetInput, { target: { value: '100000' } });
 
     // Submit via clicking the submit button
     const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
     fireEvent.click(submitBtn);
 
+    // The mocked server error must be rendered in the error alert
     await waitFor(() => {
-      // If server error displays, form was submitted
-      const errorAlert = screen.queryByRole('alert');
-      const serverError = screen.queryByText('Server error occurred');
-      const validationError = screen.queryByText('Name is required');
-      if (serverError || errorAlert) {
-        expect(true).toBe(true);
-      } else if (validationError) {
-        // Form validation failed
-        expect(validationError).toBeInTheDocument();
-      }
+      expect(screen.getByRole('alert')).toHaveTextContent('Server error occurred');
     });
   });
 

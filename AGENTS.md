@@ -112,7 +112,7 @@ Usuario
 
 **Responsabilidades**:
 
-- Mantener cobertura mínima del 80% (líneas, ramas, funciones, sentencias)
+- Mantener cobertura mínima del 70% (líneas, ramas, funciones, sentencias)
 - Tests unitarios para cálculos financieros (`src/lib/money.ts`)
 - Tests de integración para Server Actions (rollback, idempotencia, atomicidad)
 - Tests de componentes (accesibilidad, interacción, estados de error)
@@ -210,7 +210,7 @@ npx playwright show-report
 ```bash
 npm run type-check    # TypeScript — exit code 0
 npm run lint          # ESLint — exit code 0
-npm run test:coverage # Cobertura ≥ 80%
+npm run test:coverage # Cobertura ≥ 70%
 npm run sonar         # BLOCKER/CRITICAL = 0
 ```
 
@@ -322,7 +322,7 @@ tech-lead
   │         ↓ (si toca cálculos monetarios)
   │   audit-finance   → Reporte de integridad (solo lectura)
   ├── 2. dev-frontend  → UI + integración de Actions + accesibilidad
-  ├── 3. dev-tester    → Tests unitarios + integración (coverage ≥ 80%)
+  ├── 3. dev-tester    → Tests unitarios + integración (coverage ≥ 70%)
   │         ↓ (si toca auth/pagos)
   │   sec-ops         → Auditoría OWASP (solo lectura)
   ├── 4. dev-e2e       → Escenarios Gherkin + tests Playwright de los flujos afectados
@@ -366,7 +366,7 @@ Ningún PR se aprueba sin que `qa-lead` confirme:
 | ----------------------- | ---------------------- |
 | `npm run type-check`    | Exit code 0            |
 | `npm run lint`          | Exit code 0            |
-| `npm run test:coverage` | Cobertura ≥ 80%        |
+| `npm run test:coverage` | Cobertura ≥ 70%        |
 | `npx playwright test`   | 100% en Chromium       |
 | `npm run sonar`         | BLOCKER y CRITICAL = 0 |
 

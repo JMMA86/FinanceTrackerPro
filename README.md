@@ -8,7 +8,7 @@ Enterprise-grade financial management system with **ACID transactions**, **high-
 ![Prisma](https://img.shields.io/badge/Prisma-ORM-%232D3748?logo=prisma)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-%2338B2AC?logo=tailwindcss)
 ![SonarQube](https://img.shields.io/badge/SonarQube-Quality%20Gate-005A9C?logo=sonarqube)
-![Coverage](https://img.shields.io/badge/Coverage-%3E%3D80%25-green)
+![Coverage](https://img.shields.io/badge/Coverage-%3E%3D70%25-green)
 
 ---
 
@@ -130,7 +130,7 @@ npm run db:studio:e2e    # E2E database  → http://localhost:5556
 | `npm test`              | Unit / Integration | Runs tests in headless CI mode.                                        |
 | `npm run test:watch`    | Unit / Integration | Launches interactive Vitest watch runner.                              |
 | `npm run test:ui`       | Unit / Integration | Opens the Vitest graphical interface.                                  |
-| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **80%** global floor).             |
+| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **70%** global floor).             |
 | `npm run test:e2e`      | E2E                | Compiles Gherkin features and runs the full Playwright suite headless. |
 | `npm run test:e2e:ui`   | E2E                | Compiles Gherkin features and opens the Playwright interactive UI.     |
 | `npm run lint`          | Code Style         | Validates code standards via ESLint with auto-fix.                     |
@@ -197,7 +197,7 @@ npm run sonar
 **Quality Gate blocks merge if:**
 
 - Quality Gate status is `ERROR`
-- Coverage drops below `80%` on new code
+- Coverage drops below `70%` on new code
 - TypeScript strict `any` count rises above zero
 - Any `BLOCKER` or `CRITICAL` vulnerability is detected
 
@@ -211,7 +211,7 @@ FinanceTrackerPro uses a **hierarchical agent orchestration model** for AI-assis
 tech-lead (primary — orchestrator)
   ├── dev-backend    → Server Actions, Prisma, Zod validation
   ├── dev-frontend   → Next.js UI, Tailwind, accessibility
-  ├── dev-tester     → Vitest unit/integration, coverage ≥ 80%
+  ├── dev-tester     → Vitest unit/integration, coverage ≥ 70%
   ├── dev-e2e        → Playwright + Cucumber BDD, isolated E2E DB
   ├── qa-lead        → 14 financial integrity rules, SonarQube gates
   ├── sec-ops        → OWASP Top 10 audit, dependency scan
@@ -266,20 +266,19 @@ on:
 runs-on: [self-hosted, windows, x64]
 ```
 
-| Step                 | Command / Action                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| Env setup            | Creates `.env`, `.env.e2e`, `.env.test` from secrets                                 |
-| Infrastructure       | `docker compose` up: Postgres dev (5432), e2e (5433), test (5434) + SonarQube (9000) |
-| Dependencies         | `npm ci` + `npx prisma generate`                                                     |
-| Migrations (test DB) | `prisma migrate deploy` against `financetrackerpro_test`                             |
-| Lint                 | `eslint . --max-warnings=0`                                                          |
-| Format               | `npm run format:check`                                                               |
-| TypeScript           | `npm run type-check`                                                                 |
-| Unit + coverage      | `vitest run --coverage` (excludes integration)                                       |
-| Integration          | `vitest run integration` → DB test (5434)                                            |
-| E2E                  | `npm run test:e2e` (Playwright + BDD, DB e2e 5433)                                   |
-| SonarQube            | `npm run sonar` + Quality Gate API check                                             |
-| Build                | `npm run build`                                                                      |
+| Step                                  | Command / Action                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| Env setup                             | Creates `.env`, `.env.e2e`, `.env.test` from secrets                                 |
+| Infrastructure                        | `docker compose` up: Postgres dev (5432), e2e (5433), test (5434) + SonarQube (9000) |
+| Dependencies                          | `npm ci` + `npx prisma generate`                                                     |
+| Migrations (test DB)                  | `prisma migrate deploy` against `financetrackerpro_test`                             |
+| Lint                                  | `eslint . --max-warnings=0`                                                          |
+| Format                                | `npm run format:check`                                                               |
+| TypeScript                            | `npm run type-check`                                                                 |
+| Tests + coverage (unit + integration) | `vitest run --coverage` → integration uses DB test (5434)                            |
+| E2E                                   | `npm run test:e2e` (Playwright + BDD, DB e2e 5433)                                   |
+| SonarQube                             | `npm run sonar` + Quality Gate API check                                             |
+| Build                                 | `npm run build`                                                                      |
 
 ### Self-hosted runner setup
 

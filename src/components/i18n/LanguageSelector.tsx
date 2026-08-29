@@ -35,6 +35,7 @@ export function LanguageSelector({ currentLocale, labels }: Readonly<LanguageSel
   return (
     <div className="relative">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-slate-700 text-white hover:bg-slate-800 transition-all rounded-xl shadow-md hover:shadow-lg backdrop-blur-sm border border-slate-600/50"
         title="Select language"
@@ -57,6 +58,7 @@ export function LanguageSelector({ currentLocale, labels }: Readonly<LanguageSel
           {SUPPORTED_LOCALES.map((locale) => (
             <button
               key={locale}
+              type="button"
               onClick={() => handleLanguageChange(locale)}
               className={`
                 w-full px-4 py-3 text-left text-sm font-medium transition-all

@@ -163,9 +163,8 @@ describe('SavingsGoalCard', () => {
       />
     );
     const progressbar = screen.getByRole('progressbar');
-    expect(progressbar).toHaveAttribute('aria-valuenow', '25');
-    expect(progressbar).toHaveAttribute('aria-valuemin', '0');
-    expect(progressbar).toHaveAttribute('aria-valuemax', '100');
+    expect(progressbar).toHaveAttribute('value', '25');
+    expect(progressbar).toHaveAttribute('max', '100');
   });
 
   it('should show "Completado" badge when status is COMPLETED', () => {

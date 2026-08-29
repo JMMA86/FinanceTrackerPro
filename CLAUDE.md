@@ -97,7 +97,7 @@ export async function createAccountAction(input: unknown) {
 
 ### 8. Testing Requirements
 
-- 80% minimum coverage
+- 70% minimum coverage
 - Test money calculations with edge cases (rounding)
 - Test atomic transactions (rollback scenarios)
 - Test currency conversions

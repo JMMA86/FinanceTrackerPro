@@ -68,6 +68,7 @@ export default function SettingsClient({
                 {SUPPORTED_LOCALES.map((locale) => (
                   <button
                     key={locale}
+                    type="button"
                     onClick={() => handleLanguageChange(locale)}
                     disabled={changing || locale === lang}
                     className={[
@@ -114,6 +115,7 @@ export default function SettingsClient({
             </p>
 
             <button
+              type="button"
               onClick={handleLogout}
               disabled={loggingOut}
               className="

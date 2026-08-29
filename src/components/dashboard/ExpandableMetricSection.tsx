@@ -33,6 +33,7 @@ export function ExpandableMetricSection({
     <section className="animate-in fade-in slide-in-from-top-4 duration-500 rounded-xl sm:rounded-2xl border border-white/8 bg-slate-900/40 overflow-hidden">
       {/* Header — parte del mismo panel */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-white/4 transition-colors duration-200 group"
         aria-expanded={isOpen}

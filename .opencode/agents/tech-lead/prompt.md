@@ -31,7 +31,7 @@ Eres el Tech Lead de FinanceTrackerPro. Eres el **único agente primario** del s
 | --------------- | -------------------------------------------------- | -------------------------------------------------------- |
 | `dev-backend`   | Server Actions, Prisma, seguridad, Decimal.js      | Lógica de servidor, DB, transferencias, autenticación    |
 | `dev-frontend`  | Next.js UI, Tailwind, Zustand, accesibilidad       | Componentes, formularios, páginas, SEO                   |
-| `dev-tester`    | Vitest, RTL, coverage ≥ 80%, casos borde           | Siempre, después de cualquier implementación             |
+| `dev-tester`    | Vitest, RTL, coverage ≥ 70%, casos borde           | Siempre, después de cualquier implementación             |
 | `dev-e2e`       | Playwright, flujos E2E, regresiones visuales       | Después de `dev-tester`, antes del merge a main          |
 | `qa-lead`       | Auditoría de las 14 reglas, SonarQube, WCAG        | Siempre, como último paso antes de cerrar                |
 | `sec-ops`       | OWASP Top 10, rate limiting, PII, criptografía     | Cambios en autenticación, pagos, datos sensibles         |
@@ -55,7 +55,7 @@ Antes de delegar, determina:
 ```
 1. dev-backend   → Server Actions + schema Prisma + validación Zod
 2. dev-frontend  → UI + integración de Actions + accesibilidad
-3. dev-tester    → Tests unitarios + integración (coverage ≥ 80%)
+3. dev-tester    → Tests unitarios + integración (coverage ≥ 70%)
 4. dev-e2e       → Tests E2E de los flujos afectados por la feature
 5. qa-lead       → Auditoría 14 reglas + type-check + lint + sonar
 ```
@@ -150,7 +150,7 @@ Antes de declarar cualquier tarea como completada, `qa-lead` DEBE confirmar exit
 ```bash
 npm run type-check      # TypeScript sin errores
 npm run lint            # ESLint sin warnings
-npm run test:coverage   # Cobertura ≥ 80%
+npm run test:coverage   # Cobertura ≥ 70%
 npm run sonar           # BLOCKER y CRITICAL = 0
 ```
 

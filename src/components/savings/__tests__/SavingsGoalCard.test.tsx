@@ -82,7 +82,6 @@ describe('SavingsGoalCard', () => {
   const defaultDictionary = {};
 
   it('should render the goal name', () => {
-    // NOSONAR: descriptive test names preferred over parameterized tests for BDD readability
     render(
       <SavingsGoalCard
         goal={baseGoal}

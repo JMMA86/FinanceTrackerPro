@@ -60,7 +60,6 @@ describe('InvestmentAccountCard', () => {
   };
 
   it('should render the account name', () => {
-    // NOSONAR: descriptive test names preferred over parameterized tests for BDD readability
     render(
       <InvestmentAccountCard
         account={mockAccount}

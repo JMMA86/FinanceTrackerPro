@@ -40,7 +40,6 @@ describe('middleware', () => {
 
   describe('when user is unauthenticated', () => {
     it('should allow access to the login page', async () => {
-      // NOSONAR: descriptive test names preferred over parameterized tests for BDD readability
       // Given
       vi.mocked(verifySession).mockResolvedValue(null);
       const request = createRequest('/login');

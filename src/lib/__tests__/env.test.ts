@@ -1,76 +1,54 @@
 /**
- * env.ts JWT_SECRET fail-fast validation tests (Fix S3 — CRITICAL).
+ * env.ts JWT_SECRET fail-fast validation tests.
  *
- * env.ts executes dotenv at import time, so we:
- *  - mock `dotenv` and `dotenv-expand` to avoid real .env side-effects,
- *  - set PRISMA_E2E=1 to skip the dotenv override branch,
- *  - use vi.resetModules() + dynamic import to re-evaluate the module with
- *    controlled NODE_ENV / JWT_SECRET values (via vi.stubEnv because Next.js
- *    augments NODE_ENV as read-only on process.env).
+ * validateJwtSecret is a pure function — no dotenv, no side effects —
+ * safe to test directly without module reload hacks.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { validateJwtSecret } from '@/lib/env';
 
-vi.mock('dotenv', () => ({
-  default: {
-    config: vi.fn(() => ({ parsed: {} })),
-  },
-}));
+describe('validateJwtSecret', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
 
-vi.mock('dotenv-expand', () => ({
-  default: {
-    expand: vi.fn(),
-  },
-}));
-
-async function loadEnv(): Promise<void> {
-  vi.resetModules();
-  // Keep env.ts from running dotenv.config with real .env overrides.
-  process.env.PRISMA_E2E = '1';
-  await import('@/lib/env');
-}
-
-describe('env.ts JWT_SECRET validation', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
-    delete process.env.PRISMA_E2E;
-    vi.resetModules();
+    warnSpy.mockRestore();
   });
 
-  it('throws in production when JWT_SECRET is missing', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    delete process.env.JWT_SECRET;
-
-    await expect(loadEnv()).rejects.toThrow('JWT_SECRET is required in production');
+  it('does not throw in production with a valid JWT_SECRET (>= 32 chars)', () => {
+    expect(() => validateJwtSecret('a'.repeat(32), 'production')).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('throws when JWT_SECRET is shorter than 32 characters', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('JWT_SECRET', 'too-short-secret');
-
-    await expect(loadEnv()).rejects.toThrow(
-      'JWT_SECRET must be at least 32 characters long for HS256'
+  it('throws in production when JWT_SECRET is missing', () => {
+    expect(() => validateJwtSecret(undefined, 'production')).toThrow(
+      'FATAL: JWT_SECRET is required in production'
     );
   });
 
-  it('does not throw in production with a valid JWT_SECRET (>= 32 chars)', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('JWT_SECRET', 'a'.repeat(32));
-
-    await expect(loadEnv()).resolves.not.toThrow();
+  it('warns (without throwing) in development when JWT_SECRET is missing', () => {
+    expect(() => validateJwtSecret(undefined, 'development')).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('WARN: JWT_SECRET is not set'));
   });
 
-  it('warns (without throwing) in development when JWT_SECRET is missing', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.stubEnv('NODE_ENV', 'development');
-    delete process.env.JWT_SECRET;
+  it('throws when JWT_SECRET is shorter than 32 characters in production', () => {
+    expect(() => validateJwtSecret('corto', 'production')).toThrow(
+      'FATAL: JWT_SECRET must be at least 32 characters long for HS256'
+    );
+  });
 
-    await expect(loadEnv()).resolves.not.toThrow();
+  it('throws when JWT_SECRET is shorter than 32 characters in development', () => {
+    expect(() => validateJwtSecret('corto', 'development')).toThrow(
+      'FATAL: JWT_SECRET must be at least 32 characters long for HS256'
+    );
+  });
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('WARN: JWT_SECRET is not set'));
-    warnSpy.mockRestore();
+  it('throws with empty string in production (treated as missing)', () => {
+    expect(() => validateJwtSecret('', 'production')).toThrow(
+      'FATAL: JWT_SECRET is required in production'
+    );
   });
 });

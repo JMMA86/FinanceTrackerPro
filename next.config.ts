@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next';
+import { validateJwtSecret } from './src/lib/env';
+
+// Fail-fast: valida JWT_SECRET en build y start (Node runtime)
+validateJwtSecret(process.env.JWT_SECRET, process.env.NODE_ENV);
 
 const nextConfig: NextConfig = {
   // Disable Next.js branding

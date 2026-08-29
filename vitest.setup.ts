@@ -25,3 +25,7 @@ vi.mock('server-only', () => ({}));
 
 // Mock dotenv/config for tests
 vi.mock('dotenv/config', () => ({}));
+
+// Ensure JWT_SECRET is set before any module that imports session.ts loads
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || 'test-secret-key-for-testing-min-32-characters-long';

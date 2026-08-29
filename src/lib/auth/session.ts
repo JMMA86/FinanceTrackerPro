@@ -4,7 +4,6 @@
  */
 
 import 'server-only';
-import '@/lib/env'; // Ensure JWT_SECRET fail-fast validation runs before any session operation
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { log } from '@/lib/logger';

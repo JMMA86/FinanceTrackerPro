@@ -115,6 +115,20 @@ export function PocketDetailModal({
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // Reset per-pocket state synchronously when the target pocket changes
+  // (React's "adjust state during render" pattern). Doing it inside an
+  // rAF-delayed callback let a fast fetch/event clobber the new state.
+  const [resetPocketId, setResetPocketId] = useState<string | null | undefined>(pocket?.id);
+  if (pocket?.id !== resetPocketId) {
+    setResetPocketId(pocket?.id);
+    setLiveName(null);
+    setLiveRate(null);
+    setPage(1);
+    setTxs([]);
+    setTotal(0);
+    setTotalPages(0);
+  }
+
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
@@ -168,6 +182,7 @@ export function PocketDetailModal({
   }, [pocket?.id]);
 
   useEffect(() => {
+    if (!mounted) return;
     const dialog = dialogRef.current;
     if (!dialog) return;
     const pid = pocketIdRef.current;
@@ -182,24 +197,11 @@ export function PocketDetailModal({
     }
     dialog.showModal();
     const id = requestAnimationFrame(() => {
-      setLiveName(null);
-      setLiveRate(null);
       setIsVisible(true);
     });
     log.info({ action: 'pocket.detail.open', pocketId: pid }, 'Pocket detail opened');
     return () => cancelAnimationFrame(id);
-  }, [pocket?.id]);
-
-  useEffect(() => {
-    if (!pocket?.id) return;
-    const id = requestAnimationFrame(() => {
-      setPage(1);
-      setTxs([]);
-      setTotal(0);
-      setTotalPages(0);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [pocket?.id]);
+  }, [pocket?.id, mounted]);
 
   const pocketId = pocket?.id;
   useEffect(() => {

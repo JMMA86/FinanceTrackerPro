@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface PieChartData {
   readonly category: string;
@@ -74,12 +74,11 @@ export function PieChartComponent({ data, size = 220 }: PieChartComponentProps) 
   // Center text
   const total = data.reduce((sum, item) => sum + item.amount, 0);
 
-  // Trigger animation on mount
-  useMemo(() => {
-    if (data.length > 0) {
-      const timer = setTimeout(() => setIsAnimating(false), 600);
-      return () => clearTimeout(timer);
-    }
+  // Trigger animation on mount (isAnimating starts as true; the timer ends it)
+  useEffect(() => {
+    if (data.length === 0) return;
+    const timer = setTimeout(() => setIsAnimating(false), 600);
+    return () => clearTimeout(timer);
   }, [data.length]);
 
   const formatCurrency = (cents: number) => {

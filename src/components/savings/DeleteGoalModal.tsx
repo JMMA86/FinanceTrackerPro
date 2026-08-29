@@ -42,7 +42,6 @@ export function DeleteGoalModal({
   useEffect(() => {
     if (!isOpen) return;
     const id = requestAnimationFrame(() => {
-      setSubmitError(null);
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
@@ -51,6 +50,9 @@ export function DeleteGoalModal({
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
     if (!dialog?.open) return;
+    // Clear the server error here (on close) instead of in an rAF-delayed reset,
+    // which could clobber an error set by a fast submit.
+    setSubmitError(null);
     setIsVisible(false);
     setTimeout(() => {
       if (dialog.open) dialog.close();
@@ -58,6 +60,7 @@ export function DeleteGoalModal({
   }, []);
 
   const handleDialogClose = useCallback(() => {
+    setSubmitError(null);
     onClose();
   }, [onClose]);
 

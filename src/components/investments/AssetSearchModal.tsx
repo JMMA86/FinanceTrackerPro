@@ -163,9 +163,12 @@ export function AssetSearchModal({
         setPricedStock(priced);
         setPricePerShareCents(data.priceCents);
       } else {
+        // Reset the selection so the search UI (and the error) is visible again.
+        setSelectedStock(null);
         setSearchError(get(dictionary, 'priceFailed'));
       }
     } catch {
+      setSelectedStock(null);
       setSearchError(get(dictionary, 'priceFailed'));
     } finally {
       setFetchingPrice(false);

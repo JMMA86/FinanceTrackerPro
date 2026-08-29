@@ -332,11 +332,14 @@ export function AccountFullDetail({
     return () => document.removeEventListener('finance:account-updated', onUpdated);
   }, [account?.id]);
 
-  // Reset live color when switching accounts or closing overlay
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setLiveCardColor(null));
-    return () => cancelAnimationFrame(id);
-  }, [account?.id, isOpen]);
+  // Reset live color synchronously when switching accounts or closing the
+  // overlay (adjust-state-during-render) — an rAF-delayed reset could race a
+  // real-time finance:account-updated event.
+  const [liveColorResetKey, setLiveColorResetKey] = useState<string | null>(null);
+  if (`${account?.id ?? ''}:${isOpen}` !== liveColorResetKey) {
+    setLiveColorResetKey(`${account?.id ?? ''}:${isOpen}`);
+    setLiveCardColor(null);
+  }
 
   // Step 1: set initial clip BEFORE browser paints — zero flash
   // cardRect is read from ref so it doesn't need to be in the dep array
@@ -498,18 +501,18 @@ export function AccountFullDetail({
     setIsLoading(false);
   }, [accountId, page, search, typeFilter]);
 
-  // Reset filters when the open account changes — all setState inside rAF callback
-  useEffect(() => {
-    if (!accountId || !isOpen) return;
-    const id = requestAnimationFrame(() => {
-      setSearch('');
-      setTypeFilter('');
-      setPage(1);
-      setTransactions([]);
-      setTotal(0);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [accountId, isOpen]);
+  // Reset filters synchronously when the open account changes
+  // (adjust-state-during-render). An rAF-delayed reset could clobber rows a
+  // fast fetch already resolved.
+  const [txResetKey, setTxResetKey] = useState<string | null>(null);
+  if (isOpen && accountId && `${accountId}:${isOpen}` !== txResetKey) {
+    setTxResetKey(`${accountId}:${isOpen}`);
+    setSearch('');
+    setTypeFilter('');
+    setPage(1);
+    setTransactions([]);
+    setTotal(0);
+  }
 
   useEffect(() => {
     if (!accountId || !isOpen) return;

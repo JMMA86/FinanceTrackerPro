@@ -85,6 +85,7 @@ function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
 }
 
 export const logger = pino({
+  enabled: process.env.NEXT_PHASE !== 'phase-production-build', // silenciar durante next build (ruido DYNAMIC_SERVER_USAGE)
   level: process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info'),
   formatters: {
     level: (label) => {

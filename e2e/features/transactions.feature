@@ -358,3 +358,37 @@ Feature: Gestión de Transacciones
     Then la transacción creada debe aparecer en la tabla
     When navega a la página de cuentas
     Then la cuenta "Ahorros E2E" debe mostrar un saldo de 100000
+
+  # ============================================================================
+  # DELETE - INTEGRIDAD (no dejar saldo negativo al eliminar transacciones)
+  # ============================================================================
+
+  # NOTA sobre visibilidad: cuando deleteTransaction rechaza la operación
+  # (BALANCE_NEGATIVE), DeleteTransactionModal SIEMPRE cierra el <dialog>
+  # (handleClose() corre en ambas ramas de handleDelete). El toast de error
+  # (ToastViewport) queda visible una vez el dialog sale del top layer — sí es
+  # asertable. Además, la fila "Saldo inicial" sigue en la tabla.
+
+  @transactions @delete @integrity
+  Scenario: No se puede eliminar la transacción de apertura si deja saldo negativo
+    Given que el usuario de transacciones ha iniciado sesión
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Ahorros Integridad"
+    And selecciona el tipo "Cuenta de Ahorros"
+    And ingresa "300000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    When navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona la cuenta recién creada como cuenta
+    And ingresa "200000" en el campo valor
+    And ingresa una descripción única "Gasto integridad saldo"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When hace clic en el botón de eliminar de la fila "Saldo inicial" de la cuenta recién creada
+    Then debe ver el diálogo de confirmación de eliminación
+    When hace clic en "Eliminar" en el diálogo de eliminación
+    Then el diálogo de eliminación debe cerrarse
+    And debe ver la notificación de error "No se puede eliminar: el saldo de la cuenta quedaría negativo"
+    And la fila "Saldo inicial" de la cuenta recién creada debe seguir visible

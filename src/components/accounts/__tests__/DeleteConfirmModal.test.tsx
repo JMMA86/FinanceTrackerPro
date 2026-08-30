@@ -172,9 +172,33 @@ describe('DeleteConfirmModal', () => {
 
     await waitFor(() => {
       expect(getLastNotification()?.type).toBe('error');
-      expect(getLastNotification()?.message).toBe('errors.deleteFailed');
+      expect(getLastNotification()?.message).toBe('boom');
     });
     // Modal stays open and delete button is re-enabled
+    expect(useUIStore.getState().activeModal).toBe('delete-confirm');
+    expect(screen.getByText('delete')).toBeEnabled();
+  });
+
+  it('should notify with the localized accountHasBalance message when the account has balance', async () => {
+    mockDeleteBankAccount.mockResolvedValue({
+      success: false,
+      code: 'ACCOUNT_HAS_BALANCE',
+      error: 'Account has a nonzero balance',
+    });
+    useUIStore.getState().openModal('delete-confirm', {
+      accountId: ACCOUNT_ID,
+      accountName: 'Mi Cuenta',
+      isPocket: false,
+    });
+    renderModal();
+
+    fireEvent.click(screen.getByText('delete'));
+
+    await waitFor(() => {
+      expect(getLastNotification()?.type).toBe('error');
+      expect(getLastNotification()?.message).toBe('accountHasBalance');
+    });
+    // Modal stays open so the user can resolve the balance before retrying
     expect(useUIStore.getState().activeModal).toBe('delete-confirm');
     expect(screen.getByText('delete')).toBeEnabled();
   });

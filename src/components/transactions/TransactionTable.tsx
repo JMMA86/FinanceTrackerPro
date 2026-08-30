@@ -131,6 +131,10 @@ const TransactionRowItem = memo(function TransactionRowItem({
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
 
+  // The server include (transaction.account.name) wins over the account
+  // lookup map so inactive/legacy accounts keep their real name.
+  const displayAccountName = transaction.account?.name ?? accountName;
+
   const formattedAmount = useMemo(
     () => formatMoney(Math.abs(transaction.amountCents), transaction.currency, locale),
     [transaction.amountCents, transaction.currency, locale]
@@ -179,7 +183,7 @@ const TransactionRowItem = memo(function TransactionRowItem({
 
       {/* Account */}
       <td className="py-3 px-4">
-        <span className="text-sm text-slate-400">{accountName}</span>
+        <span className="text-sm text-slate-400">{displayAccountName}</span>
       </td>
 
       {/* Category */}
@@ -259,6 +263,9 @@ const TransactionCard = memo(function TransactionCard({
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
 
+  // Server include wins over the account lookup map (see TransactionRowItem).
+  const displayAccountName = transaction.account?.name ?? accountName;
+
   const formattedAmount = useMemo(
     () => formatMoney(Math.abs(transaction.amountCents), transaction.currency, locale),
     [transaction.amountCents, transaction.currency, locale]
@@ -298,7 +305,7 @@ const TransactionCard = memo(function TransactionCard({
             {formattedDate} · {formattedTime}
           </time>
           <span className="text-slate-600">·</span>
-          <span className="text-xs text-slate-500 truncate">{accountName}</span>
+          <span className="text-xs text-slate-500 truncate">{displayAccountName}</span>
           <span className="text-slate-600">·</span>
           {transaction.category ? (
             <span className="inline-flex items-center gap-1 text-xs text-slate-500 truncate">

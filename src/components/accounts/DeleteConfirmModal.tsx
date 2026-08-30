@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, X, Trash2 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { deleteBankAccount } from '@/actions/account.actions';
+import { getAccountError } from '@/components/accounts/getAccountError';
 import { get } from '@/lib/i18n';
 import { log } from '@/lib/logger';
 
@@ -98,7 +99,7 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
         { action: 'account.delete.failure', accountId, isPocket, code: result.code },
         'Account delete failed (client)'
       );
-      addNotification('error', get(dictionary, 'errors.deleteFailed'));
+      addNotification('error', getAccountError(result, dictionary));
       setIsDeleting(false);
     }
   }

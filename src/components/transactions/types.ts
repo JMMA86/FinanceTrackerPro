@@ -34,7 +34,10 @@ export interface TransactionCategoryBrief {
  * Shared transaction row shape consumed by the transactions table and the
  * create/edit modal. `category` is `null` when the transaction has no
  * category; `categoryId` is kept alongside so the edit modal can prefill the
- * category selector.
+ * category selector. `account` mirrors the Prisma include returned by
+ * `getAllTransactions` (`account: { select: { name: true } }`) — it is
+ * optional so older data (or fixtures without the include) still render the
+ * account name from the account lookup map.
  */
 export interface TransactionRow {
   id: string;
@@ -46,5 +49,6 @@ export interface TransactionRow {
   accountId: string;
   categoryId: string | null;
   category: TransactionCategoryBrief | null;
+  account?: { name: string } | null;
   createdAt: string | Date;
 }

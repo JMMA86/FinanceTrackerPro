@@ -74,6 +74,7 @@
   "inactiveAccount": "The selected account is inactive",
   "accountNotFound": "The selected account does not exist",
   "rateLimited": "Too many attempts. Please try again later.",
+  "balanceNegative": "Cannot delete: the account balance would become negative",
   "deleteTransaction": "Delete transaction",
   "delete": "Delete",
   "actions": "Actions",

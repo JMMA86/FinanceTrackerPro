@@ -7,6 +7,7 @@ import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page, type Locator } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
+import { getStoredAccountName } from '../helpers/unique';
 
 // ============================================================================
 // CONSTANTS
@@ -22,14 +23,15 @@ const TRANSACTIONS_USER = {
 const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
 
 /**
- * Window key where the unique transaction description is stored for the
+ * Window/localStorage key where the unique transaction description is stored for the
  * delete scenario. A unique value per attempt keeps retries clean (a retry
- * never collides with a leftover row from the failed attempt).
+ * never collides with a leftover row from the failed attempt). Stored in
+ * localStorage so it survives page.goto() navigations between steps.
  */
 const UNIQUE_DESC_KEY = '__e2eUniqueTxDescription';
 
 /**
- * Window key where the ORIGINAL transaction description is preserved before an
+ * localStorage key where the ORIGINAL transaction description is preserved before an
  * edit overwrites the current one. Used by the edit happy-path scenario to
  * assert the old row disappears after the edit succeeds.
  */
@@ -67,7 +69,7 @@ function getDeleteDialog(page: Page) {
 async function storeUniqueDescription(page: Page, description: string) {
   await page.evaluate(
     ({ key, value }) => {
-      (window as Window & typeof globalThis & Record<string, unknown>)[key] = value;
+      window.localStorage.setItem(key, value);
     },
     { key: UNIQUE_DESC_KEY, value: description }
   );
@@ -76,9 +78,7 @@ async function storeUniqueDescription(page: Page, description: string) {
 /** Reads the unique transaction description stored by the create step */
 async function getStoredDescription(page: Page): Promise<string> {
   const description = await page.evaluate((key) => {
-    return (window as Window & typeof globalThis & Record<string, unknown>)[key] as
-      | string
-      | undefined;
+    return window.localStorage.getItem(key) ?? undefined;
   }, UNIQUE_DESC_KEY);
   if (!description) throw new Error('No unique transaction description stored on the page');
   return description;
@@ -683,6 +683,96 @@ Then('el diálogo de eliminación debe cerrarse', async ({ page }) => {
 });
 
 // ============================================================================
+// DELETE - INTEGRITY (account created inside the scenario)
+// ============================================================================
+
+When('selecciona la cuenta recién creada como cuenta', async ({ page }) => {
+  const accountName = await getStoredAccountName(page);
+  const dialog = getOpenDialog(page);
+  const accountCombo = dialog.getByRole('combobox', { name: 'Cuenta' });
+  const options = await accountCombo.locator('option').allTextContents();
+  const matchingOption = options.find((o) => o.toLowerCase().includes(accountName.toLowerCase()));
+  if (!matchingOption) {
+    throw new Error(
+      `Account "${accountName}" not found in the create-transaction combobox. Options: ${options.join(' | ')}`
+    );
+  }
+  await accountCombo.selectOption({ label: matchingOption });
+  await page.waitForTimeout(200);
+});
+
+/**
+ * Locates a transactions-table row matching BOTH the description AND the unique
+ * account name created in this scenario. The account name filter disambiguates
+ * when multiple accounts produced a "Saldo inicial" row.
+ */
+async function rowForAccountTransaction(page: Page, description: string): Promise<Locator> {
+  const accountName = await getStoredAccountName(page);
+  const table = page.getByRole('table', { name: 'Transacciones' });
+  await expect(table).toBeVisible({ timeout: 5000 });
+  return table
+    .getByRole('row')
+    .filter({ hasText: description })
+    .filter({ hasText: accountName })
+    .first();
+}
+
+When(
+  'hace clic en el botón de eliminar de la fila {string} de la cuenta recién creada',
+  async ({ page }, description: string) => {
+    const row = await rowForAccountTransaction(page, description);
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await row.getByRole('button', { name: 'Eliminar transacción' }).click();
+  }
+);
+
+Then(
+  'la fila {string} de la cuenta recién creada debe estar visible',
+  async ({ page }, description: string) => {
+    await expect(await rowForAccountTransaction(page, description)).toBeVisible({
+      timeout: 10000,
+    });
+  }
+);
+
+Then(
+  'la fila {string} de la cuenta recién creada debe seguir visible',
+  async ({ page }, description: string) => {
+    await expect(await rowForAccountTransaction(page, description)).toBeVisible({
+      timeout: 10000,
+    });
+  }
+);
+
+Then(
+  'la transacción recién creada debe estar visible con el nombre de la cuenta eliminada',
+  async ({ page }) => {
+    const description = await getStoredDescription(page);
+    const accountName = await getStoredAccountName(page);
+    const table = page.getByRole('table', { name: 'Transacciones' });
+    await expect(table).toBeVisible({ timeout: 5000 });
+    const row = table
+      .getByRole('row')
+      .filter({ hasText: description })
+      .filter({ hasText: accountName })
+      .first();
+    // Regla 3: after deleting the account (soft delete), its transactions remain
+    // in the history and the server include (transaction.account.name) keeps the
+    // account name visible in the row — it is never replaced by "—".
+    await expect(row).toBeVisible({ timeout: 10000 });
+  }
+);
+
+Then('debe ver la notificación de error {string}', async ({ page }, message: string) => {
+  // ToastViewport renders error notifications in a role="status" region. The
+  // DeleteTransactionModal ALWAYS closes after the server action (even on
+  // error — handleClose() runs in both branches), so the toast becomes visible
+  // once the <dialog> leaves the top layer.
+  const statusRegion = page.locator('[role="status"][aria-live="polite"]');
+  await expect(statusRegion.getByText(message)).toBeVisible({ timeout: 4000 });
+});
+
+// ============================================================================
 // CATEGORIES - CRUD
 // ============================================================================
 
@@ -811,9 +901,7 @@ Then(
 /** Reads the original description preserved before an edit overwrote the current one */
 async function getOriginalDescription(page: Page): Promise<string> {
   const description = await page.evaluate((key) => {
-    return (window as Window & typeof globalThis & Record<string, unknown>)[key] as
-      | string
-      | undefined;
+    return window.localStorage.getItem(key) ?? undefined;
   }, UNIQUE_ORIG_DESC_KEY);
   if (!description) throw new Error('No original transaction description stored on the page');
   return description;
@@ -851,7 +939,7 @@ When('cambia la descripción a una única {string}', async ({ page }, prefix: st
   const original = await getStoredDescription(page);
   await page.evaluate(
     ({ key, value }) => {
-      (window as Window & typeof globalThis & Record<string, unknown>)[key] = value;
+      window.localStorage.setItem(key, value);
     },
     { key: UNIQUE_ORIG_DESC_KEY, value: original }
   );

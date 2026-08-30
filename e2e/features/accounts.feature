@@ -146,3 +146,77 @@ Feature: Gestión de Cuentas Bancarias
     Given que la pantalla es móvil 390x844
     When navega a la página de cuentas
     Then la página de cuentas debe mostrarse correctamente en mobile
+
+  # ============================================================================
+  # ELIMINAR CUENTA - REGLAS DE INTEGRIDAD
+  # ============================================================================
+
+  # NOTA sobre visibilidad: cuando deleteBankAccount rechaza la operación
+  # (ACCOUNT_HAS_BALANCE), DeleteConfirmModal NO cierra el <dialog> (solo llama
+  # a closeModal() en éxito) y el toast de error queda DETRÁS del top layer del
+  # dialog abierto — no es asertable. Lo observable: el modal permanece abierto,
+  # el botón se re-habilita y, tras cerrarlo, la cuenta sigue activa en el grid.
+
+  @accounts @delete @integrity
+  Scenario: No se puede eliminar una cuenta con saldo
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Cuenta Con Saldo"
+    And selecciona el tipo "Cuenta Corriente"
+    And ingresa "50000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    And la nueva cuenta debe aparecer en el grid
+    When abre el panel de detalle de la cuenta
+    And hace clic en eliminar en el panel de detalle
+    Then debe ver el modal de confirmación "Eliminar Cuenta"
+    When confirma la eliminación de la cuenta esperando rechazo
+    Then el modal de confirmación de eliminación debe permanecer abierto
+    When cierra el modal de confirmación con Cancelar
+    And navega a la página de cuentas
+    Then la cuenta con el nombre único debe seguir en el grid
+
+  # NOTA (Regla 3): al eliminar una cuenta con saldo 0 (soft delete), sus
+  # transacciones SIGUEN en el historial y la tabla muestra el nombre de la
+  # cuenta vía el include server (transaction.account.name) aunque la cuenta
+  # esté inactiva — nunca "—".
+
+  @accounts @delete @integrity
+  Scenario: Eliminar cuenta con saldo 0 conserva el historial
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
+    # Cuenta que PERMANECE activa: sin cuentas activas la página de
+    # transacciones muestra el empty state "sin cuentas" y no la tabla.
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Cuenta Permanente"
+    And selecciona el tipo "Cuenta Corriente"
+    And ingresa "100000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    # Cuenta objetivo (la que se eliminará) — se crea al final para que su
+    # nombre sea el "nombre único" que los steps posteriores leen.
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Cuenta A Eliminar"
+    And selecciona el tipo "Cuenta Corriente"
+    And ingresa "50000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    And la nueva cuenta debe aparecer en el grid
+    When navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona la cuenta recién creada como cuenta
+    And ingresa "50000" en el campo valor
+    And ingresa una descripción única "Gasto para eliminar cuenta"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When navega a la página de cuentas
+    And abre el panel de detalle de la cuenta con el nombre único
+    And hace clic en eliminar en el panel de detalle
+    Then debe ver el modal de confirmación "Eliminar Cuenta"
+    When confirma la eliminación de la cuenta
+    Then la cuenta con el nombre único no debe estar en el grid
+    When navega a la página de transacciones
+    Then la fila "Saldo inicial" de la cuenta recién creada debe estar visible
+    And la transacción recién creada debe estar visible con el nombre de la cuenta eliminada

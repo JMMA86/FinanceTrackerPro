@@ -8,6 +8,8 @@ const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { ACCOUNTS_TEST_USER } from '../fixtures';
+import { resetUserFinancialData } from '../helpers/db';
+import { storeUniqueAccountName, getStoredAccountName } from '../helpers/unique';
 
 // ============================================================================
 // HELPERS
@@ -69,6 +71,13 @@ Given('que el usuario de cuentas ha iniciado sesión', async ({ page }) => {
 });
 
 Given('que no existen cuentas bancarias', async ({ page }) => {
+  // The ACCOUNT_HAS_BALANCE integrity rule rejects deleting an account whose
+  // true balance is not 0, so the old UI-loop cleanup hangs on any leftover
+  // account (e.g. "Mi Cuenta Corriente" with 1.000.000 created by a previous
+  // scenario). Reset the accounts user's data directly in the isolated e2e
+  // schema — a DB-level soft delete equivalent of the UI cleanup.
+  await resetUserFinancialData(ACCOUNTS_TEST_USER.email);
+
   await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
   // Wait for streaming/hydration to finish so account cards are stable before we interact.
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
@@ -82,41 +91,8 @@ Given('que no existen cuentas bancarias', async ({ page }) => {
     .catch(() => {});
   await page.waitForTimeout(350);
 
-  // Delete every account via UI so each scenario starts with a clean slate.
-  while ((await page.locator('[data-account-id]').count()) > 0) {
-    const firstCard = page.locator('[data-account-id] button').first();
-    await firstCard.waitFor({ state: 'visible', timeout: 5000 });
-    // Read the account name from the card's aria-label BEFORE clicking.
-    // We use it below to confirm the detail panel resolved the correct account object —
-    // force:true can fire the click while React is mid-render, causing account=null in the panel,
-    // which makes handleDelete() return early with a silent no-op.
-    const accountName = (await firstCard.getAttribute('aria-label')) ?? '';
-    await firstCard.click({ force: true });
-    // Wait for the account NAME (not just a generic label) to appear in the detail panel.
-    // This proves accounts.find(selectedId) returned the real account, not null.
-    if (accountName) {
-      await page
-        .getByText(accountName, { exact: false })
-        .first()
-        .waitFor({ state: 'visible', timeout: 8000 });
-    } else {
-      await page.getByText('Saldo actual').first().waitFor({ state: 'visible', timeout: 5000 });
-    }
-    await page
-      .getByRole('button', { name: /^eliminar$/i })
-      .first()
-      .click();
-    const dialog = page.locator('dialog[open]').first();
-    await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    await dialog.locator('button').filter({ hasText: 'Eliminar' }).last().click();
-    // Wait for the account to disappear from the grid (the actual desired outcome) rather than
-    // waiting for the dialog to close. The delete + router.refresh() + animations can push the
-    // dialog.close() past the 10s window in a cold-server context.
-    await expect(page.locator('[data-account-id]')).toHaveCount(0, { timeout: 15000 });
-    // Dismiss any lingering dialog (it will close naturally but we don't need to wait for it).
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-  }
+  // The grid must be empty after the DB reset.
+  await expect(page.locator('[data-account-id]')).toHaveCount(0, { timeout: 5000 });
 });
 
 Given('que el modal de creación está abierto', async ({ page }) => {
@@ -241,6 +217,60 @@ When('confirma la eliminación de la cuenta', async ({ page }) => {
   await dialog.locator('button').filter({ hasText: 'Eliminar' }).last().click();
   // Wait for dialog to close and page to update
   await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 10000 });
+});
+
+// ============================================================================
+// WHEN/THEN - Delete integrity (ACCOUNT_HAS_BALANCE rejection path)
+// ============================================================================
+
+When('ingresa un nombre único de cuenta con prefijo {string}', async ({ page }, prefix: string) => {
+  const dialog = getOpenDialog(page);
+  const name = await storeUniqueAccountName(page, prefix);
+  await dialog.locator('#acc-name').fill(name);
+});
+
+When('confirma la eliminación de la cuenta esperando rechazo', async ({ page }) => {
+  const dialog = getOpenDialog(page);
+  const deleteBtn = dialog.locator('button').filter({ hasText: 'Eliminar' }).last();
+  await deleteBtn.click();
+  // While submitting the button is disabled + shows a spinner; on server
+  // rejection (ACCOUNT_HAS_BALANCE) it re-enables and the dialog STAYS OPEN
+  // (DeleteConfirmModal only calls closeModal() on success).
+  await expect(deleteBtn).toBeEnabled({ timeout: 15000 });
+  await page.waitForTimeout(300);
+});
+
+Then('el modal de confirmación de eliminación debe permanecer abierto', async ({ page }) => {
+  await expect(getOpenDialog(page)).toBeVisible({ timeout: 5000 });
+});
+
+When('cierra el modal de confirmación con Cancelar', async ({ page }) => {
+  const dialog = getOpenDialog(page);
+  await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 5000 });
+});
+
+Then('la cuenta con el nombre único debe seguir en el grid', async ({ page }) => {
+  const name = await getStoredAccountName(page);
+  // AccountCard button has aria-label={account.name}
+  await expect(page.getByRole('button', { name, exact: true })).toBeVisible({ timeout: 5000 });
+});
+
+When('abre el panel de detalle de la cuenta con el nombre único', async ({ page }) => {
+  const name = await getStoredAccountName(page);
+  const card = page.getByRole('button', { name, exact: true });
+  await expect(card).toBeVisible({ timeout: 5000 });
+  await card.click();
+});
+
+Then('la cuenta con el nombre único no debe estar en el grid', async ({ page }) => {
+  const name = await getStoredAccountName(page);
+  // After a successful delete the card disappears while the remaining accounts
+  // stay in the grid (unlike "la cuenta debe ser eliminada del grid", this does
+  // not require the whole grid to be empty).
+  await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0, {
+    timeout: 10000,
+  });
 });
 
 // ============================================================================

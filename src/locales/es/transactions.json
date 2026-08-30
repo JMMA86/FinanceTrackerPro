@@ -74,6 +74,7 @@
   "inactiveAccount": "La cuenta seleccionada está inactiva",
   "accountNotFound": "La cuenta seleccionada no existe",
   "rateLimited": "Demasiados intentos. Inténtalo de nuevo más tarde.",
+  "balanceNegative": "No se puede eliminar: el saldo de la cuenta quedaría negativo",
   "deleteTransaction": "Eliminar transacción",
   "delete": "Eliminar",
   "actions": "Acciones",

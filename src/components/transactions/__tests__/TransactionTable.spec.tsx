@@ -137,6 +137,7 @@ const dictionary = {
   editTransaction: 'Edit transaction',
   deleteConfirm: 'Are you sure you want to delete this transaction?',
   deleteSuccess: 'Transaction deleted',
+  balanceNegative: 'Cannot delete: the account balance would become negative',
   createError: 'Error creating transaction',
   cancel: 'Cancel',
   delete: 'Delete',
@@ -231,6 +232,22 @@ describe('TransactionTable', () => {
 
     const savingsElements = screen.getAllByText('Savings');
     expect(savingsElements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should prefer the account name from the server include over the account map', () => {
+    const txWithInactiveAccount = {
+      ...mockTransactions[0],
+      id: 'tx-5',
+      accountId: 'acc-inactive', // not present in mockAccounts
+      account: { name: 'Inactive Account' },
+    };
+    renderTable([txWithInactiveAccount]);
+
+    // The include name wins even though the account is missing from the map
+    expect(screen.getAllByText('Inactive Account').length).toBeGreaterThanOrEqual(1);
+    // No em dash fallback is used for this transaction
+    const dashes = screen.queryAllByText('—');
+    expect(dashes.length).toBe(0);
   });
 
   it('should render fallback for null description', () => {
@@ -446,6 +463,29 @@ describe('TransactionTable', () => {
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'boom');
+    });
+  });
+
+  it('should notify with the localized balance negative message when delete violates Rule 1', async () => {
+    mockDeleteTransaction.mockResolvedValue({
+      success: false,
+      code: 'BALANCE_NEGATIVE',
+      error: 'raw server error',
+    });
+
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    await userEvent.click(deleteButtons[0]);
+
+    await userEvent.click(screen.getByText('Delete'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith(
+        'error',
+        'Cannot delete: the account balance would become negative'
+      );
     });
   });
 

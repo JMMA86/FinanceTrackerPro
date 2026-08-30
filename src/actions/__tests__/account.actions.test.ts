@@ -1,12 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/auth/session', () => ({ getSession: vi.fn() }));
-vi.mock('@/lib/db', () => ({
-  prisma: {
-    account: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
-    user: { findUnique: vi.fn() },
-  },
-}));
+vi.mock('@/lib/db', () => {
+  const mockAccount = {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  };
+  const mockTransaction = { create: vi.fn() };
+  const mockUser = { findUnique: vi.fn() };
+
+  const prismaMock = {
+    account: mockAccount,
+    transaction: mockTransaction,
+    user: mockUser,
+    $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
+      return callback({
+        account: mockAccount,
+        transaction: mockTransaction,
+      });
+    }),
+  };
+
+  return { prisma: prismaMock };
+});
 vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
@@ -24,6 +42,7 @@ import { log } from '@/lib/logger';
 
 const mockGetSession = vi.mocked(getSession);
 const mockAccount = vi.mocked(prisma.account);
+const mockTransaction = vi.mocked(prisma.transaction);
 const mockUser = vi.mocked(prisma.user);
 const mockHeaders = vi.mocked(headers);
 const mockLog = vi.mocked(log);
@@ -129,17 +148,18 @@ describe('account.actions.ts', () => {
 
     it('returns wasIdempotent=true for duplicate idempotency key', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockUser.findUnique.mockResolvedValue({ id: USER_ID } as never);
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
       mockAccount.findUnique.mockResolvedValue(makeAccountRow());
       const result = await createBankAccount(makeCreateInput());
       expect(result.success).toBe(true);
       expect(result.data?.wasIdempotent).toBe(true);
       expect(mockAccount.create).not.toHaveBeenCalled();
+      expect(mockTransaction.create).not.toHaveBeenCalled();
     });
 
     it('creates account with createdBy and lastModifiedBy = userId', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockUser.findUnique.mockResolvedValue({ id: USER_ID } as never);
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
       mockAccount.findUnique.mockResolvedValue(null);
       mockAccount.create.mockResolvedValue(makeAccountRow());
       await createBankAccount(makeCreateInput());
@@ -152,7 +172,7 @@ describe('account.actions.ts', () => {
 
     it('captures and logs ipAddress and userAgent from headers', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockUser.findUnique.mockResolvedValue({ id: USER_ID } as never);
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
       mockAccount.findUnique.mockResolvedValue(null);
       mockAccount.create.mockResolvedValue(makeAccountRow());
       mockHeaders.mockResolvedValue(makeHeaders('203.0.113.5', 'TestBrowser/2.0'));
@@ -181,7 +201,7 @@ describe('account.actions.ts', () => {
 
     it('stores idempotencyKey and cardColor', async () => {
       mockGetSession.mockResolvedValue(makeSession());
-      mockUser.findUnique.mockResolvedValue({ id: USER_ID } as never);
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
       mockAccount.findUnique.mockResolvedValue(null);
       mockAccount.create.mockResolvedValue(makeAccountRow());
       await createBankAccount(makeCreateInput({ cardColor: 'blue' }));
@@ -190,6 +210,76 @@ describe('account.actions.ts', () => {
           data: expect.objectContaining({ idempotencyKey: IDEM_KEY, cardColor: 'blue' }),
         })
       );
+    });
+
+    it('creates opening INCOME transaction when initialBalanceCents > 0', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique.mockResolvedValue(null);
+      mockAccount.create.mockResolvedValue(makeAccountRow({ balanceCents: 100_000 }));
+      const result = await createBankAccount(makeCreateInput({ initialBalanceCents: 100_000 }));
+      expect(result.success).toBe(true);
+      expect(mockTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'INCOME',
+            amountCents: 100_000,
+            description: 'Saldo inicial',
+            currency: 'COP',
+            userId: USER_ID,
+            accountId: ACCOUNT_ID,
+          }),
+        })
+      );
+    });
+
+    it('does not create opening transaction when initialBalanceCents is 0', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique.mockResolvedValue(null);
+      mockAccount.create.mockResolvedValue(makeAccountRow({ balanceCents: 0 }));
+      const result = await createBankAccount(makeCreateInput({ initialBalanceCents: 0 }));
+      expect(result.success).toBe(true);
+      expect(mockTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('uses English description when user language is ENGLISH', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'ENGLISH' } as never);
+      mockAccount.findUnique.mockResolvedValue(null);
+      mockAccount.create.mockResolvedValue(makeAccountRow({ balanceCents: 50_000 }));
+      await createBankAccount(makeCreateInput({ initialBalanceCents: 50_000 }));
+      expect(mockTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ description: 'Initial balance' }),
+        })
+      );
+    });
+
+    it('creates opening transaction for POCKET with positive balance', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique.mockResolvedValue(null);
+      mockAccount.create.mockResolvedValue(
+        makeAccountRow({ type: 'POCKET', balanceCents: 25_000 })
+      );
+      await createBankAccount(makeCreateInput({ type: 'POCKET', initialBalanceCents: 25_000 }));
+      expect(mockTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'INCOME', amountCents: 25_000 }),
+        })
+      );
+    });
+
+    it('is idempotent: same idempotencyKey returns wasIdempotent=true and no duplicate opening transaction', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow({ balanceCents: 100_000 }));
+      const result = await createBankAccount(makeCreateInput({ initialBalanceCents: 100_000 }));
+      expect(result.success).toBe(true);
+      expect(result.data?.wasIdempotent).toBe(true);
+      expect(mockAccount.create).not.toHaveBeenCalled();
+      expect(mockTransaction.create).not.toHaveBeenCalled();
     });
   });
 

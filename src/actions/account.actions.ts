@@ -1,6 +1,7 @@
 'use server';
 import 'server-only';
 
+import crypto from 'node:crypto';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { Prisma } from '@prisma/client';
@@ -64,7 +65,7 @@ async function createBankAccountInternal(input: unknown) {
   // Verify user exists (session cookie may outlive a DB reset)
   const userExists = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true },
+    select: { id: true, language: true },
   });
   if (!userExists) {
     throw new AppError(
@@ -73,6 +74,9 @@ async function createBankAccountInternal(input: unknown) {
       'SESSION_INVALID'
     );
   }
+
+  const openingDescription =
+    userExists.language === 'ENGLISH' ? 'Initial balance' : 'Saldo inicial';
 
   const existing = await prisma.account.findUnique({
     where: { idempotencyKey: validated.idempotencyKey },
@@ -88,21 +92,44 @@ async function createBankAccountInternal(input: unknown) {
 
   let account;
   try {
-    account = await prisma.account.create({
-      data: {
-        userId: session.userId,
-        name: validated.name,
-        type: validated.type,
-        currency: validated.currency,
-        balanceCents: validated.initialBalanceCents,
-        interestRateEA: validated.interestRateEA,
-        parentAccountId: validated.parentAccountId,
-        cardColor: validated.cardColor,
-        cardNetwork: validated.cardNetwork ?? 'NONE',
-        idempotencyKey: validated.idempotencyKey,
-        createdBy: session.userId,
-        lastModifiedBy: session.userId,
-      },
+    account = await prisma.$transaction(async (tx) => {
+      const newAccount = await tx.account.create({
+        data: {
+          userId: session.userId,
+          name: validated.name,
+          type: validated.type,
+          currency: validated.currency,
+          balanceCents: validated.initialBalanceCents,
+          interestRateEA: validated.interestRateEA,
+          parentAccountId: validated.parentAccountId,
+          cardColor: validated.cardColor,
+          cardNetwork: validated.cardNetwork ?? 'NONE',
+          idempotencyKey: validated.idempotencyKey,
+          createdBy: session.userId,
+          lastModifiedBy: session.userId,
+        },
+      });
+
+      if (newAccount.balanceCents > 0) {
+        await tx.transaction.create({
+          data: {
+            idempotencyKey: crypto.randomUUID(),
+            userId: session.userId,
+            accountId: newAccount.id,
+            type: 'INCOME',
+            amountCents: newAccount.balanceCents,
+            currency: newAccount.currency,
+            description: openingDescription,
+            date: new Date(),
+            ipAddress,
+            userAgent,
+            createdBy: session.userId,
+            lastModifiedBy: session.userId,
+          },
+        });
+      }
+
+      return newAccount;
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {

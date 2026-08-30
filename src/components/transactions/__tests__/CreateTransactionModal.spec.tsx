@@ -4,13 +4,19 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateTransactionModal } from '../CreateTransactionModal';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+// Mutable holder so tests can simulate the modal opening/closing (the real
+// store's activeModal is driven by openModal/closeModal).
+const { mockActiveModalState } = vi.hoisted(() => ({
+  mockActiveModalState: { value: 'create-transaction' as string | null },
+}));
 
 const mockOpenModal = vi.fn();
 const mockCloseModal = vi.fn();
@@ -19,7 +25,7 @@ const mockAddNotification = vi.fn();
 vi.mock('@/store/ui.store', () => ({
   useUIStore: vi.fn((selector) => {
     const state = {
-      activeModal: 'create-transaction',
+      activeModal: mockActiveModalState.value,
       openModal: mockOpenModal,
       closeModal: mockCloseModal,
       addNotification: mockAddNotification,
@@ -167,6 +173,7 @@ const renderModal = (overrides: Record<string, unknown> = {}) =>
 describe('CreateTransactionModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveModalState.value = 'create-transaction';
   });
 
   it('should render when activeModal is create-transaction', () => {
@@ -483,6 +490,107 @@ describe('CreateTransactionModal', () => {
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'Rate limited');
+    });
+  });
+
+  it('should render the INSUFFICIENT_FUNDS error inline inside the dialog', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'INSUFFICIENT_FUNDS',
+      error: 'Insufficient funds',
+    });
+
+    const { container } = renderModal();
+    const dialog = container.querySelector('dialog');
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    // The localized server error must be visible INSIDE the dialog (the toast
+    // below the <dialog> top layer would be invisible while the modal is open).
+    await waitFor(() => {
+      const alert = within(dialog as HTMLElement).getByRole('alert');
+      expect(alert).toHaveTextContent('Insufficient funds');
+    });
+
+    // The toast is kept as reinforcement too.
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Insufficient funds');
+  });
+
+  it('should render the CURRENCY_MISMATCH error inline inside the dialog', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'CURRENCY_MISMATCH',
+      error: 'Currency mismatch',
+    });
+
+    const { container } = renderModal();
+    const dialog = container.querySelector('dialog');
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const alert = within(dialog as HTMLElement).getByRole('alert');
+      expect(alert).toHaveTextContent('Currency mismatch');
+    });
+
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Currency mismatch');
+  });
+
+  it('should clear the server error when the modal is reopened', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'INSUFFICIENT_FUNDS',
+      error: 'Insufficient funds',
+    });
+
+    const { container, rerender } = renderModal();
+    const dialog = container.querySelector('dialog');
+
+    // 1. Open modal → fail a submit → inline alert appears
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(within(dialog as HTMLElement).getByRole('alert')).toHaveTextContent(
+        'Insufficient funds'
+      );
+    });
+
+    // 2. Close the modal
+    mockActiveModalState.value = null;
+    rerender(
+      <CreateTransactionModal
+        accounts={mockAccounts}
+        categories={mockCategories}
+        dictionary={dictionary}
+        lang="en"
+      />
+    );
+
+    // 3. Reopen the modal → the stale server error must be cleared
+    mockActiveModalState.value = 'create-transaction';
+    rerender(
+      <CreateTransactionModal
+        accounts={mockAccounts}
+        categories={mockCategories}
+        dictionary={dictionary}
+        lang="en"
+      />
+    );
+
+    await waitFor(() => {
+      expect(within(dialog as HTMLElement).queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 

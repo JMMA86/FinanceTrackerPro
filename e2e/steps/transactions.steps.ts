@@ -583,6 +583,20 @@ Then('el diálogo de crear transacción debe permanecer abierto', async ({ page 
   await expect(getOpenDialog(page)).toBeVisible({ timeout: 5000 });
 });
 
+Then(
+  'debe ver el error {string} dentro del diálogo de crear transacción',
+  async ({ page }, message: string) => {
+    // Fix B: the server error is rendered INLINE inside the modal via role="alert"
+    // (e.g. "Fondos insuficientes en la cuenta seleccionada"). The old toast lives
+    // below the <dialog> top layer and is invisible — we assert the inline alert
+    // scoped to the dialog instead.
+    const dialog = getOpenDialog(page);
+    await expect(dialog.getByRole('alert').filter({ hasText: message })).toBeVisible({
+      timeout: 5000,
+    });
+  }
+);
+
 // ============================================================================
 // DELETE - WITH CONFIRMATION
 // ============================================================================
@@ -725,5 +739,29 @@ Then(
     const dialog = getOpenDialog(page);
     await expect(dialog).toBeVisible({ timeout: 5000 });
     await expect(dialog.getByRole('radio', { name })).toHaveCount(0, { timeout: 5000 });
+  }
+);
+
+// ============================================================================
+// THEN - Opening Balance (account created with initialBalanceCents > 0)
+// ============================================================================
+
+Then(
+  'la cuenta {string} debe mostrar un saldo de {int}',
+  async ({ page }, accountName, balanceCents) => {
+    // Navigate to the accounts page to verify the ledger-driven balance. The card
+    // renders formatMoney(balanceCents, currency, 'es-CO'), e.g. "$ 1.000,00" for
+    // 100000 COP cents.
+    await page.goto('/es/accounts', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    const card = page.getByRole('button', { name: accountName, exact: true });
+    await expect(card).toBeVisible({ timeout: 5000 });
+    // Build the expected localized number (no currency symbol) and assert it is a
+    // substring of the formatted balance on the card — robust across symbol variants.
+    const expectedNumber = new Intl.NumberFormat('es-CO', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(balanceCents / 100);
+    await expect(card).toContainText(expectedNumber, { timeout: 5000 });
   }
 );

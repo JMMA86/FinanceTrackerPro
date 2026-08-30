@@ -79,6 +79,12 @@ export function CreateTransactionModal({
   const [isVisible, setIsVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [amountCents, setAmountCents] = useState(0);
+  // Holds a server-side error (e.g. INSUFFICIENT_FUNDS) rendered inline inside
+  // the modal. NOTE: the global ToastViewport is a fixed z-[100] element that
+  // sits BELOW the <dialog> top layer, so toasts are invisible while the modal
+  // is open. This inline alert is the primary (visible) error surface; the
+  // toast is kept as reinforcement in case the modal closes first.
+  const [serverError, setServerError] = useState('');
 
   const {
     register,
@@ -134,6 +140,7 @@ export function CreateTransactionModal({
       date: new Date().toISOString().split('T')[0],
     });
     const id = requestAnimationFrame(() => {
+      setServerError(''); // Clear any stale server error when (re)opening the modal
       setAmountCents(0);
       setIsVisible(true);
     });
@@ -159,6 +166,9 @@ export function CreateTransactionModal({
 
   const onSubmit = useCallback(
     async (data: CreateTransactionFormData) => {
+      // Clear any previous server error on each submit attempt
+      setServerError('');
+
       if (!selectedAccount) {
         addNotification('error', get(dictionary, 'selectAccount'));
         return;
@@ -183,10 +193,16 @@ export function CreateTransactionModal({
       setIsSubmitting(false);
 
       if (result.success) {
+        setServerError('');
         addNotification('success', get(dictionary, 'createSuccess'));
         closeModal();
       } else {
-        addNotification('error', getTransactionError(result, dictionary));
+        // Render the error inline inside the modal: the toast below the
+        // <dialog> top layer is invisible while the modal is open. Keep the
+        // toast too — it becomes visible if/when the modal closes.
+        const message = getTransactionError(result, dictionary);
+        setServerError(message);
+        addNotification('error', message);
       }
     },
     [selectedAccount, dictionary, addNotification, closeModal]
@@ -514,6 +530,16 @@ export function CreateTransactionModal({
               </p>
             )}
           </div>
+
+          {/* Server error (inline — the toast is hidden below the <dialog> top layer) */}
+          {serverError && (
+            <div
+              role="alert"
+              className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3"
+            >
+              <p className="text-sm text-red-200 font-medium">{serverError}</p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">

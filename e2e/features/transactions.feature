@@ -204,8 +204,12 @@ Feature: Gestión de Transacciones
   # CREATE - INSUFFICIENT FUNDS
   # ============================================================================
 
+  # NOTA (Fix B): el error del server se muestra INLINE dentro del modal
+  # (role="alert" con el texto localizado). El toast global queda por debajo
+  # del top layer del <dialog> y NO se aserta.
+
   @transactions @create @insufficient-funds
-  Scenario: Gasto con fondos insuficientes muestra error
+  Scenario: Gasto con fondos insuficientes muestra error inline en el modal
     Given que el usuario de transacciones ha iniciado sesión
     And navega a la página de transacciones
     Given que el modal de transacción está abierto
@@ -214,6 +218,7 @@ Feature: Gestión de Transacciones
     And ingresa "999999999" en el campo valor
     And envía el formulario de creación de transacción esperando error
     Then el diálogo de crear transacción debe permanecer abierto
+    And debe ver el error "Fondos insuficientes en la cuenta seleccionada" dentro del diálogo de crear transacción
 
   # ============================================================================
   # DELETE - WITH CONFIRMATION
@@ -264,3 +269,31 @@ Feature: Gestión de Transacciones
     When elimina la categoría "Categoría E2E Editada"
     Then la categoría "Categoría E2E Editada" no debe aparecer en la lista de categorías
     And la categoría "Categoría E2E Editada" no debe aparecer en el selector de creación
+
+  # ============================================================================
+  # CREATE - OPENING BALANCE (Fix A: crear cuenta con initialBalanceCents > 0
+  # genera automáticamente una transacción INCOME "Saldo inicial" dentro del
+  # mismo $transaction. Bug del usuario: antes el historial quedaba vacío y el
+  # gasto fallaba con INSUFFICIENT_FUNDS falso.)
+  # ============================================================================
+
+  @transactions @create @opening-balance
+  Scenario: Gasto exitoso con cuenta recién creada con saldo inicial
+    Given que el usuario de transacciones ha iniciado sesión
+    Given que el modal de creación está abierto
+    When ingresa "Ahorros E2E" en el campo nombre
+    And selecciona el tipo "Cuenta de Ahorros"
+    And ingresa "300000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    And la nueva cuenta debe aparecer en el grid
+    When navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona "Ahorros E2E" como cuenta
+    And ingresa "200000" en el campo valor
+    And ingresa una descripción única "Gasto saldo inicial E2E"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When navega a la página de cuentas
+    Then la cuenta "Ahorros E2E" debe mostrar un saldo de 100000

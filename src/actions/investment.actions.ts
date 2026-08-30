@@ -16,6 +16,7 @@
 'use server';
 import 'server-only';
 
+import crypto from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { Decimal } from 'decimal.js';
 import { prisma } from '@/lib/db';
@@ -32,6 +33,7 @@ import {
   markApiAttemptSuccess,
 } from '@/services/rate-limit.service';
 import {
+  AppError,
   NotFoundError,
   UnauthorizedError,
   InsufficientFundsError,
@@ -94,6 +96,22 @@ async function createInvestmentAccountInternal(input: unknown) {
 
   const validated = CreateInvestmentAccountSchema.parse(input);
 
+  // Verify user exists and get language
+  const userExists = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, language: true },
+  });
+  if (!userExists) {
+    throw new AppError(
+      'Your session is no longer valid. Please log out and sign in again.',
+      401,
+      'SESSION_INVALID'
+    );
+  }
+
+  const openingDescription =
+    userExists.language === 'ENGLISH' ? 'Initial balance' : 'Saldo inicial';
+
   // Idempotency check
   const existing = await prisma.account.findUnique({
     where: { idempotencyKey: validated.idempotencyKey },
@@ -106,19 +124,42 @@ async function createInvestmentAccountInternal(input: unknown) {
     return { account: existing, wasIdempotent: true };
   }
 
-  const { ipAddress } = await getClientInfo();
+  const { ipAddress, userAgent } = await getClientInfo();
 
-  const account = await prisma.account.create({
-    data: {
-      userId: session.userId,
-      name: validated.name,
-      type: 'INVESTMENT',
-      currency: validated.currency,
-      balanceCents: validated.initialBalanceCents,
-      idempotencyKey: validated.idempotencyKey,
-      createdBy: session.userId,
-      lastModifiedBy: session.userId,
-    },
+  const account = await prisma.$transaction(async (tx) => {
+    const newAccount = await tx.account.create({
+      data: {
+        userId: session.userId,
+        name: validated.name,
+        type: 'INVESTMENT',
+        currency: validated.currency,
+        balanceCents: validated.initialBalanceCents,
+        idempotencyKey: validated.idempotencyKey,
+        createdBy: session.userId,
+        lastModifiedBy: session.userId,
+      },
+    });
+
+    if (newAccount.balanceCents > 0) {
+      await tx.transaction.create({
+        data: {
+          idempotencyKey: crypto.randomUUID(),
+          userId: session.userId,
+          accountId: newAccount.id,
+          type: 'INCOME',
+          amountCents: newAccount.balanceCents,
+          currency: newAccount.currency,
+          description: openingDescription,
+          date: new Date(),
+          ipAddress,
+          userAgent,
+          createdBy: session.userId,
+          lastModifiedBy: session.userId,
+        },
+      });
+    }
+
+    return newAccount;
   });
 
   log.info(

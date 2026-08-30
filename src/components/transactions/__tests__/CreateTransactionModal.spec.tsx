@@ -47,6 +47,15 @@ vi.mock('@/lib/i18n', () => ({
       createSuccess: 'Transaction created',
       createError: 'Error creating transaction',
       insufficientFunds: 'Insufficient funds',
+      selectCategory: 'No category',
+      category: 'Category',
+      manageCategories: 'Manage categories',
+      noAccountsDesc: 'You need at least one account to record transactions.',
+      createAccountCta: 'Create account',
+      currencyMismatch: 'Currency mismatch',
+      inactiveAccount: 'Inactive account',
+      accountNotFound: 'Account not found',
+      rateLimited: 'Rate limited',
     };
     return labels[key] ?? key;
   }),
@@ -107,6 +116,11 @@ const mockAccounts = [
   { id: 'acc-2', name: 'Savings Account', currency: 'USD' },
 ];
 
+const mockCategories = [
+  { id: 'cat-1', name: 'Groceries', type: 'GROCERIES', color: '#3B82F6', userId: null },
+  { id: 'cat-2', name: 'My Travel', type: 'OTHER', color: '#8B5CF6', userId: 'user-1' },
+];
+
 const dictionary = {
   createTitle: 'Create Transaction',
   type: 'Type',
@@ -124,7 +138,27 @@ const dictionary = {
   createSuccess: 'Transaction created',
   createError: 'Error creating transaction',
   insufficientFunds: 'Insufficient funds',
+  selectCategory: 'No category',
+  category: 'Category',
+  manageCategories: 'Manage categories',
+  noAccountsDesc: 'You need at least one account to record transactions.',
+  createAccountCta: 'Create account',
+  currencyMismatch: 'Currency mismatch',
+  inactiveAccount: 'Inactive account',
+  accountNotFound: 'Account not found',
+  rateLimited: 'Rate limited',
 };
+
+const renderModal = (overrides: Record<string, unknown> = {}) =>
+  render(
+    <CreateTransactionModal
+      accounts={mockAccounts}
+      categories={mockCategories}
+      dictionary={dictionary}
+      lang="en"
+      {...overrides}
+    />
+  );
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -136,9 +170,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should render when activeModal is create-transaction', () => {
-    const { container } = render(
-      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
-    );
+    const { container } = renderModal();
 
     expect(screen.getByText('Create Transaction')).toBeInTheDocument();
     // jsdom doesn't map <dialog> to role="dialog", use native querySelector
@@ -147,9 +179,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should show modal dialog with proper role and aria attributes', () => {
-    const { container } = render(
-      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
-    );
+    const { container } = renderModal();
 
     const dialog = container.querySelector('dialog');
     expect(dialog).toBeInTheDocument();
@@ -157,14 +187,14 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should display transaction type radio buttons (Expense and Income)', () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     expect(screen.getByLabelText('Expense')).toBeInTheDocument();
     expect(screen.getByLabelText('Income')).toBeInTheDocument();
   });
 
   it('should display account select with options', () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     const accountSelect = screen.getByLabelText('Account');
     expect(accountSelect).toBeInTheDocument();
@@ -173,7 +203,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should display amount input, description textarea, and date input', () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     expect(screen.getByTestId('formatted-numeric-input')).toBeInTheDocument();
     expect(screen.getByLabelText('Description')).toBeInTheDocument();
@@ -181,14 +211,14 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should display Cancel and Create buttons', () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     expect(screen.getByText('Cancel')).toBeInTheDocument();
     expect(screen.getByText('Create')).toBeInTheDocument();
   });
 
   it('should close modal via close button click', async () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // The close X button in the header (last Cancel-labeled element)
     const closeButtons = screen.getAllByLabelText('Cancel');
@@ -200,7 +230,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should close modal via backdrop click', async () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Backdrop is the first button with aria-label="Cancel" (the full-screen backdrop)
     const backdrop = screen.getAllByLabelText('Cancel')[0];
@@ -211,7 +241,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should validate required fields on submit', async () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Click submit to trigger validation
     const submitButton = screen.getByText('Create');
@@ -230,7 +260,7 @@ describe('CreateTransactionModal', () => {
       () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
     );
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Select an account first
     const accountSelect = screen.getByLabelText('Account');
@@ -253,7 +283,7 @@ describe('CreateTransactionModal', () => {
   it('should call createTransaction with correct data on valid submit', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Select account (required)
     const accountSelect = screen.getByLabelText('Account');
@@ -287,7 +317,7 @@ describe('CreateTransactionModal', () => {
     const randomUUIDSpy = vi.spyOn(crypto, 'randomUUID');
     mockCreateTransaction.mockResolvedValue({ success: true });
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Fill required fields: account + amount
     const accountSelect = screen.getByLabelText('Account');
@@ -307,7 +337,7 @@ describe('CreateTransactionModal', () => {
   it('should close modal and show success notification on successful creation', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Fill required fields
     const accountSelect = screen.getByLabelText('Account');
@@ -331,7 +361,7 @@ describe('CreateTransactionModal', () => {
       error: 'Validation failed',
     });
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Fill required fields
     const accountSelect = screen.getByLabelText('Account');
@@ -357,7 +387,7 @@ describe('CreateTransactionModal', () => {
       error: 'Insufficient funds',
     });
 
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Fill required fields
     const accountSelect = screen.getByLabelText('Account');
@@ -376,8 +406,163 @@ describe('CreateTransactionModal', () => {
     });
   });
 
+  it('should show localized CURRENCY_MISMATCH error', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'CURRENCY_MISMATCH',
+      error: 'Currency mismatch',
+    });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Currency mismatch');
+    });
+  });
+
+  it('should show localized INACTIVE_ACCOUNT error', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'INACTIVE_ACCOUNT',
+      error: 'Inactive account',
+    });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Inactive account');
+    });
+  });
+
+  it('should show localized NOT_FOUND error as account not found', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'NOT_FOUND',
+      error: 'Account with ID x not found',
+    });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Account not found');
+    });
+  });
+
+  it('should show localized RATE_LIMITED error', async () => {
+    mockCreateTransaction.mockResolvedValue({
+      success: false,
+      code: 'RATE_LIMITED',
+      error: 'Too many attempts',
+    });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '5000' } });
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Rate limited');
+    });
+  });
+
+  it('should render category chips for system and user categories', () => {
+    renderModal();
+
+    // "No category" option
+    expect(screen.getByLabelText('No category')).toBeInTheDocument();
+    // System category
+    expect(screen.getByLabelText('Groceries')).toBeInTheDocument();
+    // User-defined category
+    expect(screen.getByLabelText('My Travel')).toBeInTheDocument();
+  });
+
+  it('should include categoryId in the createTransaction payload', async () => {
+    mockCreateTransaction.mockResolvedValue({ success: true });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '25000' } });
+
+    // Select the "Groceries" category chip
+    await userEvent.click(screen.getByLabelText('Groceries'));
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreateTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: 'cat-1' })
+      );
+    });
+  });
+
+  it('should submit without categoryId when no category selected', async () => {
+    mockCreateTransaction.mockResolvedValue({ success: true });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '25000' } });
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreateTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: undefined })
+      );
+    });
+  });
+
+  it('should show no-accounts warning and disable submit when there are no accounts', () => {
+    renderModal({ accounts: [] });
+
+    expect(
+      screen.getByText('You need at least one account to record transactions.')
+    ).toBeInTheDocument();
+    // CTA link navigates to the accounts page
+    const cta = screen.getByText('Create account');
+    expect(cta).toHaveAttribute('href', '/en/accounts');
+
+    const submitButton = screen.getByText('Create');
+    expect(submitButton).toBeDisabled();
+  });
+
+  it('should mark the account select as required', () => {
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    expect(accountSelect).toHaveAttribute('required');
+  });
+
   it('should reset form when modal opens', () => {
-    render(<CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />);
+    renderModal();
 
     // Verify default type is selected (EXPENSE)
     const expenseRadio = screen.getByLabelText('Expense');
@@ -385,9 +570,7 @@ describe('CreateTransactionModal', () => {
   });
 
   it('should be accessible with aria-labelledby attribute', () => {
-    const { container } = render(
-      <CreateTransactionModal accounts={mockAccounts} dictionary={dictionary} />
-    );
+    const { container } = renderModal();
 
     // jsdom doesn't map <dialog> to role="dialog" by default,
     // so we use the native element directly

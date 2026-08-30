@@ -1,10 +1,11 @@
 /**
  * TransactionTable Component Tests
- * Tests responsive table rendering, formatting, accessibility
+ * Tests responsive table rendering, formatting, accessibility, and delete flow
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TransactionTable } from '../TransactionTable';
 
 // Mock i18n
@@ -24,6 +25,42 @@ vi.mock('@/lib/money', () => ({
     return `${currency} ${dollars}.${centsPart.toString().padStart(2, '0')}`;
   }),
 }));
+
+// Mock next/navigation
+const mockRefresh = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: mockRefresh,
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}));
+
+// Mock Zustand UI store (addNotification)
+const mockAddNotification = vi.fn();
+vi.mock('@/store/ui.store', () => ({
+  useUIStore: vi.fn((selector) => {
+    const state = {
+      addNotification: mockAddNotification,
+    };
+    return selector(state);
+  }),
+}));
+
+// Mock deleteTransaction action
+const mockDeleteTransaction = vi.fn();
+vi.mock('@/actions/transaction.actions', () => ({
+  deleteTransaction: (...args: unknown[]) => mockDeleteTransaction(...args),
+}));
+
+// Mock HTMLDialogElement methods
+HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+});
+HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+  this.removeAttribute('open');
+});
 
 // ============================================================================
 // Test data
@@ -84,6 +121,13 @@ const dictionary = {
   type: 'Type',
   account: 'Account',
   amount: 'Amount',
+  actions: 'Actions',
+  deleteTransaction: 'Delete transaction',
+  deleteConfirm: 'Are you sure you want to delete this transaction?',
+  deleteSuccess: 'Transaction deleted',
+  createError: 'Error creating transaction',
+  cancel: 'Cancel',
+  delete: 'Delete',
   noTransactions: 'No transactions',
   noTransactionsDesc: 'Create your first transaction',
   income: 'Income',
@@ -95,20 +139,23 @@ const dictionary = {
   creditPayment: 'Credit Payment',
 };
 
+const renderTable = (transactions = mockTransactions) =>
+  render(
+    <TransactionTable
+      transactions={transactions}
+      accounts={mockAccounts}
+      dictionary={dictionary}
+      locale="en-US"
+    />
+  );
+
 describe('TransactionTable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('should render transaction rows in desktop table', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // Main table
     const table = screen.getByRole('table');
@@ -116,23 +163,17 @@ describe('TransactionTable', () => {
 
     // Headers
     const headers = within(table).getAllByRole('columnheader');
-    expect(headers).toHaveLength(5);
+    expect(headers).toHaveLength(6);
     expect(headers[0]).toHaveTextContent('Date');
     expect(headers[1]).toHaveTextContent('Description');
     expect(headers[2]).toHaveTextContent('Type');
     expect(headers[3]).toHaveTextContent('Account');
     expect(headers[4]).toHaveTextContent('Amount');
+    expect(headers[5]).toHaveTextContent('Actions');
   });
 
   it('should render correct number of transaction rows', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // All rows in table body
     const table = screen.getByRole('table');
@@ -141,14 +182,7 @@ describe('TransactionTable', () => {
   });
 
   it('should display formatted amounts with correct sign', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // Income should have positive sign (appears in both desktop and mobile)
     const incomeAmounts = screen.getAllByText(/\+USD 5000\.00/);
@@ -160,14 +194,7 @@ describe('TransactionTable', () => {
   });
 
   it('should display type badges with correct styles', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // Income appears in both desktop + mobile (2 transactions with INCOME type)
     const incomeBadges = screen.getAllByText('Income');
@@ -183,14 +210,7 @@ describe('TransactionTable', () => {
   });
 
   it('should display account names correctly', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // Account names appear both in desktop table and mobile cards
     const mainAccountElements = screen.getAllByText('Main Account');
@@ -201,14 +221,7 @@ describe('TransactionTable', () => {
   });
 
   it('should render fallback for null description', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // The null description em dash appears in both desktop table and mobile cards
     const dashElements = screen.getAllByText('—');
@@ -216,14 +229,7 @@ describe('TransactionTable', () => {
   });
 
   it('should render empty state when no transactions', () => {
-    render(
-      <TransactionTable
-        transactions={[]}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable([]);
 
     expect(screen.getByText('No transactions')).toBeInTheDocument();
     expect(screen.getByText('Create your first transaction')).toBeInTheDocument();
@@ -233,35 +239,20 @@ describe('TransactionTable', () => {
   });
 
   it('should be accessible with proper role and aria attributes', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     const table = screen.getByRole('table');
     expect(table).toHaveAttribute('aria-label', 'Transactions');
 
     // Headers should have scope="col"
-    const tableElement = table;
-    const headerCells = tableElement.querySelectorAll('th');
+    const headerCells = table.querySelectorAll('th');
     headerCells.forEach((th) => {
       expect(th).toHaveAttribute('scope', 'col');
     });
   });
 
   it('should render mobile card list (hidden on desktop)', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // Mobile list
     const mobileList = screen.getByRole('list');
@@ -270,14 +261,7 @@ describe('TransactionTable', () => {
   });
 
   it('should display transaction dates correctly', () => {
-    render(
-      <TransactionTable
-        transactions={mockTransactions}
-        accounts={mockAccounts}
-        dictionary={dictionary}
-        locale="en-US"
-      />
-    );
+    renderTable();
 
     // All transactions should have time elements
     const timeElements = document.querySelectorAll('time');
@@ -297,5 +281,99 @@ describe('TransactionTable', () => {
     // Should show fallback for account names
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(4); // One per transaction
+  });
+
+  // -------------------------------------------------------------------------
+  // Delete flow tests
+  // -------------------------------------------------------------------------
+
+  it('should render a trash button per desktop row with delete aria-label', () => {
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    expect(deleteButtons).toHaveLength(mockTransactions.length);
+  });
+
+  it('should render a trash button in mobile cards', () => {
+    renderTable();
+
+    const mobileList = screen.getByRole('list');
+    const deleteButtons = within(mobileList).getAllByRole('button', { name: 'Delete transaction' });
+    expect(deleteButtons).toHaveLength(mockTransactions.length);
+  });
+
+  it('should open the delete confirmation modal when trash is clicked', async () => {
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    await userEvent.click(deleteButtons[0]);
+
+    expect(
+      screen.getByText('Are you sure you want to delete this transaction?')
+    ).toBeInTheDocument();
+    // Modal has cancel and delete buttons
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
+  });
+
+  it('should delete the transaction, notify success and refresh after confirm', async () => {
+    mockDeleteTransaction.mockResolvedValue({ success: true });
+
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    await userEvent.click(deleteButtons[0]);
+
+    await userEvent.click(screen.getByText('Delete'));
+
+    await waitFor(() => {
+      expect(mockDeleteTransaction).toHaveBeenCalledWith({ transactionId: 'tx-1' });
+      expect(mockAddNotification).toHaveBeenCalledWith('success', 'Transaction deleted');
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('should notify with localized error when deletion fails', async () => {
+    mockDeleteTransaction.mockResolvedValue({ success: false, code: 'X', error: 'boom' });
+
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    await userEvent.click(deleteButtons[0]);
+
+    await userEvent.click(screen.getByText('Delete'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'boom');
+    });
+  });
+
+  it('should close the modal when cancel is clicked', async () => {
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const deleteButtons = within(table).getAllByRole('button', { name: 'Delete transaction' });
+    await userEvent.click(deleteButtons[0]);
+
+    const dialog = screen
+      .getByText('Are you sure you want to delete this transaction?')
+      .closest('dialog');
+    expect(dialog).toHaveAttribute('open');
+
+    // Cancel triggers the close animation
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    fireEvent.click(screen.getByText('Cancel'));
+
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
+    expect(dialog).not.toHaveAttribute('open');
+    vi.useRealTimers();
   });
 });

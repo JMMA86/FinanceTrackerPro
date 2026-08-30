@@ -80,4 +80,29 @@ describe('NewTransactionButton', () => {
     const button = screen.getByRole('button', { name: /New Transaction/i });
     expect(button).toHaveAttribute('type', 'button');
   });
+
+  it('should render as enabled by default', () => {
+    render(<NewTransactionButton dictionary={dictionary} />);
+
+    const button = screen.getByRole('button', { name: /New Transaction/i });
+    expect(button).toBeEnabled();
+  });
+
+  it('should render disabled when disabled prop is true', () => {
+    render(<NewTransactionButton dictionary={dictionary} disabled />);
+
+    const button = screen.getByRole('button', { name: /New Transaction/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveClass('disabled:opacity-50');
+    expect(button).toHaveClass('disabled:cursor-not-allowed');
+  });
+
+  it('should not open the create-transaction modal when disabled', async () => {
+    render(<NewTransactionButton dictionary={dictionary} disabled />);
+
+    const button = screen.getByRole('button', { name: /New Transaction/i });
+    await userEvent.click(button);
+
+    expect(mockOpenModal).not.toHaveBeenCalled();
+  });
 });

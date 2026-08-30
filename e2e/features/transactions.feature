@@ -158,3 +158,109 @@ Feature: Gestión de Transacciones
     When navega a la página de transacciones
     Then debe ver el título "Transacciones"
     And la tabla de transacciones debe ser visible
+
+  # ============================================================================
+  # EMPTY STATE - NO ACCOUNTS
+  # ============================================================================
+
+  # NOTA: las notificaciones del store de UI (Zustand) NO se renderizan en el DOM
+  # (no existe componente de toasts), por lo que los flujos de éxito se verifican
+  # por el cierre del modal + actualización de la tabla, y los de error por la
+  # permanencia del modal abierto (el server action rechaza la operación).
+
+  @transactions @empty-state @no-accounts
+  Scenario: Usuario sin cuentas ve aviso y no puede crear transacciones
+    Given que el usuario navega a la página de login en español
+    When cambia a modo registro en desktop
+    And ingresa "E2E Sin Cuentas" en el campo nombre del registro desktop
+    And ingresa un email único en el registro desktop
+    And ingresa "E2ePassword123" en el campo contraseña del registro desktop
+    And hace clic en "Registrarse" en el registro desktop
+    And inicia sesión con el email recién registrado
+    And navega a la página de transacciones
+    Then debe ver el aviso de crear cuenta
+    And el botón "Nueva transacción" no debe estar visible
+    When hace clic en el enlace "Crear cuenta"
+    Then debe ser redirigido a la página de cuentas
+
+  # ============================================================================
+  # CREATE - EXPENSE
+  # ============================================================================
+
+  @transactions @create @expense
+  Scenario: Crear una transacción de gasto exitosamente
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona "Efectivo" como cuenta
+    And ingresa "10000" en el campo valor
+    And ingresa "Gasto de prueba E2E" como descripción
+    And envía el formulario de creación de transacción
+    Then debe ver una notificación de éxito
+    And la transacción con descripción "Gasto de prueba E2E" debe aparecer en la tabla
+
+  # ============================================================================
+  # CREATE - INSUFFICIENT FUNDS
+  # ============================================================================
+
+  @transactions @create @insufficient-funds
+  Scenario: Gasto con fondos insuficientes muestra error
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona "Efectivo" como cuenta
+    And ingresa "999999999" en el campo valor
+    And envía el formulario de creación de transacción esperando error
+    Then el diálogo de crear transacción debe permanecer abierto
+
+  # ============================================================================
+  # DELETE - WITH CONFIRMATION
+  # ============================================================================
+
+  @transactions @delete
+  Scenario: Eliminar una transacción con confirmación
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Ingreso" como tipo
+    And selecciona "Efectivo" como cuenta
+    And ingresa "5000" en el campo valor
+    And ingresa una descripción única "Eliminar E2E"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When hace clic en el botón de eliminar de la fila de la transacción creada
+    Then debe ver el diálogo de confirmación de eliminación
+    When hace clic en "Cancelar" en el diálogo de eliminación
+    Then el diálogo de eliminación debe cerrarse
+    And la transacción creada debe aparecer en la tabla
+    When hace clic en el botón de eliminar de la fila de la transacción creada
+    And hace clic en "Eliminar" en el diálogo de eliminación
+    Then el diálogo de eliminación debe cerrarse
+    And la transacción creada no debe aparecer en la tabla
+
+  # ============================================================================
+  # CATEGORIES - CRUD
+  # ============================================================================
+
+  @transactions @categories @crud
+  Scenario: CRUD de categorías personalizadas
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    When hace clic en "Gestionar categorías"
+    Then debe ver el diálogo de categorías
+    And debe ver 9 categorías predeterminadas sin botones de editar o eliminar
+    When añade la categoría "Categoría E2E" con tipo "Otros"
+    Then debe ver la categoría "Categoría E2E" en la lista de categorías
+    When cierra el diálogo de categorías
+    And abre el modal de transacción y ve la categoría "Categoría E2E"
+    When hace clic en "Cancelar" en el modal
+    Then el diálogo debe estar cerrado
+    When hace clic en "Gestionar categorías"
+    Then debe ver el diálogo de categorías
+    When edita la categoría "Categoría E2E" a "Categoría E2E Editada"
+    Then debe ver la categoría "Categoría E2E Editada" en la lista de categorías
+    When elimina la categoría "Categoría E2E Editada"
+    Then la categoría "Categoría E2E Editada" no debe aparecer en la lista de categorías
+    And la categoría "Categoría E2E Editada" no debe aparecer en el selector de creación

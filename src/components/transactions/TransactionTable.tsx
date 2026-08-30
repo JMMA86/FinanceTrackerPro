@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useCallback } from 'react';
+import { memo, useMemo, useCallback, useState } from 'react';
 import { formatMoney } from '@/lib/money';
 import {
   ArrowUpRight,
@@ -9,8 +9,10 @@ import {
   TrendingUp,
   CreditCard,
   Landmark,
+  Trash2,
 } from 'lucide-react';
 import { get } from '@/lib/i18n';
+import { DeleteTransactionModal } from '@/components/transactions/DeleteTransactionModal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -126,11 +128,13 @@ const TransactionRowItem = memo(function TransactionRowItem({
   accountName,
   dictionary,
   locale,
+  onDelete,
 }: {
   transaction: TransactionRow;
   accountName: string;
   dictionary: Record<string, unknown>;
   locale: string;
+  onDelete?: (transactionId: string) => void;
 }) {
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
@@ -190,6 +194,20 @@ const TransactionRowItem = memo(function TransactionRowItem({
           {formattedAmount}
         </span>
       </td>
+
+      {/* Actions */}
+      <td className="py-3 px-4 text-right">
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(transaction.id)}
+            aria-label={get(dictionary, 'deleteTransaction')}
+            className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
+      </td>
     </tr>
   );
 });
@@ -203,11 +221,13 @@ const TransactionCard = memo(function TransactionCard({
   accountName,
   dictionary,
   locale,
+  onDelete,
 }: {
   transaction: TransactionRow;
   accountName: string;
   dictionary: Record<string, unknown>;
   locale: string;
+  onDelete?: (transactionId: string) => void;
 }) {
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
@@ -265,6 +285,18 @@ const TransactionCard = memo(function TransactionCard({
         {isPositive ? '+' : '-'}
         {formattedAmount}
       </span>
+
+      {/* Actions */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(transaction.id)}
+          aria-label={get(dictionary, 'deleteTransaction')}
+          className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 shrink-0"
+        >
+          <Trash2 className="w-4 h-4" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 });
@@ -293,8 +325,19 @@ export const TransactionTable = memo(function TransactionTable({
     [accountMap]
   );
 
-  if (transactions.length === 0) {
-    return (
+  // Delete flow: track the transaction awaiting confirmation
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const handleDeleteRequest = useCallback((transactionId: string) => {
+    setConfirmingId(transactionId);
+  }, []);
+
+  const handleDeleteModalClose = useCallback(() => {
+    setConfirmingId(null);
+  }, []);
+
+  const content =
+    transactions.length === 0 ? (
       <div
         className="app-shell rounded-2xl py-16 flex flex-col items-center gap-4 text-center"
         aria-live="polite"
@@ -309,74 +352,91 @@ export const TransactionTable = memo(function TransactionTable({
           <p className="text-xs text-slate-400 max-w-xs">{get(dictionary, 'noTransactionsDesc')}</p>
         </div>
       </div>
+    ) : (
+      <div className="app-shell rounded-2xl overflow-hidden">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full" role="table" aria-label={get(dictionary, 'title')}>
+            <thead>
+              <tr className="border-b border-white/5">
+                <th
+                  scope="col"
+                  className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'date')}
+                </th>
+                <th
+                  scope="col"
+                  className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'description')}
+                </th>
+                <th
+                  scope="col"
+                  className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'type')}
+                </th>
+                <th
+                  scope="col"
+                  className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'account')}
+                </th>
+                <th
+                  scope="col"
+                  className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'amount')}
+                </th>
+                <th
+                  scope="col"
+                  className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'actions')}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <TransactionRowItem
+                  key={tx.id}
+                  transaction={tx}
+                  accountName={getAccountName(tx.accountId)}
+                  dictionary={dictionary}
+                  locale={locale}
+                  onDelete={handleDeleteRequest}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <ul className="md:hidden divide-y divide-white/5" aria-label={get(dictionary, 'title')}>
+          {transactions.map((tx) => (
+            <TransactionCard
+              key={tx.id}
+              transaction={tx}
+              accountName={getAccountName(tx.accountId)}
+              dictionary={dictionary}
+              locale={locale}
+              onDelete={handleDeleteRequest}
+            />
+          ))}
+        </ul>
+      </div>
     );
-  }
 
   return (
-    <div className="app-shell rounded-2xl overflow-hidden">
-      {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full" role="table" aria-label={get(dictionary, 'title')}>
-          <thead>
-            <tr className="border-b border-white/5">
-              <th
-                scope="col"
-                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
-              >
-                {get(dictionary, 'date')}
-              </th>
-              <th
-                scope="col"
-                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
-              >
-                {get(dictionary, 'description')}
-              </th>
-              <th
-                scope="col"
-                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
-              >
-                {get(dictionary, 'type')}
-              </th>
-              <th
-                scope="col"
-                className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
-              >
-                {get(dictionary, 'account')}
-              </th>
-              <th
-                scope="col"
-                className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
-              >
-                {get(dictionary, 'amount')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((tx) => (
-              <TransactionRowItem
-                key={tx.id}
-                transaction={tx}
-                accountName={getAccountName(tx.accountId)}
-                dictionary={dictionary}
-                locale={locale}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile cards */}
-      <ul className="md:hidden divide-y divide-white/5" aria-label={get(dictionary, 'title')}>
-        {transactions.map((tx) => (
-          <TransactionCard
-            key={tx.id}
-            transaction={tx}
-            accountName={getAccountName(tx.accountId)}
-            dictionary={dictionary}
-            locale={locale}
-          />
-        ))}
-      </ul>
-    </div>
+    <>
+      {content}
+      <DeleteTransactionModal
+        open={confirmingId !== null}
+        transactionId={confirmingId}
+        dictionary={dictionary}
+        onClose={handleDeleteModalClose}
+      />
+    </>
   );
 });

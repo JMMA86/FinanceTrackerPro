@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { SyntheticEvent, ReactNode } from 'react';
 import { X, Plus, Pencil, Trash2 } from 'lucide-react';
 import { createCategory, updateCategory, deleteCategory } from '@/actions/category.actions';
 import { useUIStore } from '@/store/ui.store';
@@ -143,7 +143,7 @@ export function CategoryManagerModal({
     setFormError(null);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) {
       setFormError(get(dictionary, 'categoryError'));

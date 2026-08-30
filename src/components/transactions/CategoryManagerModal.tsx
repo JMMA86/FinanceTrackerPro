@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { X, Plus, Pencil, Trash2 } from 'lucide-react';
 import { createCategory, updateCategory, deleteCategory } from '@/actions/category.actions';
 import { useUIStore } from '@/store/ui.store';
@@ -142,7 +143,7 @@ export function CategoryManagerModal({
     setFormError(null);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) {
       setFormError(get(dictionary, 'categoryError'));
@@ -253,6 +254,63 @@ export function CategoryManagerModal({
             )}
             {categories.map((cat) => {
               const isSystem = cat.userId === null;
+
+              // Actions/status rendered to the right of each category name.
+              // Extracted from a nested ternary (SonarQube typescript:S3358).
+              let categoryActions: ReactNode;
+              if (isSystem) {
+                categoryActions = (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">
+                    {get(dictionary, 'systemCategory')}
+                  </span>
+                );
+              } else if (confirmingId === cat.id) {
+                categoryActions = (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-300 max-w-[220px]">
+                      {interpolate(get(dictionary, 'categoryDeleteConfirm'), { name: cat.name })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(cat.id)}
+                      disabled={isSubmitting}
+                      className="text-rose-400 hover:text-rose-300 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 rounded-lg px-1.5 py-0.5 disabled:opacity-50"
+                    >
+                      {get(dictionary, 'deleteCategory')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingId(null)}
+                      disabled={isSubmitting}
+                      className="text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg px-1.5 py-0.5 disabled:opacity-50"
+                    >
+                      {get(dictionary, 'cancel')}
+                    </button>
+                  </div>
+                );
+              } else {
+                categoryActions = (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(cat)}
+                      aria-label={`${get(dictionary, 'editCategory')}: ${cat.name}`}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingId(cat.id)}
+                      aria-label={`${get(dictionary, 'deleteCategory')}: ${cat.name}`}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              }
+
               return (
                 <li
                   key={cat.id}
@@ -267,52 +325,7 @@ export function CategoryManagerModal({
                     {cat.name}
                   </span>
 
-                  {isSystem ? (
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/5 px-2 py-0.5 rounded-full">
-                      {get(dictionary, 'systemCategory')}
-                    </span>
-                  ) : confirmingId === cat.id ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-300 max-w-[220px]">
-                        {interpolate(get(dictionary, 'categoryDeleteConfirm'), { name: cat.name })}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(cat.id)}
-                        disabled={isSubmitting}
-                        className="text-rose-400 hover:text-rose-300 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 rounded-lg px-1.5 py-0.5 disabled:opacity-50"
-                      >
-                        {get(dictionary, 'deleteCategory')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingId(null)}
-                        disabled={isSubmitting}
-                        className="text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg px-1.5 py-0.5 disabled:opacity-50"
-                      >
-                        {get(dictionary, 'cancel')}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(cat)}
-                        aria-label={`${get(dictionary, 'editCategory')}: ${cat.name}`}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                      >
-                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingId(cat.id)}
-                        aria-label={`${get(dictionary, 'deleteCategory')}: ${cat.name}`}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  )}
+                  {categoryActions}
                 </li>
               );
             })}

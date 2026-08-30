@@ -151,14 +151,20 @@ Feature: Gestión de Cuentas Bancarias
   # ELIMINAR CUENTA - REGLAS DE INTEGRIDAD
   # ============================================================================
 
-  # NOTA sobre visibilidad: cuando deleteBankAccount rechaza la operación
-  # (ACCOUNT_HAS_BALANCE), DeleteConfirmModal NO cierra el <dialog> (solo llama
-  # a closeModal() en éxito) y el toast de error queda DETRÁS del top layer del
-  # dialog abierto — no es asertable. Lo observable: el modal permanece abierto,
-  # el botón se re-habilita y, tras cerrarlo, la cuenta sigue activa en el grid.
+  # NOTA sobre visibilidad (fix UX): cuando deleteBankAccount rechaza la
+  # operación (ACCOUNT_HAS_BALANCE), DeleteConfirmModal AHORA cierra el <dialog>
+  # en AMBAS ramas (éxito y error) — el toast de error sale del top layer del
+  # dialog y SÍ es asertable en el ToastViewport (role="status"). Lo observable:
+  # el modal se cierra, el toast de error aparece y la cuenta sigue en el grid.
+  #
+  # NOTA (nueva regla de eliminación): una cuenta con SOLO su transacción de
+  # apertura (saldo inicial, sin movimientos no-apertura) SÍ se puede eliminar
+  # aunque su saldo real sea != 0 (el server soft-deletea la cuenta + la(s)
+  # apertura(s)). Para disparar ACCOUNT_HAS_BALANCE la cuenta debe tener
+  # apertura + al menos un movimiento no-apertura (gasto) con saldo != 0.
 
   @accounts @delete @integrity
-  Scenario: No se puede eliminar una cuenta con saldo
+  Scenario: No se puede eliminar una cuenta con saldo y movimientos
     Given que el usuario de cuentas ha iniciado sesión
     And que no existen cuentas bancarias
     Given que el modal de creación está abierto
@@ -168,13 +174,23 @@ Feature: Gestión de Cuentas Bancarias
     And envía el formulario de creación
     Then la cuenta debe crearse exitosamente
     And la nueva cuenta debe aparecer en el grid
-    When abre el panel de detalle de la cuenta
+    # Movimiento no-apertura: gasto de 10000 → saldo real 40000 != 0.
+    When navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona la cuenta recién creada como cuenta
+    And ingresa "10000" en el campo valor
+    And ingresa una descripción única "Gasto saldo no cero"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When navega a la página de cuentas
+    And abre el panel de detalle de la cuenta con el nombre único
     And hace clic en eliminar en el panel de detalle
     Then debe ver el modal de confirmación "Eliminar Cuenta"
     When confirma la eliminación de la cuenta esperando rechazo
-    Then el modal de confirmación de eliminación debe permanecer abierto
-    When cierra el modal de confirmación con Cancelar
-    And navega a la página de cuentas
+    Then el modal de confirmación de eliminación debe cerrarse
+    And debe ver la notificación de error "La cuenta debe tener saldo 0 para poder eliminarla"
+    When navega a la página de cuentas
     Then la cuenta con el nombre único debe seguir en el grid
 
   # NOTA (Regla 3): al eliminar una cuenta con saldo 0 (soft delete), sus
@@ -220,3 +236,38 @@ Feature: Gestión de Cuentas Bancarias
     When navega a la página de transacciones
     Then la fila "Saldo inicial" de la cuenta recién creada debe estar visible
     And la transacción recién creada debe estar visible con el nombre de la cuenta eliminada
+
+  # NOTA (nueva regla de eliminación): una cuenta con SOLO su transacción de
+  # apertura (sin movimientos no-apertura) SÍ se puede eliminar aunque su saldo
+  # sea != 0. El server hace soft delete de la cuenta + de la apertura. Al
+  # navegar a transacciones, la fila "Saldo inicial" de esa cuenta YA NO existe.
+  # Se mantiene una cuenta PERMANENTE activa para que la tabla de transacciones
+  # se renderice (si no hay cuentas activas, la página muestra el empty state).
+
+  @accounts @delete @integrity
+  Scenario: Cuenta recién creada solo con saldo inicial se puede eliminar
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
+    # Cuenta que PERMANECE activa (para que la tabla de transacciones se renderice).
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Cuenta Permanente"
+    And selecciona el tipo "Cuenta Corriente"
+    And ingresa "100000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    # Cuenta objetivo: SOLO apertura, sin gastos → con la nueva regla se puede eliminar.
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Ahorros Inicial"
+    And selecciona el tipo "Cuenta de Ahorros"
+    And ingresa "50000" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    And la nueva cuenta debe aparecer en el grid
+    When abre el panel de detalle de la cuenta con el nombre único
+    And hace clic en eliminar en el panel de detalle
+    Then debe ver el modal de confirmación "Eliminar Cuenta"
+    When confirma la eliminación de la cuenta
+    Then debe ver la notificación de éxito "Cuenta eliminada"
+    And la cuenta con el nombre único no debe estar en el grid
+    When navega a la página de transacciones
+    Then la fila "Saldo inicial" de la cuenta recién creada no debe estar visible

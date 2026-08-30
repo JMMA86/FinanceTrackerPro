@@ -745,6 +745,17 @@ Then(
 );
 
 Then(
+  'la fila {string} de la cuenta recién creada no debe estar visible',
+  async ({ page }, description: string) => {
+    // Nueva regla de eliminación: una cuenta SOLO-apertura soft-deletea su(s)
+    // apertura(s) junto con la cuenta, así que la fila "Saldo inicial" de esa
+    // cuenta YA NO existe en el historial.
+    const row = await rowForAccountTransaction(page, description);
+    await expect(row).toHaveCount(0, { timeout: 10000 });
+  }
+);
+
+Then(
   'la transacción recién creada debe estar visible con el nombre de la cuenta eliminada',
   async ({ page }) => {
     const description = await getStoredDescription(page);

@@ -8,7 +8,7 @@ vi.mock('@/lib/db', () => {
     create: vi.fn(),
     update: vi.fn(),
   };
-  const mockTransaction = { create: vi.fn() };
+  const mockTransaction = { create: vi.fn(), count: vi.fn(), updateMany: vi.fn() };
   const mockUser = { findUnique: vi.fn() };
   const mockInvestmentAssetHolding = { count: vi.fn() };
 
@@ -239,6 +239,7 @@ describe('account.actions.ts', () => {
             amountCents: 100_000,
             description: 'Saldo inicial',
             currency: 'COP',
+            openingBalance: true,
             userId: USER_ID,
             accountId: ACCOUNT_ID,
           }),
@@ -334,6 +335,7 @@ describe('account.actions.ts', () => {
       mockGetTrueBalance.mockResolvedValue(0);
       mockAccount.findMany.mockResolvedValue([]);
       mockInvestmentAssetHolding.count.mockResolvedValue(0);
+      mockTransaction.count.mockResolvedValue(0);
     });
 
     it('returns UnauthorizedError when account belongs to another user', async () => {
@@ -380,10 +382,48 @@ describe('account.actions.ts', () => {
       mockGetSession.mockResolvedValue(makeSession());
       mockAccount.findUnique.mockResolvedValue(makeAccountRow());
       mockGetTrueBalance.mockResolvedValue(50000);
+      mockTransaction.count.mockResolvedValue(1);
       const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
       expect(result.success).toBe(false);
       expect(result.code).toBe('ACCOUNT_HAS_BALANCE');
       expect(mockAccount.update).not.toHaveBeenCalled();
+    });
+
+    it('allows deleting account with only opening balance (non-zero trueBalance, zero non-opening)', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow());
+      mockGetTrueBalance.mockResolvedValue(50000);
+      mockTransaction.count.mockResolvedValue(0);
+      mockAccount.update.mockResolvedValue(makeAccountRow({ isActive: false }));
+      const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
+      expect(result.success).toBe(true);
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(mockAccount.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isActive: false, deletedAt: expect.any(Date) }),
+        })
+      );
+      expect(mockTransaction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            accountId: ACCOUNT_ID,
+            isActive: true,
+            openingBalance: true,
+          }),
+          data: expect.objectContaining({ isActive: false, deletedAt: expect.any(Date) }),
+        })
+      );
+    });
+
+    it('does NOT call updateMany transactions when trueBalance is 0', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow());
+      mockGetTrueBalance.mockResolvedValue(0);
+      mockTransaction.count.mockResolvedValue(2);
+      mockAccount.update.mockResolvedValue(makeAccountRow({ isActive: false }));
+      const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
+      expect(result.success).toBe(true);
+      expect(mockTransaction.updateMany).not.toHaveBeenCalled();
     });
 
     it('returns POCKET_HAS_BALANCE when a pocket still has funds', async () => {

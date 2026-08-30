@@ -150,6 +150,7 @@ async function createInvestmentAccountInternal(input: unknown) {
           amountCents: newAccount.balanceCents,
           currency: newAccount.currency,
           description: openingDescription,
+          openingBalance: true,
           date: new Date(),
           ipAddress,
           userAgent,

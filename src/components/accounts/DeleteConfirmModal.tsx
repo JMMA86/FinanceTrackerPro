@@ -101,6 +101,9 @@ export function DeleteConfirmModal({ dictionary }: Readonly<DeleteConfirmModalPr
       );
       addNotification('error', getAccountError(result, dictionary));
       setIsDeleting(false);
+      // Close the modal so the error toast is visible above the dialog top layer.
+      // Keeping the dialog open hid the notification behind the ::backdrop top layer.
+      closeModal();
     }
   }
 

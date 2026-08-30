@@ -132,6 +132,7 @@ async function createTestTransaction(
     amountCents: number;
     description: string;
     isActive: boolean;
+    openingBalance: boolean;
   }> = {}
 ) {
   return prisma.transaction.create({
@@ -143,6 +144,7 @@ async function createTestTransaction(
       amountCents: overrides.amountCents ?? 10000,
       currency: Currency.COP,
       description: overrides.description ?? 'Test transaction',
+      openingBalance: overrides.openingBalance ?? false,
       date: new Date(),
       isActive: overrides.isActive ?? true,
       createdBy: TEST_USER_ID,
@@ -270,6 +272,104 @@ describe('Account Delete Integrity Integration', () => {
       // Transactions still exist
       const txCount = await prisma.transaction.count({
         where: { accountId: account.id },
+      });
+      expect(txCount).toBe(2);
+    });
+
+    it('should allow deleting account with ONLY opening balance (non-zero) and soft-delete the opening transaction', async () => {
+      const account = await createTestAccount(TEST_USER_ID, {
+        name: 'New Account Only Opening',
+        balanceCents: 100000,
+      });
+
+      // Only an opening balance transaction
+      await createTestTransaction(account.id, {
+        type: 'INCOME',
+        amountCents: 100000,
+        description: 'Saldo inicial',
+        openingBalance: true,
+      });
+
+      const result = await accountActions.deleteBankAccount({ accountId: account.id });
+
+      expect(result.success).toBe(true);
+
+      // Account soft-deleted
+      const deletedAccount = await prisma.account.findUnique({ where: { id: account.id } });
+      expect(deletedAccount?.isActive).toBe(false);
+      expect(deletedAccount?.deletedAt).not.toBeNull();
+
+      // Opening transaction also soft-deleted
+      const openingTx = await prisma.transaction.findFirst({
+        where: { accountId: account.id, openingBalance: true },
+      });
+      expect(openingTx?.isActive).toBe(false);
+      expect(openingTx?.deletedAt).not.toBeNull();
+    });
+
+    it('should reject deleting account with opening balance + other movements even if balance != 0', async () => {
+      const account = await createTestAccount(TEST_USER_ID, {
+        name: 'Account With Opening Plus Expense',
+        balanceCents: 80000,
+      });
+
+      await createTestTransaction(account.id, {
+        type: 'INCOME',
+        amountCents: 100000,
+        description: 'Saldo inicial',
+        openingBalance: true,
+      });
+      await createTestTransaction(account.id, {
+        type: 'EXPENSE',
+        amountCents: -20000,
+        description: 'Gasto',
+      });
+
+      const result = await accountActions.deleteBankAccount({ accountId: account.id });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('ACCOUNT_HAS_BALANCE');
+
+      // Account still active
+      const stillActive = await prisma.account.findUnique({ where: { id: account.id } });
+      expect(stillActive?.isActive).toBe(true);
+
+      // Both transactions still active
+      const txCount = await prisma.transaction.count({
+        where: { accountId: account.id, isActive: true },
+      });
+      expect(txCount).toBe(2);
+    });
+
+    it('should allow deleting account with zero balance (opening + expense that zeroes it) and preserve transactions', async () => {
+      const account = await createTestAccount(TEST_USER_ID, {
+        name: 'Zero Balance With Opening',
+        balanceCents: 0,
+      });
+
+      await createTestTransaction(account.id, {
+        type: 'INCOME',
+        amountCents: 100000,
+        description: 'Saldo inicial',
+        openingBalance: true,
+      });
+      await createTestTransaction(account.id, {
+        type: 'EXPENSE',
+        amountCents: -100000,
+        description: 'Gasto que la deja en cero',
+      });
+
+      const result = await accountActions.deleteBankAccount({ accountId: account.id });
+
+      expect(result.success).toBe(true);
+
+      // Account soft-deleted
+      const deletedAccount = await prisma.account.findUnique({ where: { id: account.id } });
+      expect(deletedAccount?.isActive).toBe(false);
+
+      // Transactions remain active (trueBalance === 0)
+      const txCount = await prisma.transaction.count({
+        where: { accountId: account.id, isActive: true },
       });
       expect(txCount).toBe(2);
     });

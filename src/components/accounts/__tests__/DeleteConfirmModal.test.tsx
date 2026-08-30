@@ -159,7 +159,7 @@ describe('DeleteConfirmModal', () => {
     document.removeEventListener('finance:account-deleted', accountDeletedListener);
   });
 
-  it('should show error notification when deletion fails', async () => {
+  it('should show error notification and close the modal when deletion fails', async () => {
     mockDeleteBankAccount.mockResolvedValue({ success: false, code: 'X', error: 'boom' });
     useUIStore.getState().openModal('delete-confirm', {
       accountId: ACCOUNT_ID,
@@ -174,12 +174,11 @@ describe('DeleteConfirmModal', () => {
       expect(getLastNotification()?.type).toBe('error');
       expect(getLastNotification()?.message).toBe('boom');
     });
-    // Modal stays open and delete button is re-enabled
-    expect(useUIStore.getState().activeModal).toBe('delete-confirm');
-    expect(screen.getByText('delete')).toBeEnabled();
+    // Modal closes so the error toast is visible above the dialog top layer
+    expect(useUIStore.getState().activeModal).toBeNull();
   });
 
-  it('should notify with the localized accountHasBalance message when the account has balance', async () => {
+  it('should notify with the localized accountHasBalance message and close the modal when the account has balance', async () => {
     mockDeleteBankAccount.mockResolvedValue({
       success: false,
       code: 'ACCOUNT_HAS_BALANCE',
@@ -198,9 +197,8 @@ describe('DeleteConfirmModal', () => {
       expect(getLastNotification()?.type).toBe('error');
       expect(getLastNotification()?.message).toBe('accountHasBalance');
     });
-    // Modal stays open so the user can resolve the balance before retrying
-    expect(useUIStore.getState().activeModal).toBe('delete-confirm');
-    expect(screen.getByText('delete')).toBeEnabled();
+    // Modal closes so the error toast is visible above the dialog top layer
+    expect(useUIStore.getState().activeModal).toBeNull();
   });
 
   it('should close the modal when the dialog close event fires', () => {

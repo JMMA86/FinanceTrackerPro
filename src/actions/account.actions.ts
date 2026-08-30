@@ -127,6 +127,7 @@ async function createBankAccountInternal(input: unknown) {
             amountCents: newAccount.balanceCents,
             currency: newAccount.currency,
             description: openingDescription,
+            openingBalance: true,
             date: new Date(),
             ipAddress,
             userAgent,
@@ -220,14 +221,18 @@ async function deleteBankAccountInternal(input: unknown) {
   if (!account?.isActive) throw new NotFoundError('Account', accountId);
   if (account.userId !== session.userId) throw new UnauthorizedError();
 
-  // Regla de integridad: solo se elimina con saldo REAL 0 (Rule 13 — fuente de verdad)
+  // Regla de integridad: se puede eliminar si saldo real == 0, O si los únicos movimientos son de saldo inicial
   const transactionRepo = getTransactionRepository();
   const trueBalance = await getTrueBalance(accountId, transactionRepo);
-  if (trueBalance !== 0) {
+  const nonOpeningCount = await prisma.transaction.count({
+    where: { accountId, isActive: true, openingBalance: false },
+  });
+
+  if (trueBalance !== 0 && nonOpeningCount > 0) {
     throw new AccountHasBalanceError(accountId, trueBalance);
   }
 
-  // Pockets del padre deben estar en 0
+  // Pockets del padre deben estar en 0 (mantenido: los pockets se eliminan individualmente)
   const pockets = await prisma.account.findMany({
     where: { parentAccountId: accountId, isActive: true },
     select: { id: true, name: true },
@@ -255,9 +260,20 @@ async function deleteBankAccountInternal(input: unknown) {
     );
   }
 
-  await prisma.account.update({
-    where: { id: accountId },
-    data: { isActive: false, deletedAt: new Date(), lastModifiedBy: session.userId },
+  // Soft delete atómico: cuenta + transacciones de apertura si aplica (Rule 3)
+  await prisma.$transaction(async (tx) => {
+    await tx.account.update({
+      where: { id: accountId },
+      data: { isActive: false, deletedAt: new Date(), lastModifiedBy: session.userId },
+    });
+
+    if (trueBalance !== 0) {
+      // Solo-apertura: el historial mínimo se elimina con la cuenta (soft delete)
+      await tx.transaction.updateMany({
+        where: { accountId, isActive: true, openingBalance: true },
+        data: { isActive: false, deletedAt: new Date(), lastModifiedBy: session.userId },
+      });
+    }
   });
 
   log.info({ action: 'account.delete', accountId, userId: session.userId }, 'Account soft-deleted');

@@ -104,6 +104,7 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
   deletedAt: null,
   createdBy: VALID_USER_ID,
   lastModifiedBy: VALID_USER_ID,
+  openingBalance: false,
   ...overrides,
 });
 

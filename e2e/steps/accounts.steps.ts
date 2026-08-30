@@ -233,21 +233,24 @@ When('confirma la eliminación de la cuenta esperando rechazo', async ({ page })
   const dialog = getOpenDialog(page);
   const deleteBtn = dialog.locator('button').filter({ hasText: 'Eliminar' }).last();
   await deleteBtn.click();
-  // While submitting the button is disabled + shows a spinner; on server
-  // rejection (ACCOUNT_HAS_BALANCE) it re-enables and the dialog STAYS OPEN
-  // (DeleteConfirmModal only calls closeModal() on success).
-  await expect(deleteBtn).toBeEnabled({ timeout: 15000 });
-  await page.waitForTimeout(300);
+  // Fix UX: DeleteConfirmModal now closes the <dialog> on BOTH success and
+  // rejection (closeModal() runs in the error branch too), so the error toast
+  // becomes visible once the dialog leaves the top layer. Waiting for the
+  // dialog to close is the reliable signal that the server rejected the
+  // operation (ACCOUNT_HAS_BALANCE).
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 15000 });
 });
 
-Then('el modal de confirmación de eliminación debe permanecer abierto', async ({ page }) => {
-  await expect(getOpenDialog(page)).toBeVisible({ timeout: 5000 });
-});
-
-When('cierra el modal de confirmación con Cancelar', async ({ page }) => {
-  const dialog = getOpenDialog(page);
-  await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+Then('el modal de confirmación de eliminación debe cerrarse', async ({ page }) => {
   await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 5000 });
+});
+
+Then('debe ver la notificación de éxito {string}', async ({ page }, message: string) => {
+  // ToastViewport renders notifications in a role="status" aria-live="polite"
+  // region. DeleteConfirmModal adds the success toast BEFORE closing the dialog,
+  // so by the time we assert, the dialog is gone and the toast is visible.
+  const statusRegion = page.locator('[role="status"][aria-live="polite"]');
+  await expect(statusRegion.getByText(message)).toBeVisible({ timeout: 4000 });
 });
 
 Then('la cuenta con el nombre único debe seguir en el grid', async ({ page }) => {

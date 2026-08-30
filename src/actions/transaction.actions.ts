@@ -7,7 +7,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
-import { addCents } from '@/lib/money';
+import { addCents, subtractCents } from '@/lib/money';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { getClientInfo } from '@/lib/utils/client-info';
@@ -23,12 +23,14 @@ import {
   InactiveAccountError,
   CurrencyMismatchError,
   RateLimitError,
+  ValidationError,
 } from '@/lib/errors/api-errors';
 import {
   GetAllTransactionsSchema,
   CreateTransactionActionSchema,
   DeleteTransactionSchema,
   GetTransactionByIdSchema,
+  UpdateTransactionSchema,
 } from './transaction.schema';
 import type { Prisma, ApiAction } from '@prisma/client';
 
@@ -68,6 +70,9 @@ async function getAllTransactionsInternal(input: unknown) {
       orderBy: { date: 'desc' },
       skip: (validated.page - 1) * validated.pageSize,
       take: validated.pageSize,
+      include: {
+        category: { select: { id: true, name: true, color: true } },
+      },
     }),
     prisma.transaction.count({ where }),
   ]);
@@ -346,3 +351,161 @@ async function getTransactionByIdInternal(input: unknown) {
 }
 
 export const getTransactionById = safeAction(getTransactionByIdInternal);
+
+// ============================================================================
+// updateTransaction — Edit description, amount, date, or category atomically
+// ============================================================================
+
+async function updateTransactionInternal(input: unknown) {
+  const session = await getSession();
+  if (!session?.userId) throw new UnauthorizedError();
+
+  const validated = UpdateTransactionSchema.parse(input);
+
+  // Rate limiting (Rule 10)
+  const { ipAddress, userAgent: _userAgent } = await getClientInfo();
+  const rateLimit = await checkApiRateLimit(session.userId, 'TRANSACTION_UPDATE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'transaction.update.rate_limited', userId: session.userId, ipAddress },
+      'Transaction update rate limited'
+    );
+    throw new RateLimitError();
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Find transaction
+    const transaction = await tx.transaction.findUnique({
+      where: { id: validated.transactionId },
+      select: {
+        id: true,
+        userId: true,
+        accountId: true,
+        amountCents: true,
+        type: true,
+        isActive: true,
+      },
+    });
+
+    if (!transaction?.isActive) throw new NotFoundError('Transaction', validated.transactionId);
+    if (transaction.userId !== session.userId)
+      throw new UnauthorizedError('Transaction does not belong to user');
+
+    // 2. Find account
+    const account = await tx.account.findUnique({
+      where: { id: transaction.accountId },
+      select: {
+        id: true,
+        userId: true,
+        balanceCents: true,
+        currency: true,
+        isActive: true,
+      },
+    });
+
+    if (!account) throw new NotFoundError('Account', transaction.accountId);
+    if (!account.isActive) throw new InactiveAccountError(account.id);
+    if (account.userId !== session.userId)
+      throw new UnauthorizedError('Account does not belong to user');
+
+    // 3. Validate category if provided
+    if (validated.categoryId !== undefined) {
+      if (validated.categoryId !== null) {
+        const category = await tx.category.findUnique({
+          where: { id: validated.categoryId },
+          select: { id: true, isActive: true, userId: true },
+        });
+        if (!category?.isActive) throw new NotFoundError('Category', validated.categoryId);
+        if (category.userId !== null && category.userId !== session.userId) {
+          throw new UnauthorizedError('Category does not belong to user');
+        }
+      }
+    }
+
+    // 4. Amount sign validation and balance calculation
+    const originalAmount = transaction.amountCents;
+    const newAmount = validated.amountCents ?? originalAmount;
+
+    if (validated.amountCents !== undefined) {
+      // Validate sign matches transaction type
+      if (transaction.type === 'EXPENSE' && validated.amountCents >= 0) {
+        throw new ValidationError(
+          'Amount sign must match transaction type (EXPENSE must be negative)'
+        );
+      }
+      if (transaction.type === 'INCOME' && validated.amountCents <= 0) {
+        throw new ValidationError(
+          'Amount sign must match transaction type (INCOME must be positive)'
+        );
+      }
+
+      // Validate sufficient funds for EXPENSE (Rule 13)
+      if (transaction.type === 'EXPENSE') {
+        const transactionRepo = getTransactionRepository();
+        const trueBalance = await getTrueBalance(transaction.accountId, transactionRepo);
+        const balanceWithoutTx = subtractCents(trueBalance, originalAmount);
+        const projected = addCents(balanceWithoutTx, newAmount);
+
+        if (projected < 0) {
+          throw new InsufficientFundsError(Math.abs(newAmount), balanceWithoutTx);
+        }
+      }
+    }
+
+    // 5. Update transaction
+    const updated = await tx.transaction.update({
+      where: { id: validated.transactionId },
+      data: {
+        ...(validated.description !== undefined ? { description: validated.description } : {}),
+        ...(validated.amountCents !== undefined ? { amountCents: validated.amountCents } : {}),
+        ...(validated.date !== undefined ? { date: validated.date } : {}),
+        ...(validated.categoryId !== undefined ? { categoryId: validated.categoryId } : {}),
+        lastModifiedBy: session.userId,
+      },
+    });
+
+    // 6. Update account balance if amount changed
+    if (validated.amountCents !== undefined && newAmount !== originalAmount) {
+      const newBalance = addCents(addCents(account.balanceCents, -originalAmount), newAmount);
+      await tx.account.update({
+        where: { id: account.id },
+        data: {
+          balanceCents: newBalance,
+          lastModifiedBy: session.userId,
+        },
+      });
+    }
+
+    return updated;
+  });
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'TRANSACTION_UPDATE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
+
+  log.info(
+    {
+      action: 'transaction.update',
+      transactionId: validated.transactionId,
+      userId: session.userId,
+      ipAddress,
+    },
+    'Transaction updated'
+  );
+
+  revalidatePath('/[lang]/transactions', 'page');
+  revalidatePath('/[lang]/dashboard', 'page');
+  revalidatePath('/[lang]/accounts', 'page');
+
+  return { transaction: result, wasIdempotent: false };
+}
+
+export const updateTransaction = safeAction(updateTransactionInternal);

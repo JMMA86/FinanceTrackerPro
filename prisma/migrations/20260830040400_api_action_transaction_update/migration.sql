@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ApiAction" ADD VALUE 'TRANSACTION_UPDATE';

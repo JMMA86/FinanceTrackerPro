@@ -49,7 +49,26 @@ export const GetTransactionByIdSchema = z.object({
   transactionId: CUID,
 });
 
+/**
+ * UpdateTransaction input schema
+ * TIPO and CUENTA are NOT editable (not accepted)
+ * amountCents must keep the same sign as the original transaction type
+ */
+export const UpdateTransactionSchema = z.object({
+  transactionId: CUID,
+  description: z.string().max(500).optional(),
+  amountCents: z
+    .number()
+    .int('Amount must be an integer')
+    .min(-9999999999999, 'Amount magnitude exceeds safe limit')
+    .max(9999999999999, 'Amount magnitude exceeds safe limit')
+    .optional(),
+  date: z.coerce.date().optional(),
+  categoryId: z.union([CUID, z.null()]).optional(), // null = remove category
+});
+
 export type GetAllTransactionsInput = z.infer<typeof GetAllTransactionsSchema>;
 export type CreateTransactionActionInput = z.infer<typeof CreateTransactionActionSchema>;
 export type DeleteTransactionInput = z.infer<typeof DeleteTransactionSchema>;
 export type GetTransactionByIdInput = z.infer<typeof GetTransactionByIdSchema>;
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionSchema>;

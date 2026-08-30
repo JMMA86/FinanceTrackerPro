@@ -247,7 +247,7 @@ describe('TransactionTable', () => {
     expect(screen.getAllByText('Inactive Account').length).toBeGreaterThanOrEqual(1);
     // No em dash fallback is used for this transaction
     const dashes = screen.queryAllByText('—');
-    expect(dashes.length).toBe(0);
+    expect(dashes).toHaveLength(0);
   });
 
   it('should render fallback for null description', () => {

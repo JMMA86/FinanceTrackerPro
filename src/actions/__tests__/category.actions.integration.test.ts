@@ -156,7 +156,7 @@ async function cleanupTestData() {
     where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
   });
   await prisma.category.deleteMany({
-    where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }, { userId: null }] },
+    where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
   });
   await prisma.user.deleteMany({
     where: { OR: [{ id: TEST_USER_ID }, { id: TEST_USER_ID_2 }] },

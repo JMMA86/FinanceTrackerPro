@@ -10,23 +10,10 @@ import { useUIStore } from '@/store/ui.store';
 import { createTransaction, updateTransaction } from '@/actions/transaction.actions';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
+import { toLocalDateTimeInput } from '@/lib/utils/date-utils';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { getTransactionError } from '@/components/transactions/getTransactionError';
 import type { AccountBrief, CategoryBrief, TransactionRow } from '@/components/transactions/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Serialize a Date into a `datetime-local` input value using the user's LOCAL
- * timezone (e.g. "2024-06-15T14:30"). This keeps the browser from treating
- * the value as UTC when the form is submitted.
- */
-function toLocalDateTimeInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 // ---------------------------------------------------------------------------
 // Client-side validation schema

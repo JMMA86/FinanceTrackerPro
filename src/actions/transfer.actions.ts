@@ -31,6 +31,7 @@ import { getClientInfo } from '@/lib/utils/client-info';
 import { TransferSchema, type TransferInput } from '@/lib/validations/finance';
 import { getTransactionRepository } from '@/lib/repositories';
 import { safeAction } from '@/lib/utils/action-wrapper';
+import { getSession } from '@/lib/auth/session';
 import {
   NotFoundError,
   InsufficientFundsError,
@@ -57,6 +58,15 @@ import type {
 async function transferBetweenAccountsInternal(input: unknown): Promise<TransferResult> {
   // 1. SERVER-SIDE VALIDATION (Rule 5)
   const validated = TransferSchema.parse(input);
+
+  // SESSION VALIDATION (Zero-Trust)
+  const session = await getSession();
+  if (!session?.userId) {
+    throw new UnauthorizedError();
+  }
+  if (session.userId !== validated.userId) {
+    throw new UnauthorizedError('User ID does not match session');
+  }
 
   // Get repositories (DI)
   const transactionRepo = getTransactionRepository();
@@ -281,6 +291,7 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
   // Revalidate dashboard cache after transfer
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/accounts', 'page');
+  revalidatePath('/[lang]/transactions', 'page');
 
   return result;
 }
@@ -335,6 +346,15 @@ export const getTransferDetails = safeAction(getTransferDetailsInternal);
  */
 async function reverseTransferInternal(input: ReverseTransferInput): Promise<TransferResult> {
   const { transferId, userId, reason } = input;
+
+  // SESSION VALIDATION (Zero-Trust)
+  const session = await getSession();
+  if (!session?.userId) {
+    throw new UnauthorizedError();
+  }
+  if (session.userId !== userId) {
+    throw new UnauthorizedError('User ID does not match session');
+  }
 
   // Rate limiting (Rule 10)
   const { ipAddress } = await getClientInfo();

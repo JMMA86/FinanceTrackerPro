@@ -6,6 +6,7 @@ import { getDictionary, get } from '@/lib/i18n';
 import { getAllTransactions } from '@/actions/transaction.actions';
 import { getBankAccounts } from '@/actions/account.actions';
 import { getCategories } from '@/actions/category.actions';
+import { getSession } from '@/lib/auth/session';
 import type { TransactionType } from '@prisma/client';
 import { TransactionFilters } from '@/components/transactions/TransactionFilters';
 import { TransactionTable } from '@/components/transactions/TransactionTable';
@@ -61,10 +62,11 @@ export default async function TransactionsPage({
   const { lang } = await params;
   const sp = await searchParams;
 
-  const [dictionary, accountsRes, categoriesRes] = await Promise.all([
+  const [dictionary, accountsRes, categoriesRes, session] = await Promise.all([
     getDictionary(lang, 'transactions'),
     getBankAccounts({} as Record<string, never>),
     getCategories({} as Record<string, never>),
+    getSession(),
   ]);
 
   const accounts: AccountBrief[] =
@@ -114,6 +116,7 @@ export default async function TransactionsPage({
           categories={categories}
           hasAccounts={!hasNoAccounts}
           lang={lang}
+          userId={session?.userId ?? ''}
         />
       </div>
 

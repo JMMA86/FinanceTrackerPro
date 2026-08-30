@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('@/lib/auth/session', () => ({
+  getSession: vi.fn(),
+}));
+
 import { transferBetweenAccounts, getTransferDetails, reverseTransfer } from '../transfer.actions';
 import type { Prisma, Transaction, Currency } from '@prisma/client';
 
@@ -49,6 +54,9 @@ vi.mock('@/lib/repositories', () => ({
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
+
+import { getSession } from '@/lib/auth/session';
+const mockGetSession = vi.mocked(getSession);
 
 const VALID_USER_ID = 'clh1234567890abcdefghij';
 const VALID_FROM_ACCOUNT = 'clh1234567890abcdefghik';
@@ -111,6 +119,11 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
 describe('transfer.actions.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({
+      userId: VALID_USER_ID,
+      email: 'test@example.com',
+      name: 'Test User',
+    });
   });
 
   afterEach(() => {
@@ -177,6 +190,29 @@ describe('transfer.actions.ts', () => {
         // Then
         expect(response.success).toBe(false);
         expect(response.code).toBe('VALIDATION_ERROR');
+      });
+    });
+
+    describe('when session is invalid', () => {
+      it('should return UNAUTHORIZED when no session exists', async () => {
+        mockGetSession.mockResolvedValueOnce(null);
+        const input = buildValidTransferInput();
+        const response = await transferBetweenAccounts(input);
+        expect(response.success).toBe(false);
+        expect(response.code).toBe('UNAUTHORIZED');
+      });
+
+      it('should return UNAUTHORIZED when userId does not match session', async () => {
+        mockGetSession.mockResolvedValueOnce({
+          userId: 'clh9999999999999999999',
+          email: 'other@example.com',
+          name: 'Other',
+        });
+        const input = buildValidTransferInput();
+        const response = await transferBetweenAccounts(input);
+        expect(response.success).toBe(false);
+        expect(response.code).toBe('UNAUTHORIZED');
+        expect(response.error).toContain('does not match session');
       });
     });
 
@@ -685,6 +721,35 @@ describe('transfer.actions.ts', () => {
   });
 
   describe('reverseTransfer', () => {
+    describe('when session is invalid', () => {
+      it('should return UNAUTHORIZED when no session exists', async () => {
+        mockGetSession.mockResolvedValueOnce(null);
+        const response = await reverseTransfer({
+          transferId: 'transfer-1',
+          userId: VALID_USER_ID,
+          reason: 'Test',
+        });
+        expect(response.success).toBe(false);
+        expect(response.code).toBe('UNAUTHORIZED');
+      });
+
+      it('should return UNAUTHORIZED when userId does not match session', async () => {
+        mockGetSession.mockResolvedValueOnce({
+          userId: 'clh9999999999999999999',
+          email: 'other@example.com',
+          name: 'Other',
+        });
+        const response = await reverseTransfer({
+          transferId: 'transfer-1',
+          userId: VALID_USER_ID,
+          reason: 'Test',
+        });
+        expect(response.success).toBe(false);
+        expect(response.code).toBe('UNAUTHORIZED');
+        expect(response.error).toContain('does not match session');
+      });
+    });
+
     describe('when reversal is not allowed', () => {
       it('should return UNAUTHORIZED when transfer is older than 24 hours', async () => {
         // Given

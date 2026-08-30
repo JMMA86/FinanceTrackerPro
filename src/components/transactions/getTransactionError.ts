@@ -30,6 +30,8 @@ export function getTransactionError(
       return get(dictionary, 'accountNotFound');
     case 'RATE_LIMITED':
       return get(dictionary, 'rateLimited');
+    case 'UNAUTHORIZED':
+      return get(dictionary, 'transferUnauthorized');
     case 'BALANCE_NEGATIVE':
       return get(dictionary, 'balanceNegative');
     default:

@@ -11,10 +11,72 @@
  * Run with: npm run test:integration
  */
 
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { PrismaClient, Currency, AccountType, Language, Theme } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+
+// ============================================================================
+// Mocks (required for action imports)
+// ============================================================================
+
+vi.mock('next/headers', () => ({
+  headers: vi.fn(() =>
+    Promise.resolve({
+      get: (key: string) => {
+        if (key === 'x-forwarded-for') return '127.0.0.1';
+        if (key === 'user-agent') return 'vitest';
+        return null;
+      },
+    })
+  ),
+}));
+
+vi.mock('next/cache', () => {
+  const revalidatePath = vi.fn();
+  return { revalidatePath };
+});
+
+vi.mock('@/lib/auth/session', () => ({
+  getSession: vi.fn(),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  log: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/rate-limit.service', () => ({
+  checkApiRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  recordApiAttempt: vi.fn().mockResolvedValue('attempt-1'),
+  markApiAttemptSuccess: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/services/idempotency.service', () => ({
+  checkAndLockIdempotency: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/services/reconciliation.service', () => ({
+  getTrueBalance: vi.fn().mockResolvedValue(100000),
+}));
+
+vi.mock('@/lib/repositories', () => ({
+  getTransactionRepository: vi.fn(() => ({
+    findByIdempotencyKey: vi.fn().mockResolvedValue(null),
+    findPairedTransfers: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findManyByAccountId: vi.fn(),
+    createMany: vi.fn(),
+    softDelete: vi.fn(),
+  })),
+}));
 
 const TEST_DB_URL = process.env.DATABASE_URL!;
 const TEST_USER_ID = 'test-user-integration-' + Date.now();
@@ -22,6 +84,11 @@ const TEST_USER_ID_2 = 'test-user-integration-2-' + Date.now();
 
 let pool: Pool;
 let prisma: PrismaClient;
+
+import { getSession } from '@/lib/auth/session';
+import { transferBetweenAccounts } from '../transfer.actions';
+
+const mockGetSession = vi.mocked(getSession);
 
 const createTestUser = async () => {
   return prisma.user.create({
@@ -367,6 +434,78 @@ describe('Transfer Integration Tests', () => {
 
       expect(transaction?.ipAddress).toBe('192.168.1.100');
       expect(transaction?.userAgent).toBe('Mozilla/5.0 (Test Browser)');
+    });
+  });
+
+  describe('Session Authorization', () => {
+    it('should return UNAUTHORIZED and not create transactions when userId does not match session', async () => {
+      await prisma.user.create({
+        data: {
+          id: TEST_USER_ID,
+          email: `session-test-${Date.now()}@example.com`,
+          name: 'Session Test User',
+          passwordHash: 'hashed_test_password',
+          language: Language.SPANISH,
+          theme: Theme.LIGHT,
+          baseCurrency: Currency.USD,
+          isActive: true,
+        },
+      });
+
+      const fromAccount = await prisma.account.create({
+        data: {
+          userId: TEST_USER_ID,
+          name: 'From Account',
+          type: AccountType.SAVINGS,
+          balanceCents: 10000,
+          currency: Currency.USD,
+          isActive: true,
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+
+      const toAccount = await prisma.account.create({
+        data: {
+          userId: TEST_USER_ID,
+          name: 'To Account',
+          type: AccountType.SAVINGS,
+          balanceCents: 5000,
+          currency: Currency.USD,
+          isActive: true,
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+
+      mockGetSession.mockResolvedValueOnce({
+        userId: TEST_USER_ID,
+        email: 'session@test.com',
+        name: 'Session User',
+      });
+
+      const result = await transferBetweenAccounts({
+        userId: 'cattacker9999999999999',
+        idempotencyKey: crypto.randomUUID(),
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
+        amountCents: 1000,
+        currency: 'USD',
+        description: 'Unauthorized transfer attempt',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+
+      const transactions = await prisma.transaction.findMany({
+        where: { userId: { in: [TEST_USER_ID, TEST_USER_ID_2] } },
+      });
+      expect(transactions).toHaveLength(0);
+
+      const updatedFromAccount = await prisma.account.findUnique({
+        where: { id: fromAccount.id },
+      });
+      expect(updatedFromAccount?.balanceCents).toBe(10000);
     });
   });
 });

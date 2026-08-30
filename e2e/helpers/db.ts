@@ -54,3 +54,26 @@ export async function resetUserFinancialData(email: string): Promise<void> {
     }),
   ]);
 }
+
+/**
+ * Returns a map of ACTIVE account names → balanceCents for the given user email.
+ *
+ * Why: transfers.feature reuses the shared transactions user
+ * (transactions@e2e.financetrackerpro.com), whose account balances are mutated
+ * by the earlier transactions.feature scenarios in the same run (create, edit,
+ * delete, opening balance). Asserting an absolute seed balance would be fragile;
+ * instead the transfer happy-path reads the CURRENT balances right before the
+ * transfer and asserts the post-transfer delta on the accounts page.
+ */
+export async function getAccountBalancesByEmail(email: string): Promise<Record<string, number>> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) return {};
+
+  const accounts = await db.account.findMany({
+    where: { userId: user.id, isActive: true },
+  });
+  const balances: Record<string, number> = {};
+  for (const acc of accounts) balances[acc.name] = acc.balanceCents;
+  return balances;
+}

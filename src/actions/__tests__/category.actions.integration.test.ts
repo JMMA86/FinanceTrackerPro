@@ -164,6 +164,7 @@ async function cleanupTestData() {
 }
 
 import * as categoryActions from '../category.actions';
+import { createTransaction } from '../transaction.actions';
 
 // ============================================================================
 // Tests
@@ -394,8 +395,6 @@ describe('Category Actions Integration', () => {
         },
       });
 
-      // Import the transaction action to test category validation
-      const { createTransaction } = await import('../transaction.actions');
       const result = await createTransaction({
         idempotencyKey: crypto.randomUUID(),
         accountId: account.id,
@@ -424,7 +423,6 @@ describe('Category Actions Integration', () => {
         },
       });
 
-      const { createTransaction } = await import('../transaction.actions');
       const result = await createTransaction({
         idempotencyKey: crypto.randomUUID(),
         accountId: account.id,

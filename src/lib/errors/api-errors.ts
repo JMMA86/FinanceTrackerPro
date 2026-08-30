@@ -129,6 +129,34 @@ export class InactiveAccountError extends AppError {
 }
 
 /**
+ * 400 - Negative Balance
+ * Thrown when deleting a transaction would leave the account balance negative
+ */
+export class NegativeBalanceError extends AppError {
+  constructor(accountId: string) {
+    super(
+      `Deleting this transaction would leave account ${accountId} with a negative balance`,
+      400,
+      'BALANCE_NEGATIVE'
+    );
+  }
+}
+
+/**
+ * 400 - Account Has Balance
+ * Thrown when deleting an account that still has funds
+ */
+export class AccountHasBalanceError extends AppError {
+  constructor(accountId: string, balanceCents: number) {
+    super(
+      `Account ${accountId} still has a balance of ${balanceCents} cents. Balance must be zero to delete`,
+      400,
+      'ACCOUNT_HAS_BALANCE'
+    );
+  }
+}
+
+/**
  * 500 - Internal Server Error
  * Generic error for unexpected failures
  */

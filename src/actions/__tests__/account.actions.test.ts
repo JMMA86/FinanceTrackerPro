@@ -10,11 +10,13 @@ vi.mock('@/lib/db', () => {
   };
   const mockTransaction = { create: vi.fn() };
   const mockUser = { findUnique: vi.fn() };
+  const mockInvestmentAssetHolding = { count: vi.fn() };
 
   const prismaMock = {
     account: mockAccount,
     transaction: mockTransaction,
     user: mockUser,
+    investmentAssetHolding: mockInvestmentAssetHolding,
     $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
       return callback({
         account: mockAccount,
@@ -28,6 +30,12 @@ vi.mock('@/lib/db', () => {
 vi.mock('next/headers', () => ({ headers: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }));
+vi.mock('@/services/reconciliation.service', () => ({
+  getTrueBalance: vi.fn(),
+}));
+vi.mock('@/lib/repositories', () => ({
+  getTransactionRepository: vi.fn(),
+}));
 
 import {
   getBankAccounts,
@@ -39,13 +47,18 @@ import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 import { headers } from 'next/headers';
 import { log } from '@/lib/logger';
+import { getTrueBalance } from '@/services/reconciliation.service';
+import { getTransactionRepository } from '@/lib/repositories';
 
 const mockGetSession = vi.mocked(getSession);
 const mockAccount = vi.mocked(prisma.account);
 const mockTransaction = vi.mocked(prisma.transaction);
 const mockUser = vi.mocked(prisma.user);
+const mockInvestmentAssetHolding = vi.mocked(prisma.investmentAssetHolding);
 const mockHeaders = vi.mocked(headers);
 const mockLog = vi.mocked(log);
+const mockGetTrueBalance = vi.mocked(getTrueBalance);
+const mockGetTransactionRepository = vi.mocked(getTransactionRepository);
 
 const USER_ID = 'cuser000000000000000001';
 const ACCOUNT_ID = 'cacct000000000000000001';
@@ -316,6 +329,13 @@ describe('account.actions.ts', () => {
   });
 
   describe('deleteBankAccount', () => {
+    beforeEach(() => {
+      mockGetTransactionRepository.mockReturnValue({} as never);
+      mockGetTrueBalance.mockResolvedValue(0);
+      mockAccount.findMany.mockResolvedValue([]);
+      mockInvestmentAssetHolding.count.mockResolvedValue(0);
+    });
+
     it('returns UnauthorizedError when account belongs to another user', async () => {
       mockGetSession.mockResolvedValue(makeSession());
       mockAccount.findUnique.mockResolvedValue(
@@ -354,6 +374,44 @@ describe('account.actions.ts', () => {
       const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
       expect(result.success).toBe(false);
       expect(result.code).toBe('NOT_FOUND');
+    });
+
+    it('returns ACCOUNT_HAS_BALANCE when true balance is not zero', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow());
+      mockGetTrueBalance.mockResolvedValue(50000);
+      const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('ACCOUNT_HAS_BALANCE');
+      expect(mockAccount.update).not.toHaveBeenCalled();
+    });
+
+    it('returns POCKET_HAS_BALANCE when a pocket still has funds', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow());
+      mockGetTrueBalance.mockImplementation(async (_accountId: string) => {
+        // parent balance = 0, pocket balance = 25000
+        return 0;
+      });
+      mockAccount.findMany.mockResolvedValue([
+        { id: 'pocket-1', name: 'Vacation Pocket' },
+      ] as never);
+      // Second call to getTrueBalance for the pocket
+      mockGetTrueBalance.mockResolvedValueOnce(0).mockResolvedValueOnce(25000);
+      const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('POCKET_HAS_BALANCE');
+      expect(mockAccount.update).not.toHaveBeenCalled();
+    });
+
+    it('returns ACCOUNT_HAS_HOLDINGS when investment account has active holdings', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockAccount.findUnique.mockResolvedValue(makeAccountRow({ type: 'INVESTMENT' }));
+      mockInvestmentAssetHolding.count.mockResolvedValue(2);
+      const result = await deleteBankAccount({ accountId: ACCOUNT_ID });
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('ACCOUNT_HAS_HOLDINGS');
+      expect(mockAccount.update).not.toHaveBeenCalled();
     });
   });
 });

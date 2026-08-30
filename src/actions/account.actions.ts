@@ -9,7 +9,14 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
-import { AppError, NotFoundError, UnauthorizedError } from '@/lib/errors/api-errors';
+import {
+  AppError,
+  NotFoundError,
+  UnauthorizedError,
+  AccountHasBalanceError,
+} from '@/lib/errors/api-errors';
+import { getTrueBalance } from '@/services/reconciliation.service';
+import { getTransactionRepository } from '@/lib/repositories';
 import { CreateAccountSchema, DeleteAccountSchema, UpdateAccountSchema } from './account.schema';
 
 const BANK_TYPES = ['CHECKING', 'CASH', 'SAVINGS', 'POCKET'] as const;
@@ -212,6 +219,41 @@ async function deleteBankAccountInternal(input: unknown) {
   const account = await prisma.account.findUnique({ where: { id: accountId } });
   if (!account?.isActive) throw new NotFoundError('Account', accountId);
   if (account.userId !== session.userId) throw new UnauthorizedError();
+
+  // Regla de integridad: solo se elimina con saldo REAL 0 (Rule 13 — fuente de verdad)
+  const transactionRepo = getTransactionRepository();
+  const trueBalance = await getTrueBalance(accountId, transactionRepo);
+  if (trueBalance !== 0) {
+    throw new AccountHasBalanceError(accountId, trueBalance);
+  }
+
+  // Pockets del padre deben estar en 0
+  const pockets = await prisma.account.findMany({
+    where: { parentAccountId: accountId, isActive: true },
+    select: { id: true, name: true },
+  });
+  for (const pocket of pockets) {
+    const pocketBalance = await getTrueBalance(pocket.id, transactionRepo);
+    if (pocketBalance !== 0) {
+      throw new AppError(
+        `Pocket "${pocket.name}" still has a balance. Move its funds before deleting this account`,
+        400,
+        'POCKET_HAS_BALANCE'
+      );
+    }
+  }
+
+  // Cuentas de inversión: sin asset holdings activos
+  const holdingsCount = await prisma.investmentAssetHolding.count({
+    where: { accountId, isActive: true },
+  });
+  if (holdingsCount > 0) {
+    throw new AppError(
+      'Sell your assets before deleting this investment account',
+      400,
+      'ACCOUNT_HAS_HOLDINGS'
+    );
+  }
 
   await prisma.account.update({
     where: { id: accountId },

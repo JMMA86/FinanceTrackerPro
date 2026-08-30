@@ -24,6 +24,7 @@ import {
   CurrencyMismatchError,
   RateLimitError,
   ValidationError,
+  NegativeBalanceError,
 } from '@/lib/errors/api-errors';
 import {
   GetAllTransactionsSchema,
@@ -72,6 +73,7 @@ async function getAllTransactionsInternal(input: unknown) {
       take: validated.pageSize,
       include: {
         category: { select: { id: true, name: true, color: true } },
+        account: { select: { name: true } },
       },
     }),
     prisma.transaction.count({ where }),
@@ -273,9 +275,19 @@ async function deleteTransactionInternal(input: unknown) {
 
     const account = await tx.account.findUnique({
       where: { id: transaction.accountId },
-      select: { id: true, balanceCents: true },
+      select: { id: true, balanceCents: true, type: true },
     });
     if (!account) throw new NotFoundError('Account', transaction.accountId);
+
+    // Regla de integridad: el balance nunca puede quedar negativo (excl. CREDIT_CARD)
+    if (account.type !== 'CREDIT_CARD') {
+      const transactionRepo = getTransactionRepository();
+      const trueBalance = await getTrueBalance(transaction.accountId, transactionRepo);
+      const projectedBalance = subtractCents(trueBalance, transaction.amountCents);
+      if (projectedBalance < 0) {
+        throw new NegativeBalanceError(transaction.accountId);
+      }
+    }
 
     // Reverse balance impact to maintain cache consistency
     const revertedBalance = addCents(account.balanceCents, -transaction.amountCents);

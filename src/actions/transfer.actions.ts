@@ -196,7 +196,7 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
           type: 'TRANSFER_OUT',
           amountCents: -validated.amountCents, // NEGATIVE (debit)
           currency: validated.currency,
-          description: validated.description || `Transfer to account ${validated.toAccountId}`,
+          description: validated.description ?? null,
           date: validated.date || new Date(),
           transferId,
           transferToAccountId: validated.toAccountId,
@@ -216,7 +216,7 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
           type: 'TRANSFER_IN',
           amountCents: validated.amountCents, // POSITIVE (credit)
           currency: validated.currency,
-          description: validated.description || `Transfer from account ${validated.fromAccountId}`,
+          description: validated.description ?? null,
           date: validated.date || new Date(),
           transferId,
           transferFromAccountId: validated.fromAccountId,

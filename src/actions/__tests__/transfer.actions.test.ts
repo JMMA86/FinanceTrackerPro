@@ -32,6 +32,12 @@ vi.mock('@/services/idempotency.service', () => ({
   checkAndLockIdempotency: vi.fn(() => Promise.resolve(null)),
 }));
 
+vi.mock('@/services/rate-limit.service', () => ({
+  checkApiRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  recordApiAttempt: vi.fn().mockResolvedValue('attempt-123'),
+  markApiAttemptSuccess: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/lib/repositories', () => ({
   getTransactionRepository: vi.fn(() => ({
     findByIdempotencyKey: vi.fn(() => Promise.resolve(null)),

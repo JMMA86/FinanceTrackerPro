@@ -355,6 +355,91 @@ async function main() {
 
   console.log('✓ Savings user seeded with bank account, savings account, and 5 goals');
 
+  // ============================================================================
+  // System categories (shared, userId: null)
+  // ============================================================================
+  const systemCategories = [
+    {
+      id: 'e2e-cat-groceries',
+      name: 'Mercado',
+      type: 'GROCERIES' as const,
+      color: '#3B82F6',
+      icon: 'shopping-cart',
+    },
+    {
+      id: 'e2e-cat-transportation',
+      name: 'Transporte',
+      type: 'TRANSPORTATION' as const,
+      color: '#EF4444',
+      icon: 'bus',
+    },
+    {
+      id: 'e2e-cat-utilities',
+      name: 'Servicios',
+      type: 'UTILITIES' as const,
+      color: '#10B981',
+      icon: 'zap',
+    },
+    {
+      id: 'e2e-cat-entertainment',
+      name: 'Entretenimiento',
+      type: 'ENTERTAINMENT' as const,
+      color: '#F59E0B',
+      icon: 'film',
+    },
+    {
+      id: 'e2e-cat-healthcare',
+      name: 'Salud',
+      type: 'HEALTHCARE' as const,
+      color: '#8B5CF6',
+      icon: 'heart-pulse',
+    },
+    {
+      id: 'e2e-cat-education',
+      name: 'Educación',
+      type: 'EDUCATION' as const,
+      color: '#06B6D4',
+      icon: 'graduation-cap',
+    },
+    {
+      id: 'e2e-cat-shopping',
+      name: 'Compras',
+      type: 'SHOPPING' as const,
+      color: '#EC4899',
+      icon: 'shopping-bag',
+    },
+    {
+      id: 'e2e-cat-dining',
+      name: 'Restaurantes',
+      type: 'DINING' as const,
+      color: '#F97316',
+      icon: 'utensils',
+    },
+    {
+      id: 'e2e-cat-other',
+      name: 'Otros',
+      type: 'OTHER' as const,
+      color: '#64748B',
+      icon: 'more-horizontal',
+    },
+  ];
+
+  for (const cat of systemCategories) {
+    await prisma.category.upsert({
+      where: { id: cat.id },
+      update: {},
+      create: {
+        id: cat.id,
+        name: cat.name,
+        type: cat.type,
+        color: cat.color,
+        icon: cat.icon,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✓ Seeded ${systemCategories.length} system categories`);
+
   console.log('✅ E2E seed completed successfully!');
 }
 

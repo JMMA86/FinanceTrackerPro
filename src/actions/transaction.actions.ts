@@ -2,7 +2,7 @@
 import 'server-only';
 
 import { unstable_noStore, revalidatePath } from 'next/cache';
-import { headers } from 'next/headers';
+import { addDays } from 'date-fns';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
@@ -10,12 +10,19 @@ import { log } from '@/lib/logger';
 import { addCents } from '@/lib/money';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
+import { getClientInfo } from '@/lib/utils/client-info';
+import {
+  checkApiRateLimit,
+  recordApiAttempt,
+  markApiAttemptSuccess,
+} from '@/services/rate-limit.service';
 import {
   NotFoundError,
   UnauthorizedError,
   InsufficientFundsError,
   InactiveAccountError,
   CurrencyMismatchError,
+  RateLimitError,
 } from '@/lib/errors/api-errors';
 import {
   GetAllTransactionsSchema,
@@ -23,7 +30,7 @@ import {
   DeleteTransactionSchema,
   GetTransactionByIdSchema,
 } from './transaction.schema';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, ApiAction } from '@prisma/client';
 
 // ============================================================================
 // getAllTransactions — Paginated list of all user transactions
@@ -48,7 +55,7 @@ async function getAllTransactionsInternal(input: unknown) {
       ? {
           date: {
             ...(validated.dateFrom ? { gte: validated.dateFrom } : {}),
-            ...(validated.dateTo ? { lte: validated.dateTo } : {}),
+            ...(validated.dateTo ? { lt: addDays(validated.dateTo, 1) } : {}),
           },
         }
       : {}),
@@ -86,6 +93,17 @@ async function createTransactionInternal(input: unknown) {
 
   const validated = CreateTransactionActionSchema.parse(input);
 
+  // Rate limiting (Rule 10)
+  const { ipAddress, userAgent } = await getClientInfo();
+  const rateLimit = await checkApiRateLimit(session.userId, 'TRANSACTION_CREATE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'transaction.rate_limited', userId: session.userId, ipAddress },
+      'Transaction creation rate limited'
+    );
+    throw new RateLimitError();
+  }
+
   // Idempotency check (Rule 10)
   const existing = await prisma.transaction.findUnique({
     where: { idempotencyKey: validated.idempotencyKey },
@@ -97,11 +115,6 @@ async function createTransactionInternal(input: unknown) {
     );
     return { transaction: existing, wasIdempotent: true };
   }
-
-  // Capture audit metadata (Rule 7)
-  const headersList = await headers();
-  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
-  const userAgent = headersList.get('user-agent') ?? 'unknown';
 
   const result = await prisma.$transaction(async (tx) => {
     // Verify account exists, belongs to user, and is active
@@ -124,6 +137,18 @@ async function createTransactionInternal(input: unknown) {
     // Verify currency matches (Rule 4)
     if (account.currency !== validated.currency) {
       throw new CurrencyMismatchError(account.currency, validated.currency);
+    }
+
+    // Validate category if provided (must be system or own, and active)
+    if (validated.categoryId) {
+      const category = await tx.category.findUnique({
+        where: { id: validated.categoryId },
+        select: { id: true, isActive: true, userId: true },
+      });
+      if (!category?.isActive) throw new NotFoundError('Category', validated.categoryId);
+      if (category.userId !== null && category.userId !== session.userId) {
+        throw new UnauthorizedError('Category does not belong to user');
+      }
     }
 
     // For EXPENSE, verify sufficient funds using true balance (Rule 13)
@@ -172,6 +197,18 @@ async function createTransactionInternal(input: unknown) {
     return transaction;
   });
 
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'TRANSACTION_CREATE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
+
   log.info(
     {
       action: 'transaction.create',
@@ -201,6 +238,17 @@ async function deleteTransactionInternal(input: unknown) {
   if (!session?.userId) throw new UnauthorizedError();
 
   const { transactionId } = DeleteTransactionSchema.parse(input);
+
+  // Rate limiting (Rule 10)
+  const { ipAddress } = await getClientInfo();
+  const rateLimit = await checkApiRateLimit(session.userId, 'TRANSACTION_DELETE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'transaction.delete.rate_limited', userId: session.userId, ipAddress },
+      'Transaction deletion rate limited'
+    );
+    throw new RateLimitError();
+  }
 
   await prisma.$transaction(async (tx) => {
     const transaction = await tx.transaction.findUnique({
@@ -245,6 +293,18 @@ async function deleteTransactionInternal(input: unknown) {
       },
     });
   });
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'TRANSACTION_DELETE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
 
   log.info(
     {

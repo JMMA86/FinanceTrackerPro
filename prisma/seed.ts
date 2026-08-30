@@ -371,6 +371,90 @@ async function main() {
 
   console.log('✓ Account balances updated');
 
+  // 4. Seed system categories (shared, userId: null)
+  console.log('Seeding system categories...');
+  const systemCategories = [
+    {
+      id: 'cat-groceries',
+      name: 'Mercado',
+      type: 'GROCERIES' as const,
+      color: '#3B82F6',
+      icon: 'shopping-cart',
+    },
+    {
+      id: 'cat-transportation',
+      name: 'Transporte',
+      type: 'TRANSPORTATION' as const,
+      color: '#EF4444',
+      icon: 'bus',
+    },
+    {
+      id: 'cat-utilities',
+      name: 'Servicios',
+      type: 'UTILITIES' as const,
+      color: '#10B981',
+      icon: 'zap',
+    },
+    {
+      id: 'cat-entertainment',
+      name: 'Entretenimiento',
+      type: 'ENTERTAINMENT' as const,
+      color: '#F59E0B',
+      icon: 'film',
+    },
+    {
+      id: 'cat-healthcare',
+      name: 'Salud',
+      type: 'HEALTHCARE' as const,
+      color: '#8B5CF6',
+      icon: 'heart-pulse',
+    },
+    {
+      id: 'cat-education',
+      name: 'Educación',
+      type: 'EDUCATION' as const,
+      color: '#06B6D4',
+      icon: 'graduation-cap',
+    },
+    {
+      id: 'cat-shopping',
+      name: 'Compras',
+      type: 'SHOPPING' as const,
+      color: '#EC4899',
+      icon: 'shopping-bag',
+    },
+    {
+      id: 'cat-dining',
+      name: 'Restaurantes',
+      type: 'DINING' as const,
+      color: '#F97316',
+      icon: 'utensils',
+    },
+    {
+      id: 'cat-other',
+      name: 'Otros',
+      type: 'OTHER' as const,
+      color: '#64748B',
+      icon: 'more-horizontal',
+    },
+  ];
+
+  for (const cat of systemCategories) {
+    await prisma.category.upsert({
+      where: { id: cat.id },
+      update: { name: cat.name, color: cat.color, icon: cat.icon, isActive: true },
+      create: {
+        id: cat.id,
+        name: cat.name,
+        type: cat.type,
+        color: cat.color,
+        icon: cat.icon,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`✓ Seeded ${systemCategories.length} system categories`);
+
   // Savings goals
   console.log('Creating savings goals...');
   const goalsData = [

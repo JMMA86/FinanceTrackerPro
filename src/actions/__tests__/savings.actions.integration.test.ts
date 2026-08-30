@@ -127,6 +127,13 @@ vi.mock('@/services/reconciliation.service', () => ({
   getTrueBalance: vi.fn().mockResolvedValue(1000000),
 }));
 
+// Mock rate limiting service (always allow in tests)
+vi.mock('@/services/rate-limit.service', () => ({
+  checkApiRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  recordApiAttempt: vi.fn().mockResolvedValue('attempt-1'),
+  markApiAttemptSuccess: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ============================================================================
 // Test helpers
 // ============================================================================

@@ -71,6 +71,13 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+// Mock rate limiting service (always allow in tests)
+vi.mock('@/services/rate-limit.service', () => ({
+  checkApiRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  recordApiAttempt: vi.fn().mockResolvedValue('attempt-1'),
+  markApiAttemptSuccess: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mirrors the real safeAction envelope (ActionResponse) so types line up.
 vi.mock('@/lib/utils/action-wrapper', () => ({
   safeAction: vi.fn((fn) => {

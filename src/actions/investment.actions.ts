@@ -16,7 +16,6 @@
 'use server';
 import 'server-only';
 
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { Decimal } from 'decimal.js';
 import { prisma } from '@/lib/db';
@@ -26,12 +25,19 @@ import { log } from '@/lib/logger';
 import { addCents, subtractCents, divideCents, decimalToCents } from '@/lib/money';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
+import { getClientInfo } from '@/lib/utils/client-info';
+import {
+  checkApiRateLimit,
+  recordApiAttempt,
+  markApiAttemptSuccess,
+} from '@/services/rate-limit.service';
 import {
   NotFoundError,
   UnauthorizedError,
   InsufficientFundsError,
   InactiveAccountError,
   CurrencyMismatchError,
+  RateLimitError,
 } from '@/lib/errors/api-errors';
 import { getStockQuote, searchStocks } from '@/services/stock-price.service';
 import {
@@ -42,19 +48,9 @@ import {
   GetInvestmentTransactionsSchema,
   GetStockPriceSchema,
 } from './investment.schema';
+import type { ApiAction } from '@prisma/client';
 
 const BANK_ACCOUNT_TYPES = ['CHECKING', 'CASH', 'SAVINGS'] as const;
-
-// ============================================================================
-// Helper: Capture audit metadata
-// ============================================================================
-
-async function getAuditMetadata() {
-  const headersList = await headers();
-  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
-  const userAgent = headersList.get('user-agent') ?? 'unknown';
-  return { ipAddress, userAgent };
-}
 
 // ============================================================================
 // a) getInvestmentAccounts — List user's investment accounts with holdings
@@ -110,7 +106,7 @@ async function createInvestmentAccountInternal(input: unknown) {
     return { account: existing, wasIdempotent: true };
   }
 
-  const { ipAddress } = await getAuditMetadata();
+  const { ipAddress } = await getClientInfo();
 
   const account = await prisma.account.create({
     data: {
@@ -176,7 +172,18 @@ async function depositToInvestmentInternal(input: unknown) {
     return { transaction: existingTx, wasIdempotent: true };
   }
 
-  const { ipAddress, userAgent } = await getAuditMetadata();
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(session.userId, 'INVESTMENT_DEPOSIT' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'investment.deposit.rate_limited', userId: session.userId, ipAddress },
+      'Investment deposit rate limited'
+    );
+    throw new RateLimitError();
+  }
+
   const transactionRepo = getTransactionRepository();
 
   const result = await prisma.$transaction(async (tx) => {
@@ -320,6 +327,18 @@ async function depositToInvestmentInternal(input: unknown) {
     return { debitTransaction, creditTransaction, transferId };
   });
 
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'INVESTMENT_DEPOSIT' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
+
   log.info(
     {
       action: 'investment.deposit',
@@ -365,7 +384,18 @@ async function buyAssetInternal(input: unknown) {
     return { transaction: existingTx, wasIdempotent: true };
   }
 
-  const { ipAddress, userAgent } = await getAuditMetadata();
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(session.userId, 'INVESTMENT_BUY' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'investment.buy.rate_limited', userId: session.userId, ipAddress },
+      'Investment buy rate limited'
+    );
+    throw new RateLimitError();
+  }
+
   const transactionRepo = getTransactionRepository();
 
   const result = await prisma.$transaction(async (tx) => {
@@ -487,6 +517,18 @@ async function buyAssetInternal(input: unknown) {
     return transaction;
   });
 
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'INVESTMENT_BUY' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
+
   log.info(
     {
       action: 'investment.buy',
@@ -529,7 +571,17 @@ async function sellAssetInternal(input: unknown) {
     return { transaction: existingTx, wasIdempotent: true };
   }
 
-  const { ipAddress, userAgent } = await getAuditMetadata();
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(session.userId, 'INVESTMENT_SELL' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'investment.sell.rate_limited', userId: session.userId, ipAddress },
+      'Investment sell rate limited'
+    );
+    throw new RateLimitError();
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     // 1. Verify holding exists and belongs to user
@@ -620,6 +672,18 @@ async function sellAssetInternal(input: unknown) {
 
     return transaction;
   });
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'INVESTMENT_SELL' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
 
   log.info(
     {

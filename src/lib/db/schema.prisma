@@ -113,6 +113,17 @@ enum SavingsGoalStatus {
   CANCELLED
 }
 
+enum ApiAction {
+  TRANSACTION_CREATE
+  TRANSACTION_DELETE
+  TRANSFER_CREATE
+  TRANSFER_REVERSE
+  INVESTMENT_DEPOSIT
+  INVESTMENT_BUY
+  INVESTMENT_SELL
+  SAVINGS_CONTRIBUTE
+}
+
 // ============================================================================
 // USER & SECURITY
 // ============================================================================
@@ -135,6 +146,8 @@ model User {
   fixedExpenses     FixedExpense[]
   loans             Loan[]
   savingsGoals      SavingsGoal[]
+  categories        Category[]
+  apiAttempts       ApiAttempt[]
   biometricCredentials BiometricCredential[]
 
   // Audit fields
@@ -380,6 +393,10 @@ model Category {
   color           String?                   // Hex color for UI
   icon            String?                   // Icon identifier
 
+  // Ownership: null = system category (shared), userId = user-defined
+  userId          String?
+  user            User?                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Relations
   transactions    Transaction[]
 
@@ -388,9 +405,12 @@ model Category {
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
   deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
 
   @@index([isActive])
   @@index([type])
+  @@index([userId, isActive])
 }
 
 // ============================================================================
@@ -615,4 +635,21 @@ model LoginAttempt {
   @@index([ipAddress, createdAt])
   @@index([email, createdAt])
   @@index([userId, createdAt])
+}
+
+// ============================================================================
+// API RATE LIMITING (Rule 10 — money actions)
+// ============================================================================
+
+model ApiAttempt {
+  id        String    @id @default(cuid())
+  userId    String    // Siempre autenticado en estas acciones
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    ApiAction
+  ipAddress String
+  success   Boolean   @default(false) // se marca true al completar con éxito
+  createdAt DateTime  @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([action, createdAt])
 }

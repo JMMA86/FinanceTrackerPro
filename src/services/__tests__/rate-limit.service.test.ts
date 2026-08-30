@@ -8,6 +8,9 @@ import {
   checkLoginRateLimit,
   checkRegisterRateLimit,
   recordLoginAttempt,
+  checkApiRateLimit,
+  recordApiAttempt,
+  markApiAttemptSuccess,
 } from '../rate-limit.service';
 
 const { mockPrisma, mockLog } = vi.hoisted(() => ({
@@ -15,6 +18,11 @@ const { mockPrisma, mockLog } = vi.hoisted(() => ({
     loginAttempt: {
       count: vi.fn(),
       create: vi.fn(),
+    },
+    apiAttempt: {
+      count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
   },
   mockLog: {
@@ -198,6 +206,101 @@ describe('rate-limit.service', () => {
       await expect(
         recordLoginAttempt({ email: 'a@b.co', ipAddress: '1.2.3.4', success: true })
       ).resolves.toBeUndefined();
+
+      expect(mockLog.error).toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // API Rate Limiting (Rule 10)
+  // ==========================================================================
+
+  describe('checkApiRateLimit', () => {
+    const API_WINDOW_MS = 60 * 60 * 1000;
+
+    it('allows when attempt count is below the threshold', async () => {
+      mockPrisma.apiAttempt.count.mockResolvedValue(119);
+
+      const result = await checkApiRateLimit('user-1', 'TRANSACTION_CREATE');
+
+      expect(result.allowed).toBe(true);
+      expect(mockPrisma.apiAttempt.count).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          action: 'TRANSACTION_CREATE',
+          createdAt: expect.any(Object),
+        },
+      });
+    });
+
+    it('blocks when attempt count reaches the threshold', async () => {
+      mockPrisma.apiAttempt.count.mockResolvedValue(120);
+
+      const result = await checkApiRateLimit('user-1', 'TRANSACTION_CREATE');
+
+      expect(result.allowed).toBe(false);
+      expect(result.retryAfterMs).toBe(API_WINDOW_MS);
+    });
+
+    it('uses different thresholds per action', async () => {
+      mockPrisma.apiAttempt.count.mockResolvedValue(30);
+
+      const transferReverse = await checkApiRateLimit('user-1', 'TRANSFER_REVERSE');
+      expect(transferReverse.allowed).toBe(false); // limit is 30
+
+      mockPrisma.apiAttempt.count.mockResolvedValue(30);
+      const transferCreate = await checkApiRateLimit('user-1', 'TRANSFER_CREATE');
+      expect(transferCreate.allowed).toBe(true); // limit is 60
+    });
+
+    it('counts ALL attempts regardless of success flag', async () => {
+      mockPrisma.apiAttempt.count.mockResolvedValue(0);
+
+      await checkApiRateLimit('user-1', 'INVESTMENT_BUY');
+
+      const call = mockPrisma.apiAttempt.count.mock.calls[0];
+      expect(call[0].where).not.toHaveProperty('success');
+    });
+  });
+
+  describe('recordApiAttempt', () => {
+    it('creates a record with success=false and returns the id', async () => {
+      mockPrisma.apiAttempt.create.mockResolvedValue({ id: 'api-attempt-1' });
+
+      const id = await recordApiAttempt({
+        userId: 'user-1',
+        action: 'SAVINGS_CONTRIBUTE',
+        ipAddress: '1.2.3.4',
+      });
+
+      expect(id).toBe('api-attempt-1');
+      expect(mockPrisma.apiAttempt.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          action: 'SAVINGS_CONTRIBUTE',
+          ipAddress: '1.2.3.4',
+          success: false,
+        },
+      });
+    });
+  });
+
+  describe('markApiAttemptSuccess', () => {
+    it('updates the attempt to success=true', async () => {
+      mockPrisma.apiAttempt.update.mockResolvedValue({ id: 'api-attempt-1', success: true });
+
+      await markApiAttemptSuccess('api-attempt-1');
+
+      expect(mockPrisma.apiAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'api-attempt-1' },
+        data: { success: true },
+      });
+    });
+
+    it('logs the error and does not throw when prisma fails', async () => {
+      mockPrisma.apiAttempt.update.mockRejectedValue(new Error('db down'));
+
+      await expect(markApiAttemptSuccess('api-attempt-1')).resolves.toBeUndefined();
 
       expect(mockLog.error).toHaveBeenCalled();
     });

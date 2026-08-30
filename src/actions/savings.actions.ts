@@ -12,7 +12,6 @@
 'use server';
 import 'server-only';
 
-import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
@@ -21,7 +20,19 @@ import { addCents } from '@/lib/money';
 import { Decimal } from 'decimal.js';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
-import { NotFoundError, UnauthorizedError, InsufficientFundsError } from '@/lib/errors/api-errors';
+import { getClientInfo } from '@/lib/utils/client-info';
+import {
+  checkApiRateLimit,
+  recordApiAttempt,
+  markApiAttemptSuccess,
+} from '@/services/rate-limit.service';
+import {
+  NotFoundError,
+  UnauthorizedError,
+  InsufficientFundsError,
+  RateLimitError,
+} from '@/lib/errors/api-errors';
+import type { ApiAction } from '@prisma/client';
 import {
   CreateSavingsGoalSchema,
   UpdateSavingsGoalSchema,
@@ -36,17 +47,6 @@ import {
   getMaxSpendable,
   getSavingsSummary as getSavingsSummaryService,
 } from '@/services/savings.service';
-
-// ============================================================================
-// Helper: Capture audit metadata
-// ============================================================================
-
-async function getAuditMetadata() {
-  const headersList = await headers();
-  const ipAddress = headersList.get('x-forwarded-for') ?? headersList.get('x-real-ip') ?? 'unknown';
-  const userAgent = headersList.get('user-agent') ?? 'unknown';
-  return { ipAddress, userAgent };
-}
 
 // ============================================================================
 // 1. createSavingsGoal — Create a new savings goal
@@ -247,7 +247,17 @@ async function contributeToGoalInternal(input: unknown) {
   if (!session?.userId) throw new UnauthorizedError();
 
   const validated = ContributeToGoalSchema.parse(input);
-  const { ipAddress, userAgent } = await getAuditMetadata();
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(session.userId, 'SAVINGS_CONTRIBUTE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'savings.contribute.rate_limited', userId: session.userId, ipAddress },
+      'Savings contribution rate limited'
+    );
+    throw new RateLimitError();
+  }
 
   // Idempotency check (Rule 12)
   const existing = await prisma.savingsContribution.findUnique({
@@ -346,6 +356,18 @@ async function contributeToGoalInternal(input: unknown) {
 
     return contribution;
   });
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'SAVINGS_CONTRIBUTE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
 
   log.info(
     {

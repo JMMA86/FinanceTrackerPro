@@ -6,7 +6,7 @@
 import 'server-only';
 import { prisma } from '@/lib/db';
 import { log } from '@/lib/logger';
-import { AuthAttemptType } from '@prisma/client';
+import { AuthAttemptType, ApiAction } from '@prisma/client';
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const LOGIN_MAX_IP_FAILURES = 10;
@@ -125,5 +125,83 @@ export async function recordLoginAttempt(params: {
     });
   } catch (error) {
     log.error({ error, email: params.email }, '[RATE_LIMIT] Failed to record login attempt');
+  }
+}
+
+// ============================================================================
+// API RATE LIMITING (Rule 10 — money actions)
+// ============================================================================
+
+const API_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+const API_LIMITS: Record<ApiAction, number> = {
+  TRANSACTION_CREATE: 120,
+  TRANSACTION_DELETE: 60,
+  TRANSFER_CREATE: 60,
+  TRANSFER_REVERSE: 30,
+  INVESTMENT_DEPOSIT: 60,
+  INVESTMENT_BUY: 120,
+  INVESTMENT_SELL: 60,
+  SAVINGS_CONTRIBUTE: 60,
+};
+
+/**
+ * Check API rate limit for financial actions
+ * Counts ALL attempts (success and failure) within the window
+ */
+export async function checkApiRateLimit(
+  userId: string,
+  action: ApiAction
+): Promise<RateLimitResult> {
+  const windowStart = getWindowStart(API_WINDOW_MS);
+  const limit = API_LIMITS[action];
+
+  const count = await prisma.apiAttempt.count({
+    where: {
+      userId,
+      action,
+      createdAt: { gte: windowStart },
+    },
+  });
+
+  if (count >= limit) {
+    return { allowed: false, retryAfterMs: API_WINDOW_MS };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Record an API attempt (always inserts with success=false)
+ * Returns the attempt ID so it can be marked as success later
+ */
+export async function recordApiAttempt(params: {
+  userId: string;
+  action: ApiAction;
+  ipAddress: string;
+}): Promise<string> {
+  const attempt = await prisma.apiAttempt.create({
+    data: {
+      userId: params.userId,
+      action: params.action,
+      ipAddress: params.ipAddress,
+      success: false,
+    },
+  });
+  return attempt.id;
+}
+
+/**
+ * Mark an API attempt as successful
+ * Best-effort: catches and logs errors without throwing
+ */
+export async function markApiAttemptSuccess(attemptId: string): Promise<void> {
+  try {
+    await prisma.apiAttempt.update({
+      where: { id: attemptId },
+      data: { success: true },
+    });
+  } catch (error) {
+    log.error({ error, attemptId }, '[RATE_LIMIT] Failed to mark API attempt as success');
   }
 }

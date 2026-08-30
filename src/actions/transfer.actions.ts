@@ -15,14 +15,19 @@
 'use server';
 import 'server-only';
 
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import type { Prisma, Transaction } from '@prisma/client';
+import type { Prisma, Transaction, ApiAction } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
 import { log } from '@/lib/logger';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { checkAndLockIdempotency } from '@/services/idempotency.service';
+import {
+  checkApiRateLimit,
+  recordApiAttempt,
+  markApiAttemptSuccess,
+} from '@/services/rate-limit.service';
+import { getClientInfo } from '@/lib/utils/client-info';
 import { TransferSchema, type TransferInput } from '@/lib/validations/finance';
 import { getTransactionRepository } from '@/lib/repositories';
 import { safeAction } from '@/lib/utils/action-wrapper';
@@ -32,6 +37,7 @@ import {
   UnauthorizedError,
   CurrencyMismatchError,
   InactiveAccountError,
+  RateLimitError,
 } from '@/lib/errors/api-errors';
 import type {
   TransferResult,
@@ -73,10 +79,16 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
     };
   }
 
-  // 3. CAPTURE AUDIT DATA (Rule 14)
-  const headersList = await headers();
-  const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown';
-  const userAgent = headersList.get('user-agent') || 'unknown';
+  // 3. RATE LIMITING (Rule 10)
+  const { ipAddress, userAgent } = await getClientInfo();
+  const rateLimit = await checkApiRateLimit(validated.userId, 'TRANSFER_CREATE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'transfer.rate_limited', userId: validated.userId, ipAddress },
+      'Transfer creation rate limited'
+    );
+    throw new RateLimitError();
+  }
 
   // Log transfer initiation
   log.info(
@@ -239,6 +251,18 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
     }
   );
 
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: validated.userId,
+      action: 'TRANSFER_CREATE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: validated.userId }, 'Failed to record API attempt');
+  }
+
   // Log successful transfer
   log.info(
     {
@@ -312,6 +336,17 @@ export const getTransferDetails = safeAction(getTransferDetailsInternal);
 async function reverseTransferInternal(input: ReverseTransferInput): Promise<TransferResult> {
   const { transferId, userId, reason } = input;
 
+  // Rate limiting (Rule 10)
+  const { ipAddress } = await getClientInfo();
+  const rateLimit = await checkApiRateLimit(userId, 'TRANSFER_REVERSE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'transfer.reverse.rate_limited', userId, ipAddress },
+      'Transfer reversal rate limited'
+    );
+    throw new RateLimitError();
+  }
+
   // Get original transfer
   const originalTransferResult = await getTransferDetailsInternal(transferId);
   const { debitTransaction, creditTransaction } = originalTransferResult;
@@ -340,7 +375,21 @@ async function reverseTransferInternal(input: ReverseTransferInput): Promise<Tra
     userId,
   };
 
-  return await transferBetweenAccountsInternal(reversalInput);
+  const result = await transferBetweenAccountsInternal(reversalInput);
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId,
+      action: 'TRANSFER_REVERSE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId }, 'Failed to record API attempt');
+  }
+
+  return result;
 }
 
 /**

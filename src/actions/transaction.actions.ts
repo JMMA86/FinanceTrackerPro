@@ -32,7 +32,7 @@ import {
   GetTransactionByIdSchema,
   UpdateTransactionSchema,
 } from './transaction.schema';
-import type { Prisma, ApiAction } from '@prisma/client';
+import type { Prisma, ApiAction, TransactionType } from '@prisma/client';
 
 // ============================================================================
 // getAllTransactions — Paginated list of all user transactions
@@ -353,6 +353,60 @@ async function getTransactionByIdInternal(input: unknown) {
 export const getTransactionById = safeAction(getTransactionByIdInternal);
 
 // ============================================================================
+// updateTransaction helpers — reduce cognitive complexity (S3776)
+// ============================================================================
+
+async function validateCategoryForUpdate(
+  tx: Prisma.TransactionClient,
+  categoryId: string | null | undefined,
+  userId: string
+): Promise<void> {
+  if (categoryId === undefined || categoryId === null) return;
+
+  const category = await tx.category.findUnique({
+    where: { id: categoryId },
+    select: { id: true, isActive: true, userId: true },
+  });
+
+  if (!category?.isActive) throw new NotFoundError('Category', categoryId);
+  if (category.userId !== null && category.userId !== userId) {
+    throw new UnauthorizedError('Category does not belong to user');
+  }
+}
+
+function assertAmountSignMatchesType(amountCents: number, type: TransactionType): void {
+  if (type === 'EXPENSE' && amountCents >= 0) {
+    throw new ValidationError('Amount sign must match transaction type (EXPENSE must be negative)');
+  }
+  if (type === 'INCOME' && amountCents <= 0) {
+    throw new ValidationError('Amount sign must match transaction type (INCOME must be positive)');
+  }
+}
+
+async function validateExpenseFunds(
+  accountId: string,
+  originalAmount: number,
+  newAmount: number
+): Promise<void> {
+  const transactionRepo = getTransactionRepository();
+  const trueBalance = await getTrueBalance(accountId, transactionRepo);
+  const balanceWithoutTx = subtractCents(trueBalance, originalAmount);
+  const projected = addCents(balanceWithoutTx, newAmount);
+
+  if (projected < 0) {
+    throw new InsufficientFundsError(Math.abs(newAmount), balanceWithoutTx);
+  }
+}
+
+function computeBalanceAdjustment(
+  accountBalanceCents: number,
+  originalAmount: number,
+  newAmount: number
+): number {
+  return addCents(addCents(accountBalanceCents, -originalAmount), newAmount);
+}
+
+// ============================================================================
 // updateTransaction — Edit description, amount, date, or category atomically
 // ============================================================================
 
@@ -374,7 +428,6 @@ async function updateTransactionInternal(input: unknown) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // 1. Find transaction
     const transaction = await tx.transaction.findUnique({
       where: { id: validated.transactionId },
       select: {
@@ -388,10 +441,10 @@ async function updateTransactionInternal(input: unknown) {
     });
 
     if (!transaction?.isActive) throw new NotFoundError('Transaction', validated.transactionId);
-    if (transaction.userId !== session.userId)
+    if (transaction.userId !== session.userId) {
       throw new UnauthorizedError('Transaction does not belong to user');
+    }
 
-    // 2. Find account
     const account = await tx.account.findUnique({
       where: { id: transaction.accountId },
       select: {
@@ -405,54 +458,23 @@ async function updateTransactionInternal(input: unknown) {
 
     if (!account) throw new NotFoundError('Account', transaction.accountId);
     if (!account.isActive) throw new InactiveAccountError(account.id);
-    if (account.userId !== session.userId)
+    if (account.userId !== session.userId) {
       throw new UnauthorizedError('Account does not belong to user');
-
-    // 3. Validate category if provided
-    if (validated.categoryId !== undefined) {
-      if (validated.categoryId !== null) {
-        const category = await tx.category.findUnique({
-          where: { id: validated.categoryId },
-          select: { id: true, isActive: true, userId: true },
-        });
-        if (!category?.isActive) throw new NotFoundError('Category', validated.categoryId);
-        if (category.userId !== null && category.userId !== session.userId) {
-          throw new UnauthorizedError('Category does not belong to user');
-        }
-      }
     }
 
-    // 4. Amount sign validation and balance calculation
+    await validateCategoryForUpdate(tx, validated.categoryId, session.userId);
+
     const originalAmount = transaction.amountCents;
     const newAmount = validated.amountCents ?? originalAmount;
 
     if (validated.amountCents !== undefined) {
-      // Validate sign matches transaction type
-      if (transaction.type === 'EXPENSE' && validated.amountCents >= 0) {
-        throw new ValidationError(
-          'Amount sign must match transaction type (EXPENSE must be negative)'
-        );
-      }
-      if (transaction.type === 'INCOME' && validated.amountCents <= 0) {
-        throw new ValidationError(
-          'Amount sign must match transaction type (INCOME must be positive)'
-        );
-      }
+      assertAmountSignMatchesType(validated.amountCents, transaction.type);
 
-      // Validate sufficient funds for EXPENSE (Rule 13)
       if (transaction.type === 'EXPENSE') {
-        const transactionRepo = getTransactionRepository();
-        const trueBalance = await getTrueBalance(transaction.accountId, transactionRepo);
-        const balanceWithoutTx = subtractCents(trueBalance, originalAmount);
-        const projected = addCents(balanceWithoutTx, newAmount);
-
-        if (projected < 0) {
-          throw new InsufficientFundsError(Math.abs(newAmount), balanceWithoutTx);
-        }
+        await validateExpenseFunds(transaction.accountId, originalAmount, newAmount);
       }
     }
 
-    // 5. Update transaction
     const updated = await tx.transaction.update({
       where: { id: validated.transactionId },
       data: {
@@ -464,9 +486,8 @@ async function updateTransactionInternal(input: unknown) {
       },
     });
 
-    // 6. Update account balance if amount changed
     if (validated.amountCents !== undefined && newAmount !== originalAmount) {
-      const newBalance = addCents(addCents(account.balanceCents, -originalAmount), newAmount);
+      const newBalance = computeBalanceAdjustment(account.balanceCents, originalAmount, newAmount);
       await tx.account.update({
         where: { id: account.id },
         data: {

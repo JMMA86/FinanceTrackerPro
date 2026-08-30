@@ -306,7 +306,7 @@ describe('TransactionTable', () => {
     // Each rendered category must include its color dot
     const dots = document.querySelectorAll('span.inline-block.w-2.h-2.rounded-full');
     // 2 categorized transactions × (desktop + mobile) = 4 dots
-    expect(dots.length).toBe(4);
+    expect(dots).toHaveLength(4);
   });
 
   it('should render an em dash fallback when a transaction has no category', () => {

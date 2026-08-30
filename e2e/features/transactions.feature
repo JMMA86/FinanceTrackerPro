@@ -19,7 +19,13 @@ Feature: Gestión de Transacciones
     Given que la pantalla es de escritorio
     Then debe ver el título "Transacciones"
     And debe ver la tabla de transacciones
-    And debe ver los encabezados "Fecha", "Descripción", "Tipo", "Cuenta", "Monto"
+    And debe ver los encabezados "Fecha", "Descripción", "Tipo", "Cuenta", "Categoría", "Monto", "Acciones"
+
+  @transactions @visual
+  Scenario: Las transacciones muestran fecha y hora
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Then las celdas de fecha deben mostrar fecha y hora
 
   @transactions @visual
   Scenario: Las transacciones se muestran con formato correcto
@@ -244,6 +250,61 @@ Feature: Gestión de Transacciones
     And hace clic en "Eliminar" en el diálogo de eliminación
     Then el diálogo de eliminación debe cerrarse
     And la transacción creada no debe aparecer en la tabla
+
+  # ============================================================================
+  # EDIT - HAPPY PATH
+  # ============================================================================
+
+  # NOTA: el modal de edición es el MISMO <dialog> del de creación; cambia su
+  # título accesible a "Editar transacción" (editTitle) y el aria-label del
+  # lápiz es "Editar transacción". Los campos de tipo y cuenta quedan
+  # deshabilitados y se rellenan desde la fila original.
+
+  @transactions @edit @happy-path
+  Scenario: Editar una transacción con éxito
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Ingreso" como tipo
+    And selecciona "Efectivo" como cuenta
+    And ingresa "50000" en el campo valor
+    And ingresa una descripción única "Editar E2E"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When abre la edición de la transacción creada
+    Then debe ver el diálogo de edición con los datos prefilled
+    When cambia la descripción a una única "Editada E2E"
+    And ingresa "75000" en el campo valor del diálogo de edición
+    And envía la edición de la transacción
+    Then el diálogo de edición debe cerrarse
+    And la transacción editada debe aparecer en la tabla con monto 75000
+    And la descripción original no debe aparecer en la tabla
+
+  # ============================================================================
+  # EDIT - VALIDATION (server error inline)
+  # ============================================================================
+
+  # NOTA: para disparar INSUFFICIENT_FUNDS al editar se necesita una transacción
+  # EXPENSE (la validación de fondos solo aplica a gastos y el signo del monto se
+  # deriva del tipo original). El error se renderiza INLINE con role="alert"
+  # dentro del dialog y el modal permanece abierto.
+
+  @transactions @edit @validation
+  Scenario: Editar transacción con monto inválido muestra error inline
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Gasto" como tipo
+    And selecciona "Efectivo" como cuenta
+    And ingresa "10000" en el campo valor
+    And ingresa una descripción única "Editar error E2E"
+    And envía el formulario de creación de transacción
+    Then la transacción creada debe aparecer en la tabla
+    When abre la edición de la transacción creada
+    And ingresa "999999999" en el campo valor del diálogo de edición
+    And envía la edición de la transacción esperando error
+    Then el diálogo de edición debe permanecer abierto
+    And debe ver el error "Fondos insuficientes en la cuenta seleccionada" dentro del diálogo de edición
 
   # ============================================================================
   # CATEGORIES - CRUD

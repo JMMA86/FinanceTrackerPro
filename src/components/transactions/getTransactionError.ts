@@ -24,6 +24,8 @@ export function getTransactionError(
       return get(dictionary, 'currencyMismatch');
     case 'INACTIVE_ACCOUNT':
       return get(dictionary, 'inactiveAccount');
+    case 'VALIDATION_ERROR':
+      return get(dictionary, 'validationError');
     case 'NOT_FOUND':
       return get(dictionary, 'accountNotFound');
     case 'RATE_LIMITED':

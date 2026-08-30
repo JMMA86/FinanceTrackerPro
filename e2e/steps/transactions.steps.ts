@@ -5,7 +5,7 @@
 
 import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 
 // ============================================================================
@@ -28,13 +28,29 @@ const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
  */
 const UNIQUE_DESC_KEY = '__e2eUniqueTxDescription';
 
+/**
+ * Window key where the ORIGINAL transaction description is preserved before an
+ * edit overwrites the current one. Used by the edit happy-path scenario to
+ * assert the old row disappears after the edit succeeds.
+ */
+const UNIQUE_ORIG_DESC_KEY = '__e2eOrigTxDescription';
+
 // ============================================================================
 // HELPERS
 // ============================================================================
 
-/** Gets the currently open dialog */
-function getOpenDialog(page: Page) {
-  return page.getByRole('dialog', { name: 'Crear transacción' });
+/**
+ * Gets the currently open transaction dialog (create OR edit). The same <dialog>
+ * element is reused for both modes; its accessible name (aria-labelledby → h2)
+ * is "Crear transacción" in create mode and "Editar transacción" in edit mode.
+ */
+function getOpenDialog(page: Page, title = 'Crear transacción') {
+  return page.getByRole('dialog', { name: title });
+}
+
+/** Gets the transaction dialog when it is open in EDIT mode */
+function getEditDialog(page: Page) {
+  return getOpenDialog(page, 'Editar transacción');
 }
 
 /** Gets the category manager dialog */
@@ -247,11 +263,14 @@ When('limpia todos los filtros', async ({ page }) => {
 
 When('selecciona {string} como tipo', async ({ page }, typeName: string) => {
   const dialog = getOpenDialog(page);
-  // Radio inputs are sr-only (screen reader only) — click the parent generic container instead
-  // The container has cursor:pointer and wraps the radio + visible label
+  // Radio inputs are sr-only (screen reader only) — click the wrapping <label>
+  // instead. The label has cursor:pointer and clicking it natively activates the
+  // associated radio. (Using the grid container `../..` was a bug: the center of
+  // the grid falls in the `gap-3` between the two labels, so the radio was never
+  // actually selected and the form silently kept the default EXPENSE type.)
   const typeRadio = dialog.getByRole('radio', { name: typeName });
-  const parentContainer = typeRadio.locator('xpath=../..');
-  await parentContainer.click();
+  const label = typeRadio.locator('xpath=..');
+  await label.click();
   await page.waitForTimeout(300);
 });
 
@@ -271,8 +290,12 @@ When('selecciona {string} como cuenta', async ({ page }, accountName: string) =>
   await page.waitForTimeout(200);
 });
 
-When('ingresa {string} en el campo valor', async ({ page }, amount: string) => {
-  const dialog = getOpenDialog(page);
+/**
+ * Fills the amount input inside a transaction dialog. The field is a
+ * FormattedNumericInput that updates on keyDown (not on native fill), so we
+ * clear with Backspace and type each digit individually.
+ */
+async function fillAmountInput(page: Page, dialog: Locator, amount: string) {
   const amountInput = dialog.getByRole('textbox', { name: 'Valor' });
   await amountInput.click();
   // Clear existing value by pressing Backspace multiple times
@@ -284,6 +307,10 @@ When('ingresa {string} en el campo valor', async ({ page }, amount: string) => {
     await amountInput.press(digit);
   }
   await page.waitForTimeout(200);
+}
+
+When('ingresa {string} en el campo valor', async ({ page }, amount: string) => {
+  await fillAmountInput(page, getOpenDialog(page), amount);
 });
 
 When('ingresa {string} como descripción', async ({ page }, description: string) => {
@@ -333,14 +360,25 @@ Then('debe ver la tabla de transacciones', async ({ page }) => {
 });
 
 Then(
-  'debe ver los encabezados {string}, {string}, {string}, {string}, {string}',
-  async ({ page }, h1: string, h2: string, h3: string, h4: string, h5: string) => {
+  'debe ver los encabezados {string}, {string}, {string}, {string}, {string}, {string}, {string}',
+  async (
+    { page },
+    h1: string,
+    h2: string,
+    h3: string,
+    h4: string,
+    h5: string,
+    h6: string,
+    h7: string
+  ) => {
     const headers = page.locator('table thead th');
     await expect(headers.nth(0)).toHaveText(h1);
     await expect(headers.nth(1)).toHaveText(h2);
     await expect(headers.nth(2)).toHaveText(h3);
     await expect(headers.nth(3)).toHaveText(h4);
     await expect(headers.nth(4)).toHaveText(h5);
+    await expect(headers.nth(5)).toHaveText(h6);
+    await expect(headers.nth(6)).toHaveText(h7);
   }
 );
 
@@ -765,3 +803,158 @@ Then(
     await expect(card).toContainText(expectedNumber, { timeout: 5000 });
   }
 );
+
+// ============================================================================
+// EDIT - HAPPY PATH & VALIDATION
+// ============================================================================
+
+/** Reads the original description preserved before an edit overwrote the current one */
+async function getOriginalDescription(page: Page): Promise<string> {
+  const description = await page.evaluate((key) => {
+    return (window as Window & typeof globalThis & Record<string, unknown>)[key] as
+      | string
+      | undefined;
+  }, UNIQUE_ORIG_DESC_KEY);
+  if (!description) throw new Error('No original transaction description stored on the page');
+  return description;
+}
+
+When('abre la edición de la transacción creada', async ({ page }) => {
+  const description = await getStoredDescription(page);
+  const row = page.getByRole('row').filter({ hasText: description }).first();
+  await expect(row).toBeVisible({ timeout: 10000 });
+  // The pencil button has aria-label="Editar transacción" (editTransaction key)
+  await row.getByRole('button', { name: 'Editar transacción' }).click();
+  await expect(getEditDialog(page)).toBeVisible({ timeout: 5000 });
+});
+
+Then('debe ver el diálogo de edición con los datos prefilled', async ({ page }) => {
+  const dialog = getEditDialog(page);
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  // The dialog title changes to "Editar transacción" in edit mode
+  await expect(dialog.getByRole('heading', { level: 2 })).toHaveText('Editar transacción');
+  // Description is prefilled with the created value
+  const description = await getStoredDescription(page);
+  await expect(dialog.getByRole('textbox', { name: 'Descripción' })).toHaveValue(description);
+  // Type is INCOME (checked) and both radios are disabled (immutable)
+  await expect(dialog.getByRole('radio', { name: 'Ingreso' })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: 'Ingreso' })).toBeDisabled();
+  await expect(dialog.getByRole('radio', { name: 'Gasto' })).toBeDisabled();
+  // Account is disabled (immutable) in edit mode
+  await expect(dialog.getByRole('combobox', { name: 'Cuenta' })).toBeDisabled();
+  // Amount is prefilled: 50000 cents → "500,00" (es-CO, cents/100 with 2 decimals)
+  await expect(dialog.getByRole('textbox', { name: 'Valor' })).toHaveValue('500,00');
+});
+
+When('cambia la descripción a una única {string}', async ({ page }, prefix: string) => {
+  // Preserve the original description so a later step can assert the old row is gone
+  const original = await getStoredDescription(page);
+  await page.evaluate(
+    ({ key, value }) => {
+      (window as Window & typeof globalThis & Record<string, unknown>)[key] = value;
+    },
+    { key: UNIQUE_ORIG_DESC_KEY, value: original }
+  );
+
+  const description = `${prefix} ${Date.now()}`;
+  await storeUniqueDescription(page, description);
+  const dialog = getEditDialog(page);
+  const descInput = dialog.getByRole('textbox', { name: 'Descripción' });
+  await descInput.fill(description);
+  await page.waitForTimeout(200);
+});
+
+When(
+  'ingresa {string} en el campo valor del diálogo de edición',
+  async ({ page }, amount: string) => {
+    await fillAmountInput(page, getEditDialog(page), amount);
+  }
+);
+
+When('envía la edición de la transacción', async ({ page }) => {
+  const dialog = getEditDialog(page);
+  // The submit button keeps the "Crear transacción" label (create key) even in
+  // edit mode; the dialog closes on success (same pattern as create).
+  await dialog.getByRole('button', { name: 'Crear transacción' }).click();
+  try {
+    await expect(dialog).not.toBeVisible({ timeout: 15000 });
+  } catch {
+    const alerts = dialog.locator('[role="alert"]');
+    const alertCount = await alerts.count();
+    let alertText = '';
+    for (let i = 0; i < alertCount; i++) {
+      alertText += (await alerts.nth(i).textContent()) + ' | ';
+    }
+    console.log(`Edit dialog still open. Validation errors: "${alertText}"`);
+    throw new Error(`Transaction edit failed. Errors: ${alertText}`);
+  }
+});
+
+Then('el diálogo de edición debe cerrarse', async ({ page }) => {
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 5000 });
+});
+
+Then(
+  'la transacción editada debe aparecer en la tabla con monto {int}',
+  async ({ page }, cents: number) => {
+    const description = await getStoredDescription(page);
+    const row = page.getByRole('row').filter({ hasText: description }).first();
+    await expect(row).toBeVisible({ timeout: 10000 });
+    // Build the expected localized number (no currency symbol) and assert it is a
+    // substring of the formatted amount on the row (e.g. "750,00" in es-CO).
+    const expectedNumber = new Intl.NumberFormat('es-CO', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(cents / 100);
+    await expect(row).toContainText(expectedNumber, { timeout: 5000 });
+  }
+);
+
+Then('la descripción original no debe aparecer en la tabla', async ({ page }) => {
+  const original = await getOriginalDescription(page);
+  // After the successful edit, router.refresh() re-renders the table without the old description.
+  await expect(page.getByText(original)).toHaveCount(0, { timeout: 15000 });
+});
+
+When('envía la edición de la transacción esperando error', async ({ page }) => {
+  const dialog = getEditDialog(page);
+  const submitBtn = dialog.getByRole('button', { name: 'Crear transacción' });
+  await submitBtn.click();
+  // While submitting the button becomes "Creando..." and disabled; when the server
+  // responds with an error it re-enables and returns to "Crear transacción".
+  await expect(submitBtn).toBeEnabled({ timeout: 15000 });
+  // Small settle for the notification state update (not rendered in the DOM).
+  await page.waitForTimeout(300);
+});
+
+Then('el diálogo de edición debe permanecer abierto', async ({ page }) => {
+  // On a server-side error (INSUFFICIENT_FUNDS) the modal does NOT close.
+  await expect(getEditDialog(page)).toBeVisible({ timeout: 5000 });
+});
+
+Then(
+  'debe ver el error {string} dentro del diálogo de edición',
+  async ({ page }, message: string) => {
+    const dialog = getEditDialog(page);
+    await expect(dialog.getByRole('alert').filter({ hasText: message })).toBeVisible({
+      timeout: 5000,
+    });
+  }
+);
+
+// ============================================================================
+// DATE & TIME FORMAT
+// ============================================================================
+
+Then('las celdas de fecha deben mostrar fecha y hora', async ({ page }) => {
+  const table = page.getByRole('table', { name: 'Transacciones' });
+  await expect(table).toBeVisible({ timeout: 5000 });
+  const dateCells = table.locator('tbody tr td:first-child time');
+  const count = await dateCells.count();
+  expect(count).toBeGreaterThanOrEqual(1);
+  const text = (await dateCells.first().textContent()) ?? '';
+  // Robust assertion for the new format "26 ago 2026 · 14:30" (locale es-CO):
+  // require the "·" separator followed by an HH:MM time without depending on
+  // the exact date/month/24h-vs-12h representation.
+  expect(text).toMatch(/·\s*\d{1,2}:\d{2}/);
+});

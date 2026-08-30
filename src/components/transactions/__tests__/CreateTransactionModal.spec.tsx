@@ -12,10 +12,12 @@ import { CreateTransactionModal } from '../CreateTransactionModal';
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Mutable holder so tests can simulate the modal opening/closing (the real
-// store's activeModal is driven by openModal/closeModal).
-const { mockActiveModalState } = vi.hoisted(() => ({
+// Mutable holders so tests can simulate the modal opening/closing and the
+// editing payload (the real store's activeModal/modalData are driven by
+// openModal/closeModal).
+const { mockActiveModalState, mockModalDataState } = vi.hoisted(() => ({
   mockActiveModalState: { value: 'create-transaction' as string | null },
+  mockModalDataState: { value: null as Record<string, unknown> | null },
 }));
 
 const mockOpenModal = vi.fn();
@@ -26,6 +28,7 @@ vi.mock('@/store/ui.store', () => ({
   useUIStore: vi.fn((selector) => {
     const state = {
       activeModal: mockActiveModalState.value,
+      modalData: mockModalDataState.value,
       openModal: mockOpenModal,
       closeModal: mockCloseModal,
       addNotification: mockAddNotification,
@@ -62,15 +65,20 @@ vi.mock('@/lib/i18n', () => ({
       inactiveAccount: 'Inactive account',
       accountNotFound: 'Account not found',
       rateLimited: 'Rate limited',
+      editTitle: 'Edit Transaction',
+      updateSuccess: 'Transaction updated',
+      validationError: 'Please check the form data',
     };
     return labels[key] ?? key;
   }),
 }));
 
-// Mock createTransaction action
+// Mock createTransaction / updateTransaction actions
 const mockCreateTransaction = vi.fn();
+const mockUpdateTransaction = vi.fn();
 vi.mock('@/actions/transaction.actions', () => ({
   createTransaction: (...args: unknown[]) => mockCreateTransaction(...args),
+  updateTransaction: (...args: unknown[]) => mockUpdateTransaction(...args),
 }));
 
 // Mock FormattedNumericInput
@@ -127,6 +135,26 @@ const mockCategories = [
   { id: 'cat-2', name: 'My Travel', type: 'OTHER', color: '#8B5CF6', userId: 'user-1' },
 ];
 
+const mockEditingTransaction = {
+  id: 'tx-edit-1',
+  description: 'Supermarket',
+  amountCents: -25000,
+  currency: 'USD',
+  type: 'EXPENSE',
+  date: '2024-06-15T14:30:00.000Z',
+  accountId: 'acc-1',
+  categoryId: 'cat-1',
+  category: { id: 'cat-1', name: 'Groceries', color: '#3B82F6' },
+  createdAt: '2024-06-15T14:30:00.000Z',
+};
+
+// Mirrors the component helper so the expected datetime-local value matches
+// exactly (local timezone, not UTC).
+function toLocalDateTimeInputTest(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const dictionary = {
   createTitle: 'Create Transaction',
   type: 'Type',
@@ -153,6 +181,9 @@ const dictionary = {
   inactiveAccount: 'Inactive account',
   accountNotFound: 'Account not found',
   rateLimited: 'Rate limited',
+  editTitle: 'Edit Transaction',
+  updateSuccess: 'Transaction updated',
+  validationError: 'Please check the form data',
 };
 
 const renderModal = (overrides: Record<string, unknown> = {}) =>
@@ -174,6 +205,7 @@ describe('CreateTransactionModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockActiveModalState.value = 'create-transaction';
+    mockModalDataState.value = null;
   });
 
   it('should render when activeModal is create-transaction', () => {
@@ -380,10 +412,9 @@ describe('CreateTransactionModal', () => {
     const submitButton = screen.getByText('Create');
     await userEvent.click(submitButton);
 
-    // When result.success is false and code is not INSUFFICIENT_FUNDS,
-    // the component uses result.error (which is 'Validation failed')
+    // VALIDATION_ERROR is now mapped to the localized 'validationError' key
     await waitFor(() => {
-      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Validation failed');
+      expect(mockAddNotification).toHaveBeenCalledWith('error', 'Please check the form data');
     });
   });
 
@@ -686,5 +717,138 @@ describe('CreateTransactionModal', () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveAttribute('aria-labelledby', 'create-transaction-title');
     expect(dialog).toHaveClass('bg-transparent');
+  });
+
+  // -------------------------------------------------------------------------
+  // Edit mode tests
+  // -------------------------------------------------------------------------
+
+  const openInEditMode = () => {
+    mockModalDataState.value = { editing: mockEditingTransaction };
+    return renderModal();
+  };
+
+  it('should render the edit title and prefill the form from the editing transaction', async () => {
+    openInEditMode();
+
+    expect(screen.getByText('Edit Transaction')).toBeInTheDocument();
+
+    // Amount is prefilled with the absolute value (set via rAF after mount)
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    await waitFor(() => {
+      expect(amountInput).toHaveValue('25000');
+    });
+
+    // Description prefilled
+    const descriptionInput = screen.getByLabelText('Description');
+    expect(descriptionInput).toHaveValue('Supermarket');
+
+    // Type prefilled (EXPENSE) and account prefilled
+    const expenseRadio = screen.getByLabelText('Expense');
+    expect(expenseRadio).toBeChecked();
+
+    const accountSelect = screen.getByLabelText('Account');
+    expect(accountSelect).toHaveValue('acc-1');
+
+    // Category prefilled
+    expect(screen.getByLabelText('Groceries')).toBeChecked();
+  });
+
+  it('should render the date field as datetime-local with the local value', () => {
+    openInEditMode();
+
+    const dateInput = screen.getByLabelText('Date');
+    expect(dateInput).toHaveAttribute('type', 'datetime-local');
+
+    const expected = toLocalDateTimeInputTest(new Date(mockEditingTransaction.date));
+    expect(dateInput).toHaveValue(expected);
+  });
+
+  it('should disable the type radios and account select while editing', () => {
+    openInEditMode();
+
+    expect(screen.getByLabelText('Expense')).toBeDisabled();
+    expect(screen.getByLabelText('Income')).toBeDisabled();
+    expect(screen.getByLabelText('Account')).toBeDisabled();
+  });
+
+  it('should call updateTransaction with the correct fields on edit submit', async () => {
+    mockUpdateTransaction.mockResolvedValue({ success: true });
+
+    openInEditMode();
+
+    // Amount is already prefilled; submit directly
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockUpdateTransaction).toHaveBeenCalledWith({
+        transactionId: 'tx-edit-1',
+        description: 'Supermarket',
+        amountCents: -25000,
+        date: expect.any(Date),
+        categoryId: 'cat-1',
+      });
+    });
+    // createTransaction must NOT be called in edit mode
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('should notify success and close the modal on successful update', async () => {
+    mockUpdateTransaction.mockResolvedValue({ success: true });
+
+    openInEditMode();
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockAddNotification).toHaveBeenCalledWith('success', 'Transaction updated');
+      expect(mockCloseModal).toHaveBeenCalled();
+    });
+  });
+
+  it('should render the update error inline inside the dialog', async () => {
+    mockUpdateTransaction.mockResolvedValue({
+      success: false,
+      code: 'INSUFFICIENT_FUNDS',
+      error: 'Insufficient funds',
+    });
+
+    const { container } = openInEditMode();
+    const dialog = container.querySelector('dialog');
+
+    // Let the mount reset-effect rAF flush first (same as create-mode tests
+    // flushing the form via user interactions) so the submit's async state
+    // updates are committed reliably.
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    await waitFor(() => {
+      expect(amountInput).toHaveValue('25000');
+    });
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockUpdateTransaction).toHaveBeenCalled();
+      const alert = within(dialog as HTMLElement).getByRole('alert');
+      expect(alert).toHaveTextContent('Insufficient funds');
+    });
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Insufficient funds');
+  });
+
+  it('should keep calling createTransaction when no editing transaction is set', async () => {
+    mockCreateTransaction.mockResolvedValue({ success: true });
+
+    renderModal();
+
+    const accountSelect = screen.getByLabelText('Account');
+    await userEvent.selectOptions(accountSelect, 'acc-1');
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    fireEvent.change(amountInput, { target: { value: '25000' } });
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      expect(mockCreateTransaction).toHaveBeenCalled();
+    });
+    expect(mockUpdateTransaction).not.toHaveBeenCalled();
   });
 });

@@ -10,30 +10,12 @@ import {
   CreditCard,
   Landmark,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import { get } from '@/lib/i18n';
+import { useUIStore } from '@/store/ui.store';
 import { DeleteTransactionModal } from '@/components/transactions/DeleteTransactionModal';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface TransactionRow {
-  id: string;
-  description: string | null;
-  amountCents: number;
-  currency: string;
-  type: string;
-  date: string | Date;
-  accountId: string;
-  createdAt: string | Date;
-}
-
-interface AccountBrief {
-  id: string;
-  name: string;
-  currency: string;
-}
+import type { TransactionRow, AccountBrief } from '@/components/transactions/types';
 
 interface TransactionTableProps {
   transactions: TransactionRow[];
@@ -111,6 +93,14 @@ function formatDate(date: string | Date, locale: string): string {
   });
 }
 
+function formatTime(date: string | Date, locale: string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function formatDateShort(date: string | Date, locale: string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleDateString(locale, {
@@ -129,12 +119,14 @@ const TransactionRowItem = memo(function TransactionRowItem({
   dictionary,
   locale,
   onDelete,
+  onEdit,
 }: {
   transaction: TransactionRow;
   accountName: string;
   dictionary: Record<string, unknown>;
   locale: string;
   onDelete?: (transactionId: string) => void;
+  onEdit?: (transaction: TransactionRow) => void;
 }) {
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
@@ -149,6 +141,11 @@ const TransactionRowItem = memo(function TransactionRowItem({
     [transaction.date, locale]
   );
 
+  const formattedTime = useMemo(
+    () => formatTime(transaction.date, locale),
+    [transaction.date, locale]
+  );
+
   return (
     <tr className="group border-b border-white/5 hover:bg-white/[0.02] transition-colors">
       {/* Date */}
@@ -159,7 +156,7 @@ const TransactionRowItem = memo(function TransactionRowItem({
           }
           className="text-sm text-slate-400 tabular-nums whitespace-nowrap"
         >
-          {formattedDate}
+          {formattedDate} · {formattedTime}
         </time>
       </td>
 
@@ -185,6 +182,22 @@ const TransactionRowItem = memo(function TransactionRowItem({
         <span className="text-sm text-slate-400">{accountName}</span>
       </td>
 
+      {/* Category */}
+      <td className="py-3 px-4">
+        {transaction.category ? (
+          <span className="inline-flex items-center gap-1.5 text-sm text-slate-400 min-w-0">
+            <span
+              className="inline-block w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: transaction.category.color ?? '#64748B' }}
+              aria-hidden="true"
+            />
+            <span className="truncate">{transaction.category.name}</span>
+          </span>
+        ) : (
+          <span className="text-slate-500 italic">—</span>
+        )}
+      </td>
+
       {/* Amount */}
       <td className="py-3 px-4 text-right">
         <span
@@ -196,17 +209,29 @@ const TransactionRowItem = memo(function TransactionRowItem({
       </td>
 
       {/* Actions */}
-      <td className="py-3 px-4 text-right">
-        {onDelete && (
-          <button
-            type="button"
-            onClick={() => onDelete(transaction.id)}
-            aria-label={get(dictionary, 'deleteTransaction')}
-            className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            <Trash2 className="w-4 h-4" aria-hidden="true" />
-          </button>
-        )}
+      <td className="py-3 px-4 text-right whitespace-nowrap">
+        <div className="inline-flex items-center gap-1">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(transaction)}
+              aria-label={get(dictionary, 'editTransaction')}
+              className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-blue-400 hover:bg-blue-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            >
+              <Pencil className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(transaction.id)}
+              aria-label={get(dictionary, 'deleteTransaction')}
+              className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -222,12 +247,14 @@ const TransactionCard = memo(function TransactionCard({
   dictionary,
   locale,
   onDelete,
+  onEdit,
 }: {
   transaction: TransactionRow;
   accountName: string;
   dictionary: Record<string, unknown>;
   locale: string;
   onDelete?: (transactionId: string) => void;
+  onEdit?: (transaction: TransactionRow) => void;
 }) {
   const isPositive = isIncomeOrTransferIn(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
@@ -239,6 +266,11 @@ const TransactionCard = memo(function TransactionCard({
 
   const formattedDate = useMemo(
     () => formatDateShort(transaction.date, locale),
+    [transaction.date, locale]
+  );
+
+  const formattedTime = useMemo(
+    () => formatTime(transaction.date, locale),
     [transaction.date, locale]
   );
 
@@ -261,12 +293,25 @@ const TransactionCard = memo(function TransactionCard({
                 ? transaction.date
                 : transaction.date.toISOString()
             }
-            className="text-xs text-slate-500 tabular-nums"
+            className="text-xs text-slate-500 tabular-nums whitespace-nowrap"
           >
-            {formattedDate}
+            {formattedDate} · {formattedTime}
           </time>
           <span className="text-slate-600">·</span>
           <span className="text-xs text-slate-500 truncate">{accountName}</span>
+          <span className="text-slate-600">·</span>
+          {transaction.category ? (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-500 truncate">
+              <span
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: transaction.category.color ?? '#64748B' }}
+                aria-hidden="true"
+              />
+              <span className="truncate">{transaction.category.name}</span>
+            </span>
+          ) : (
+            <span className="text-slate-500 italic">—</span>
+          )}
         </div>
         <div className="mt-1">
           <span
@@ -287,16 +332,28 @@ const TransactionCard = memo(function TransactionCard({
       </span>
 
       {/* Actions */}
-      {onDelete && (
-        <button
-          type="button"
-          onClick={() => onDelete(transaction.id)}
-          aria-label={get(dictionary, 'deleteTransaction')}
-          className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 shrink-0"
-        >
-          <Trash2 className="w-4 h-4" aria-hidden="true" />
-        </button>
-      )}
+      <div className="inline-flex items-center gap-1 shrink-0">
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(transaction)}
+            aria-label={get(dictionary, 'editTransaction')}
+            className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-blue-400 hover:bg-blue-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            <Pencil className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(transaction.id)}
+            aria-label={get(dictionary, 'deleteTransaction')}
+            className="p-1.5 rounded-lg text-slate-500 opacity-60 hover:text-rose-400 hover:bg-rose-500/10 hover:opacity-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
     </div>
   );
 });
@@ -327,6 +384,17 @@ export const TransactionTable = memo(function TransactionTable({
 
   // Delete flow: track the transaction awaiting confirmation
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const openModal = useUIStore((s) => s.openModal);
+
+  const handleEditRequest = useCallback(
+    (transaction: TransactionRow) => {
+      // The global create-transaction modal is already mounted on the page.
+      // Transport the row through modalData — no local editing state needed.
+      openModal('create-transaction', { editing: transaction });
+    },
+    [openModal]
+  );
 
   const handleDeleteRequest = useCallback((transactionId: string) => {
     setConfirmingId(transactionId);
@@ -385,6 +453,12 @@ export const TransactionTable = memo(function TransactionTable({
                 </th>
                 <th
                   scope="col"
+                  className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
+                >
+                  {get(dictionary, 'category')}
+                </th>
+                <th
+                  scope="col"
                   className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider"
                 >
                   {get(dictionary, 'amount')}
@@ -406,6 +480,7 @@ export const TransactionTable = memo(function TransactionTable({
                   dictionary={dictionary}
                   locale={locale}
                   onDelete={handleDeleteRequest}
+                  onEdit={handleEditRequest}
                 />
               ))}
             </tbody>
@@ -422,6 +497,7 @@ export const TransactionTable = memo(function TransactionTable({
               dictionary={dictionary}
               locale={locale}
               onDelete={handleDeleteRequest}
+              onEdit={handleEditRequest}
             />
           ))}
         </ul>

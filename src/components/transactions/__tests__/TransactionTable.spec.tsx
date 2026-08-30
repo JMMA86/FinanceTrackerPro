@@ -37,11 +37,13 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock Zustand UI store (addNotification)
+// Mock Zustand UI store (openModal + addNotification)
+const mockOpenModal = vi.fn();
 const mockAddNotification = vi.fn();
 vi.mock('@/store/ui.store', () => ({
   useUIStore: vi.fn((selector) => {
     const state = {
+      openModal: mockOpenModal,
       addNotification: mockAddNotification,
     };
     return selector(state);
@@ -78,9 +80,11 @@ const mockTransactions = [
     amountCents: 500000,
     currency: 'USD',
     type: 'INCOME',
-    date: new Date('2024-06-01'),
+    date: new Date(2024, 5, 1, 10, 30), // Jun 1, 2024 10:30 AM local
     accountId: 'acc-1',
-    createdAt: new Date('2024-06-01'),
+    categoryId: 'cat-1',
+    category: { id: 'cat-1', name: 'Salary', color: '#10B981' },
+    createdAt: new Date(2024, 5, 1, 10, 30),
   },
   {
     id: 'tx-2',
@@ -88,9 +92,11 @@ const mockTransactions = [
     amountCents: -150000,
     currency: 'USD',
     type: 'EXPENSE',
-    date: new Date('2024-06-05'),
+    date: new Date(2024, 5, 5, 14, 15), // Jun 5, 2024 02:15 PM local
     accountId: 'acc-1',
-    createdAt: new Date('2024-06-05'),
+    categoryId: 'cat-2',
+    category: { id: 'cat-2', name: 'Housing', color: '#EF4444' },
+    createdAt: new Date(2024, 5, 5, 14, 15),
   },
   {
     id: 'tx-3',
@@ -98,9 +104,11 @@ const mockTransactions = [
     amountCents: -50000,
     currency: 'USD',
     type: 'TRANSFER_OUT',
-    date: new Date('2024-06-10'),
+    date: new Date(2024, 5, 10, 9, 45), // Jun 10, 2024 09:45 AM local
     accountId: 'acc-1',
-    createdAt: new Date('2024-06-10'),
+    categoryId: null,
+    category: null,
+    createdAt: new Date(2024, 5, 10, 9, 45),
   },
   {
     id: 'tx-4',
@@ -108,9 +116,11 @@ const mockTransactions = [
     amountCents: 10000,
     currency: 'USD',
     type: 'INCOME',
-    date: new Date('2024-06-15'),
+    date: new Date(2024, 5, 15, 18, 5), // Jun 15, 2024 06:05 PM local
     accountId: 'acc-2',
-    createdAt: new Date('2024-06-15'),
+    categoryId: null,
+    category: null,
+    createdAt: new Date(2024, 5, 15, 18, 5),
   },
 ];
 
@@ -120,9 +130,11 @@ const dictionary = {
   description: 'Description',
   type: 'Type',
   account: 'Account',
+  category: 'Category',
   amount: 'Amount',
   actions: 'Actions',
   deleteTransaction: 'Delete transaction',
+  editTransaction: 'Edit transaction',
   deleteConfirm: 'Are you sure you want to delete this transaction?',
   deleteSuccess: 'Transaction deleted',
   createError: 'Error creating transaction',
@@ -163,13 +175,14 @@ describe('TransactionTable', () => {
 
     // Headers
     const headers = within(table).getAllByRole('columnheader');
-    expect(headers).toHaveLength(6);
+    expect(headers).toHaveLength(7);
     expect(headers[0]).toHaveTextContent('Date');
     expect(headers[1]).toHaveTextContent('Description');
     expect(headers[2]).toHaveTextContent('Type');
     expect(headers[3]).toHaveTextContent('Account');
-    expect(headers[4]).toHaveTextContent('Amount');
-    expect(headers[5]).toHaveTextContent('Actions');
+    expect(headers[4]).toHaveTextContent('Category');
+    expect(headers[5]).toHaveTextContent('Amount');
+    expect(headers[6]).toHaveTextContent('Actions');
   });
 
   it('should render correct number of transaction rows', () => {
@@ -260,12 +273,49 @@ describe('TransactionTable', () => {
     expect(mobileList).toHaveAttribute('aria-label', 'Transactions');
   });
 
-  it('should display transaction dates correctly', () => {
+  it('should display transaction dates with time', () => {
     renderTable();
+
+    // Desktop table shows "Jun 1, 2024 · 10:30 AM" (en-US, local Date fixtures)
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByText(/Jun 1, 2024 · 10:30 AM/).length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getAllByText(/Jun 5, 2024 · 02:15 PM/).length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getAllByText(/Jun 10, 2024 · 09:45 AM/).length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getAllByText(/Jun 15, 2024 · 06:05 PM/).length).toBeGreaterThanOrEqual(1);
+
+    // Mobile cards show the short date with time too
+    const mobileList = screen.getByRole('list');
+    expect(within(mobileList).getAllByText(/Jun 1 · 10:30 AM/).length).toBeGreaterThanOrEqual(1);
+    expect(within(mobileList).getAllByText(/Jun 15 · 06:05 PM/).length).toBeGreaterThanOrEqual(1);
 
     // All transactions should have time elements
     const timeElements = document.querySelectorAll('time');
     expect(timeElements.length).toBeGreaterThan(0);
+  });
+
+  it('should render category names with a color dot when a category exists', () => {
+    renderTable();
+
+    // Category names appear in both desktop table and mobile cards
+    const salaryCategories = screen.getAllByText('Salary');
+    expect(salaryCategories.length).toBeGreaterThanOrEqual(1);
+
+    const housingCategories = screen.getAllByText('Housing');
+    expect(housingCategories.length).toBeGreaterThanOrEqual(1);
+
+    // Each rendered category must include its color dot
+    const dots = document.querySelectorAll('span.inline-block.w-2.h-2.rounded-full');
+    // 2 categorized transactions × (desktop + mobile) = 4 dots
+    expect(dots.length).toBe(4);
+  });
+
+  it('should render an em dash fallback when a transaction has no category', () => {
+    renderTable();
+
+    // tx-3 and tx-4 have no category → em dash fallback (desktop + mobile)
+    const dashes = screen.getAllByText('—');
+    // 2 null-category rows × 2 (desktop + mobile) + 1 null description = 5
+    expect(dashes.length).toBeGreaterThanOrEqual(5);
   });
 
   it('should handle empty accounts map gracefully', () => {
@@ -301,6 +351,53 @@ describe('TransactionTable', () => {
     const mobileList = screen.getByRole('list');
     const deleteButtons = within(mobileList).getAllByRole('button', { name: 'Delete transaction' });
     expect(deleteButtons).toHaveLength(mockTransactions.length);
+  });
+
+  // -------------------------------------------------------------------------
+  // Edit flow tests
+  // -------------------------------------------------------------------------
+
+  it('should render an edit (pencil) button per desktop row with edit aria-label', () => {
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const editButtons = within(table).getAllByRole('button', { name: 'Edit transaction' });
+    expect(editButtons).toHaveLength(mockTransactions.length);
+  });
+
+  it('should render an edit (pencil) button in mobile cards', () => {
+    renderTable();
+
+    const mobileList = screen.getByRole('list');
+    const editButtons = within(mobileList).getAllByRole('button', { name: 'Edit transaction' });
+    expect(editButtons).toHaveLength(mockTransactions.length);
+  });
+
+  it('should open the create-transaction modal with the transaction when edit is clicked', async () => {
+    renderTable();
+
+    const table = screen.getByRole('table');
+    const editButtons = within(table).getAllByRole('button', { name: 'Edit transaction' });
+
+    // Click edit on the second row (tx-2, EXPENSE with category)
+    await userEvent.click(editButtons[1]);
+
+    expect(mockOpenModal).toHaveBeenCalledWith('create-transaction', {
+      editing: mockTransactions[1],
+    });
+  });
+
+  it('should open the edit modal when edit is clicked from a mobile card', async () => {
+    renderTable();
+
+    const mobileList = screen.getByRole('list');
+    const editButtons = within(mobileList).getAllByRole('button', { name: 'Edit transaction' });
+
+    await userEvent.click(editButtons[3]);
+
+    expect(mockOpenModal).toHaveBeenCalledWith('create-transaction', {
+      editing: mockTransactions[3],
+    });
   });
 
   it('should open the delete confirmation modal when trash is clicked', async () => {

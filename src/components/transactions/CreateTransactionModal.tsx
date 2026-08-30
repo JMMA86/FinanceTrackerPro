@@ -7,12 +7,26 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { X, ArrowUpRight, ArrowDownRight, AlertCircle } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
-import { createTransaction } from '@/actions/transaction.actions';
+import { createTransaction, updateTransaction } from '@/actions/transaction.actions';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { getTransactionError } from '@/components/transactions/getTransactionError';
-import type { AccountBrief, CategoryBrief } from '@/components/transactions/types';
+import type { AccountBrief, CategoryBrief, TransactionRow } from '@/components/transactions/types';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialize a Date into a `datetime-local` input value using the user's LOCAL
+ * timezone (e.g. "2024-06-15T14:30"). This keeps the browser from treating
+ * the value as UTC when the form is submitted.
+ */
+function toLocalDateTimeInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 // ---------------------------------------------------------------------------
 // Client-side validation schema
@@ -69,11 +83,18 @@ export function CreateTransactionModal({
   onOpenCategoryManager,
 }: Readonly<CreateTransactionModalProps>) {
   const activeModal = useUIStore((s) => s.activeModal);
+  const modalData = useUIStore((s) => s.modalData);
   const closeModal = useUIStore((s) => s.closeModal);
   const addNotification = useUIStore((s) => s.addNotification);
 
   const isOpen = activeModal === 'create-transaction';
   const hasNoAccounts = accounts.length === 0;
+
+  // When the table's edit (pencil) button opens the modal it passes the row via
+  // `openModal('create-transaction', { editing: transaction })`. `closeModal`
+  // clears `modalData`, so reopening for a fresh create resets to create mode.
+  const editingTransaction = (modalData?.editing as TransactionRow | null | undefined) ?? null;
+  const isEditing = editingTransaction !== null;
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -101,7 +122,7 @@ export function CreateTransactionModal({
       categoryId: '',
       amountCents: 0,
       description: '',
-      date: new Date().toISOString().split('T')[0],
+      date: toLocalDateTimeInput(new Date()),
     },
   });
 
@@ -131,21 +152,37 @@ export function CreateTransactionModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    reset({
-      type: 'EXPENSE',
-      accountId: accounts.length === 1 ? accounts[0].id : '',
-      categoryId: '',
-      amountCents: 0,
-      description: '',
-      date: new Date().toISOString().split('T')[0],
-    });
+
+    if (editingTransaction) {
+      // Prefill from the row being edited. Type and account are NOT editable;
+      // the type radio is mapped to INCOME/EXPENSE for the schema while the
+      // original sign is preserved on submit (see onSubmit).
+      reset({
+        type: editingTransaction.type === 'INCOME' ? 'INCOME' : 'EXPENSE',
+        accountId: editingTransaction.accountId,
+        categoryId: editingTransaction.categoryId ?? '',
+        amountCents: Math.abs(editingTransaction.amountCents),
+        description: editingTransaction.description ?? '',
+        date: toLocalDateTimeInput(new Date(editingTransaction.date)),
+      });
+    } else {
+      reset({
+        type: 'EXPENSE',
+        accountId: accounts.length === 1 ? accounts[0].id : '',
+        categoryId: '',
+        amountCents: 0,
+        description: '',
+        date: toLocalDateTimeInput(new Date()),
+      });
+    }
+
     const id = requestAnimationFrame(() => {
       setServerError(''); // Clear any stale server error when (re)opening the modal
-      setAmountCents(0);
+      setAmountCents(editingTransaction ? Math.abs(editingTransaction.amountCents) : 0);
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [isOpen, accounts, reset]);
+  }, [isOpen, accounts, reset, editingTransaction]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
@@ -176,6 +213,35 @@ export function CreateTransactionModal({
 
       setIsSubmitting(true);
 
+      // Edit mode: type and account are immutable. The amount sign is derived
+      // from the ORIGINAL row so it stays correct for every transaction type
+      // (INCOME positive, EXPENSE/TRANSFER_OUT negative, etc.).
+      if (editingTransaction) {
+        const signedAmountCents =
+          editingTransaction.amountCents < 0 ? -data.amountCents : data.amountCents;
+
+        const result = await updateTransaction({
+          transactionId: editingTransaction.id,
+          description: data.description || undefined,
+          amountCents: signedAmountCents,
+          date: data.date ? new Date(data.date) : undefined,
+          categoryId: data.categoryId || null,
+        });
+
+        setIsSubmitting(false);
+
+        if (result.success) {
+          setServerError('');
+          addNotification('success', get(dictionary, 'updateSuccess'));
+          closeModal();
+        } else {
+          const message = getTransactionError(result, dictionary);
+          setServerError(message);
+          addNotification('error', message);
+        }
+        return;
+      }
+
       // Convert amount: positive for INCOME, negative for EXPENSE
       const signedAmountCents = data.type === 'EXPENSE' ? -data.amountCents : data.amountCents;
 
@@ -205,7 +271,7 @@ export function CreateTransactionModal({
         addNotification('error', message);
       }
     },
-    [selectedAccount, dictionary, addNotification, closeModal]
+    [selectedAccount, dictionary, addNotification, closeModal, editingTransaction]
   );
 
   // -----------------------------------------------------------------------
@@ -262,7 +328,7 @@ export function CreateTransactionModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 sticky top-0 bg-slate-900 z-10">
           <h2 id="create-transaction-title" className="text-base font-semibold text-white">
-            {get(dictionary, 'createTitle')}
+            {get(dictionary, isEditing ? 'editTitle' : 'createTitle')}
           </h2>
           <button
             type="button"
@@ -320,12 +386,15 @@ export function CreateTransactionModal({
                 return (
                   <label
                     key={opt.value}
-                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${borderClasses}`}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${borderClasses} ${
+                      isEditing ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+                    }`}
                   >
                     <input
                       type="radio"
                       value={opt.value}
                       {...register('type')}
+                      disabled={isEditing}
                       className="sr-only"
                       aria-label={opt.label}
                     />
@@ -359,6 +428,7 @@ export function CreateTransactionModal({
               id="tx-account"
               {...register('accountId')}
               required
+              disabled={isEditing}
               aria-invalid={!!errors.accountId}
               aria-describedby={errors.accountId ? 'tx-account-error' : undefined}
               className={selectCls}
@@ -519,7 +589,7 @@ export function CreateTransactionModal({
             </label>
             <input
               id="tx-date"
-              type="date"
+              type="datetime-local"
               {...register('date')}
               aria-invalid={!!errors.date}
               className={inputCls}

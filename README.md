@@ -30,6 +30,13 @@ To guarantee absolute financial integrity, FinanceTrackerPro adheres to strict b
 
 Get your local development environment up and running in under two minutes.
 
+### 0. Prerequisites
+
+- **Node.js ≥ 20** (the CI runner uses 22)
+- **Docker Desktop** running (spins up PostgreSQL 16 + SonarQube containers)
+- **Java 17+** — required only for SonarQube static analysis (`npm run sonar`)
+- **Git** (Windows: works in PowerShell, git bash or WSL)
+
 ### 1. Clone & Install Dependencies
 
 ```bash
@@ -44,8 +51,13 @@ npx playwright install
 Copy the pre-filled local Docker configurations:
 
 ```bash
+# Linux / macOS / git bash
 cp .env.example .env          # Dev database (port 5432)
 cp .env.e2e.example .env.e2e  # E2E database (port 5433) — credentials pre-filled
+
+# Windows PowerShell
+Copy-Item .env.example .env
+Copy-Item .env.e2e.example .env.e2e
 ```
 
 Fill in your credentials in `.env`:
@@ -58,11 +70,13 @@ JWT_SECRET=<min_32_chars_secret>
 ```
 
 > `.env.e2e` is pre-filled for the local Docker setup. Copy and use as-is.
+>
+> `.env.test` is **optional**: the integration test setup (`vitest.db-setup.ts`) falls back to the dedicated test container (`postgres:admin@localhost:5434/financetrackerpro_test`) when `TEST_DATABASE_URL` is not set.
 
 ### 3. Spin Up Infrastructure & Initialize
 
 ```bash
-# Start both Postgres containers (dev on 5432, E2E on 5433)
+# Start all three Postgres containers (dev 5432, E2E 5433, test 5434)
 docker-compose -f docker-compose.postgres.yml up -d
 
 # Apply migrations to dev database (requires interactive terminal)
@@ -70,6 +84,12 @@ npm run db:migrate
 
 # Generate Prisma Client
 npm run db:generate
+
+# Apply migrations to the TEST database (needed for integration tests)
+$env:PRISMA_E2E="1"; $env:DATABASE_URL="postgresql://postgres:admin@localhost:5434/financetrackerpro_test"; npx prisma migrate deploy
+
+# OPTIONAL — seed the dev database with system categories
+npm run db:seed
 ```
 
 > The E2E database is initialized automatically by `globalSetup` on the first `npx playwright test` run.
@@ -111,17 +131,19 @@ npm run db:studio:e2e    # E2E database  → http://localhost:5556
 
 ### Database Management
 
-| Command                 | Environment | Description                                               |
-| ----------------------- | ----------- | --------------------------------------------------------- |
-| `npm run db:generate`   | Dev / E2E   | Generates the type-safe Prisma Client.                    |
-| `npm run db:migrate`    | Dev         | Creates a new migration and applies it (interactive).     |
-| `npm run db:push`       | Dev         | Directly pushes schema changes without migration history. |
-| `npm run db:reset`      | Dev         | Wipes the dev database and re-runs all migrations.        |
-| `npm run db:setup:e2e`  | E2E         | Applies pending migrations to the E2E database.           |
-| `npm run db:reset:e2e`  | E2E         | Wipes and re-migrates the E2E database.                   |
-| `npm run db:seed:e2e`   | E2E         | Seeds the E2E database with test user and accounts.       |
-| `npm run db:studio`     | Dev         | Opens Prisma Studio for the dev database (port 5555).     |
-| `npm run db:studio:e2e` | E2E         | Opens Prisma Studio for the E2E database (port 5556).     |
+| Command                 | Environment | Description                                                                                                                                                                                   |
+| ----------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run db:generate`   | Dev / E2E   | Generates the type-safe Prisma Client.                                                                                                                                                        |
+| `npm run db:migrate`    | Dev         | Creates a new migration and applies it (interactive).                                                                                                                                         |
+| `npm run db:push`       | Dev         | Directly pushes schema changes without migration history.                                                                                                                                     |
+| `npm run db:reset`      | Dev         | Wipes the dev database and re-runs all migrations.                                                                                                                                            |
+| `npm run db:seed`       | Dev         | Seeds the dev database (system categories).                                                                                                                                                   |
+| `npm run db:setup:e2e`  | E2E         | Applies pending migrations to the E2E database.                                                                                                                                               |
+| `npm run db:reset:e2e`  | E2E         | Wipes and re-migrates the E2E database.                                                                                                                                                       |
+| `npm run db:seed:e2e`   | E2E         | Seeds the E2E database with test user and accounts.                                                                                                                                           |
+| `npm run db:studio`     | Dev         | Opens Prisma Studio for the dev database (port 5555).                                                                                                                                         |
+| `npm run db:studio:e2e` | E2E         | Opens Prisma Studio for the E2E database (port 5556).                                                                                                                                         |
+| — (test DB)             | Test        | `$env:PRISMA_E2E="1"; $env:DATABASE_URL="postgresql://postgres:admin@localhost:5434/financetrackerpro_test"; npx prisma migrate deploy` — applies migrations to the integration test database |
 
 ### Quality Assurance & Testing
 
@@ -177,6 +199,8 @@ npm run test:e2e
 
 SonarQube handles full-scope code safety gates through the native **SonarQube MCP Server** (`@sonarqube/mcp-server`) configured in `opencode.jsonc`.
 
+> Requires **Java 17+** on the machine (sonar-scanner runs on the JVM).
+
 ```bash
 # 1. Start SonarQube container
 docker-compose -f docker-compose.sonarqube.yml up -d
@@ -193,6 +217,7 @@ npm run sonar
 
 - **Web Dashboard:** [http://localhost:9000/dashboard?id=financetrackerpro](http://localhost:9000/dashboard?id=financetrackerpro)
 - **Default credentials:** `admin` / `admin` _(password change forced on first login)_
+- **Generate your token:** SonarQube → My Account → Security → Generate Tokens (name it e.g. `local-ci`) → set it as an OS environment variable: `$env:SONAR_TOKEN = "<token>"` (or set it permanently via System Properties).
 
 **Quality Gate blocks merge if:**
 

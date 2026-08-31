@@ -212,6 +212,13 @@ describe('account.actions.ts', () => {
       expect(result.code).toBe('VALIDATION_ERROR');
     });
 
+    it('returns ValidationError for negative initialBalanceCents', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      const result = await createBankAccount(makeCreateInput({ initialBalanceCents: -100 }));
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+    });
+
     it('stores idempotencyKey and cardColor', async () => {
       mockGetSession.mockResolvedValue(makeSession());
       mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);

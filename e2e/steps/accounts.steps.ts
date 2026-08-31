@@ -9,7 +9,14 @@ import { expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { ACCOUNTS_TEST_USER } from '../fixtures';
 import { resetUserFinancialData } from '../helpers/db';
-import { storeUniqueAccountName, getStoredAccountName } from '../helpers/unique';
+import {
+  storeUniqueAccountName,
+  getStoredAccountName,
+  storeUniquePocketName,
+  getStoredPocketName,
+  storeUniqueEditedAccountName,
+  getStoredEditedAccountName,
+} from '../helpers/unique';
 
 // ============================================================================
 // HELPERS
@@ -459,4 +466,306 @@ Then('el skeleton de carga puede mostrarse inicialmente', async ({ page }) => {
 
 Then('eventualmente el contenido de cuentas debe cargarse', async ({ page }) => {
   await expect(page.getByRole('main')).toBeVisible({ timeout: 10000 });
+});
+
+// ============================================================================
+// EDITAR CUENTA - EDIT MODAL
+// ============================================================================
+
+/** Types a percentage value (e.g. "8.5") into a FormattedNumericInput rate field (hundredths). */
+async function fillRateInput(
+  page: Page,
+  dialogLocator: ReturnType<typeof getOpenDialog>,
+  selector: string,
+  rate: string
+) {
+  const rateInput = dialogLocator.locator(selector);
+  await rateInput.click();
+  // Clear existing value by pressing Backspace multiple times
+  for (let i = 0; i < 10; i++) {
+    await rateInput.press('Backspace');
+  }
+  // Rate is stored in hundredths: "8.5" → 850 → type "850"
+  const hundredths = Math.round(parseFloat(rate) * 100).toString();
+  for (const digit of hundredths) {
+    await rateInput.press(digit);
+  }
+}
+
+When('hace clic en "Editar" en el panel de detalle', async ({ page }) => {
+  // The edit button in the AccountFullDetail top bar has aria-label="Editar"
+  await page.getByRole('button', { name: 'Editar', exact: true }).click();
+});
+
+Then('debe ver el modal de edición con el campo {string}', async ({ page }, fieldName: string) => {
+  const dialog = page.getByRole('dialog', { name: 'Editar' });
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await expect(dialog.getByText(fieldName, { exact: false }).first()).toBeVisible({
+    timeout: 3000,
+  });
+});
+
+When(
+  'cambia el nombre de la cuenta a un nombre único con prefijo {string}',
+  async ({ page }, prefix: string) => {
+    const name = await storeUniqueEditedAccountName(page, prefix);
+    const dialog = page.getByRole('dialog', { name: 'Editar' });
+    await dialog.locator('#edit-name').fill(name);
+  }
+);
+
+When('cambia la tasa de interés a {string}', async ({ page }, rate: string) => {
+  await fillRateInput(page, getOpenDialog(page), '#edit-rate', rate);
+});
+
+When('guarda los cambios de la cuenta', async ({ page }) => {
+  const dialog = page.getByRole('dialog', { name: 'Editar' });
+  await dialog.getByRole('button', { name: 'Guardar Cambios' }).click();
+  // Modal closes on success
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 15000 });
+});
+
+When('cierra el panel de detalle de la cuenta', async ({ page }) => {
+  // Back button in the detail top bar has text "Cuentas" (detail.back)
+  await page.getByRole('button', { name: 'Cuentas', exact: true }).click();
+  // The overlay animates closed and BankAccountsSection triggers router.refresh()
+  await page.waitForTimeout(1200);
+});
+
+Then('el grid debe mostrar la cuenta editada con el nuevo nombre', async ({ page }) => {
+  const name = await getStoredEditedAccountName(page);
+  await expect(page.getByRole('button', { name, exact: true })).toBeVisible({ timeout: 10000 });
+});
+
+Then(
+  'la tarjeta de la cuenta editada debe mostrar la tasa {string}',
+  async ({ page }, rateText: string) => {
+    const name = await getStoredEditedAccountName(page);
+    const card = page.getByRole('button', { name, exact: true });
+    await expect(card).toContainText(rateText, { timeout: 5000 });
+  }
+);
+
+// ============================================================================
+// BOLSILLOS - CRUD DESDE EL DETALLE
+// ============================================================================
+
+When('hace clic en "Agregar" en el detalle', async ({ page }) => {
+  // The add-pocket button in the detail has text "Agregar" (detail.addPocket)
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click();
+});
+
+Then('debe ver el modal de creación en modo bolsillo', async ({ page }) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  // POCKET mode title = newPocket ("Nuevo bolsillo")
+  await expect(dialog.locator('h2')).toHaveText('Nuevo bolsillo');
+  // The pocket name field label comes from the dictionary (pocketName)
+  await expect(dialog.getByText('Nombre del bolsillo').first()).toBeVisible({ timeout: 3000 });
+});
+
+When(
+  'ingresa un nombre único de bolsillo con prefijo {string}',
+  async ({ page }, prefix: string) => {
+    const name = await storeUniquePocketName(page, prefix);
+    const dialog = getOpenDialog(page);
+    await dialog.locator('#acc-name').fill(name);
+  }
+);
+
+When('ingresa {string} en la tasa de interés del bolsillo', async ({ page }, rate: string) => {
+  await fillRateInput(page, getOpenDialog(page), '#acc-rate', rate);
+});
+
+When('envía el formulario de creación de bolsillo', async ({ page }) => {
+  // Same submission mechanism as account creation: form.requestSubmit() to
+  // properly trigger React's onSubmit handler (createBankAccount with POCKET type).
+  await page.evaluate(() => {
+    const dialog = document.querySelector('dialog[open]');
+    if (!dialog) return;
+    const form = dialog.querySelector('form');
+    if (!form) return;
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) {
+      form.requestSubmit(submitBtn);
+    }
+  });
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 60000 });
+});
+
+Then('el bolsillo debe aparecer en la sección de bolsillos', async ({ page }) => {
+  const name = await getStoredPocketName(page);
+  const pocketsList = page.locator('[data-pockets-list]');
+  await expect(pocketsList).toBeVisible({ timeout: 10000 });
+  await expect(pocketsList.getByText(name).first()).toBeVisible({ timeout: 10000 });
+});
+
+When('abre el detalle del bolsillo', async ({ page }) => {
+  const name = await getStoredPocketName(page);
+  const pocketCard = page.locator('[data-pockets-list] button').filter({ hasText: name }).first();
+  await expect(pocketCard).toBeVisible({ timeout: 5000 });
+  await pocketCard.click();
+});
+
+Then('debe ver el modal de detalle del bolsillo', async ({ page }) => {
+  const name = await getStoredPocketName(page);
+  const dialog = page.getByRole('dialog', { name });
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+});
+
+Then(
+  'debe ver los textos del detalle del bolsillo {string}, {string} y {string}',
+  async ({ page }, text1: string, text2: string, text3: string) => {
+    const dialog = page.locator('dialog[open]').last();
+    await expect(dialog.getByText(text1).first()).toBeVisible({ timeout: 5000 });
+    await expect(dialog.getByText(text2).first()).toBeVisible({ timeout: 5000 });
+    await expect(dialog.getByText(text3).first()).toBeVisible({ timeout: 5000 });
+  }
+);
+
+When('hace clic en "Editar bolsillo" en el detalle del bolsillo', async ({ page }) => {
+  // PocketDetailModal edit button aria-label = pocketDetail.edit ("Editar bolsillo")
+  await page.getByRole('button', { name: 'Editar bolsillo', exact: true }).click();
+});
+
+Then('debe ver el modal de edición de bolsillo', async ({ page }) => {
+  // EditPocketModal h2 = edit ("Editar") + pocket badge ("Bolsillo")
+  const dialog = page.getByRole('dialog', { name: 'Editar' });
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await expect(dialog.getByText('Bolsillo').first()).toBeVisible({ timeout: 3000 });
+});
+
+When(
+  'cambia el nombre del bolsillo a un nombre único con prefijo {string}',
+  async ({ page }, prefix: string) => {
+    const name = await storeUniquePocketName(page, prefix);
+    const dialog = page.getByRole('dialog', { name: 'Editar' });
+    await dialog.locator('#edit-pocket-name').fill(name);
+  }
+);
+
+When('guarda los cambios del bolsillo', async ({ page }) => {
+  const dialog = page.getByRole('dialog', { name: 'Editar' });
+  await dialog.getByRole('button', { name: 'Guardar Cambios' }).click();
+  // EditPocketModal closes; PocketDetailModal stays open with liveName updated
+  await expect(page.getByRole('dialog', { name: 'Editar' })).not.toBeVisible({ timeout: 15000 });
+});
+
+Then('el modal de detalle del bolsillo debe mostrar el nuevo nombre', async ({ page }) => {
+  const name = await getStoredPocketName(page);
+  const dialog = page.getByRole('dialog', { name });
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+});
+
+When('hace clic en "Eliminar bolsillo" en el detalle del bolsillo', async ({ page }) => {
+  // PocketDetailModal delete button aria-label = pocketDetail.delete ("Eliminar bolsillo")
+  await page.getByRole('button', { name: 'Eliminar bolsillo', exact: true }).click();
+});
+
+Then('debe ver el modal de confirmación de bolsillo {string}', async ({ page }, title: string) => {
+  const dialog = page.getByRole('dialog', { name: title });
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await expect(dialog.locator('h2')).toHaveText(title);
+});
+
+When('confirma la eliminación del bolsillo', async ({ page }) => {
+  const dialog = page.getByRole('dialog', { name: 'Eliminar Bolsillo' });
+  await dialog.locator('button').filter({ hasText: 'Eliminar' }).last().click();
+  // DeleteConfirmModal closes on success (both success and error branches close it)
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 15000 });
+});
+
+Then('el bolsillo no debe aparecer en la sección de bolsillos', async ({ page }) => {
+  const name = await getStoredPocketName(page);
+  await expect(page.locator('[data-pockets-list]').getByText(name)).toHaveCount(0, {
+    timeout: 15000,
+  });
+});
+
+// ============================================================================
+// MOVIMIENTOS DEL DETALLE - BÚSQUEDA, FILTRO Y PAGINACIÓN
+// ============================================================================
+
+When('abre el detalle de la cuenta {string}', async ({ page }, accountName: string) => {
+  // AccountCard button has aria-label={account.name}
+  const card = page.getByRole('button', { name: accountName, exact: true });
+  await expect(card).toBeVisible({ timeout: 5000 });
+  await card.click();
+});
+
+Then('debe ver la tabla de movimientos del detalle', async ({ page }) => {
+  await expect(page.locator('table')).toBeVisible({ timeout: 10000 });
+});
+
+Then(
+  'debe ver el indicador de paginación {string} en el detalle',
+  async ({ page }, indicator: string) => {
+    await expect(page.getByText(indicator, { exact: true })).toBeVisible({ timeout: 10000 });
+  }
+);
+
+When('escribe {string} en el buscador de movimientos', async ({ page }, term: string) => {
+  // Search input placeholder = detail.searchPlaceholder ("Buscar movimiento...")
+  await page.getByPlaceholder('Buscar movimiento...').fill(term);
+  // Search has a 300ms debounce before the fetch
+  await page.waitForTimeout(800);
+});
+
+When('limpia el buscador de movimientos', async ({ page }) => {
+  await page.getByPlaceholder('Buscar movimiento...').fill('');
+  await page.waitForTimeout(800);
+});
+
+When('selecciona {string} en el filtro de tipo de movimientos', async ({ page }, label: string) => {
+  // The detail type filter is the only visible select on the accounts page
+  await page.getByRole('combobox').selectOption({ label });
+  await page.waitForTimeout(600);
+});
+
+Then(
+  'la descripción {string} debe estar visible en los movimientos',
+  async ({ page }, desc: string) => {
+    await expect(page.locator('table').getByText(desc).first()).toBeVisible({ timeout: 5000 });
+  }
+);
+
+Then(
+  'la descripción {string} no debe estar visible en los movimientos',
+  async ({ page }, desc: string) => {
+    await expect(page.locator('table').getByText(desc)).toHaveCount(0, { timeout: 5000 });
+  }
+);
+
+When('hace clic en "Siguiente" en la paginación de movimientos', async ({ page }) => {
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await page.waitForTimeout(800);
+});
+
+// ============================================================================
+// DETALLE EN INGLÉS
+// ============================================================================
+
+When('cambia el idioma a {string} en la página de ajustes', async ({ page }, language: string) => {
+  // The dashboard has no header language selector; the settings page exposes the
+  // language switcher (changeLanguageAction + router.push to /en/settings).
+  await page.goto('/es/settings', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await page.getByRole('button', { name: language, exact: true }).click();
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+});
+
+When('navega a la página de cuentas en inglés', async ({ page }) => {
+  await page.goto('/en/accounts', { waitUntil: 'domcontentloaded' });
+});
+
+Then('debe ver el detalle de la cuenta en inglés', async ({ page }) => {
+  // English dictionary texts rendered by AccountFullDetail
+  await expect(page.getByText('Current balance').first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Annual interest').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Pockets').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Movements').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible({
+    timeout: 5000,
+  });
+  await expect(page.getByPlaceholder('Search transactions...')).toBeVisible({ timeout: 5000 });
 });

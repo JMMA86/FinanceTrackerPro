@@ -168,6 +168,7 @@ export function BankAccountsSection({
         pockets={pockets}
         cardRect={cardRect}
         isOpen={isDetailOpen}
+        dictionary={dictionary}
         locale={locale}
         onClose={handleClose}
         onEdit={(id) => openModal('edit-account', { accountId: id })}

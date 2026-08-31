@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { TrendingUp, ChevronLeft, ChevronRight, Activity, Pencil, Trash2 } from 'lucide-react';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, multiplyCents, divideCents } from '@/lib/money';
+import { get } from '@/lib/i18n';
 import { log } from '@/lib/logger';
 import { getAccountTransactions } from '@/actions/account-transactions.actions';
 import { TYPE_GRADIENTS } from './AccountCard';
@@ -12,15 +13,15 @@ const ANIM_MS = 260;
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const EASE_OUT = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
-const TX_LABELS: Record<string, string> = {
-  INCOME: 'Ingreso',
-  EXPENSE: 'Gasto',
-  TRANSFER_OUT: 'Salida',
-  TRANSFER_IN: 'Entrada',
-  INVESTMENT: 'Inversión',
-  LOAN_PAYMENT: 'Cuota',
-  CREDIT_PAYMENT: 'Pago tarjeta',
-};
+/**
+ * Resolve a dictionary label with a fallback for missing keys/types.
+ * `get` from @/lib/i18n returns the key path itself when the key is absent,
+ * so a key path result is treated as "not found".
+ */
+function getLabel(dictionary: Record<string, unknown>, path: string, fallback: string): string {
+  const value = get(dictionary, path);
+  return value !== path ? value : fallback;
+}
 
 interface Tx {
   id: string;
@@ -35,9 +36,10 @@ interface PocketTxListProps {
   loading: boolean;
   txs: Tx[];
   locale: string;
+  dictionary: Record<string, unknown>;
 }
 
-function PocketTxList({ loading, txs, locale }: Readonly<PocketTxListProps>) {
+function PocketTxList({ loading, txs, locale, dictionary }: Readonly<PocketTxListProps>) {
   if (loading) {
     return (
       <div className="space-y-2">
@@ -49,7 +51,9 @@ function PocketTxList({ loading, txs, locale }: Readonly<PocketTxListProps>) {
   }
 
   if (txs.length === 0) {
-    return <p className="text-xs text-white/30 py-2">Sin movimientos registrados.</p>;
+    return (
+      <p className="text-xs text-white/30 py-2">{get(dictionary, 'pocketDetail.noMovements')}</p>
+    );
   }
 
   return (
@@ -67,7 +71,9 @@ function PocketTxList({ loading, txs, locale }: Readonly<PocketTxListProps>) {
                 {isIn ? '+' : '-'}
                 {formatMoney(Math.abs(tx.amountCents), tx.currency, locale)}
               </p>
-              <p className="text-[10px] text-white/30 mt-0.5">{TX_LABELS[tx.type] ?? tx.type}</p>
+              <p className="text-[10px] text-white/30 mt-0.5">
+                {getLabel(dictionary, `pocketDetail.typeLabels.${tx.type}`, tx.type)}
+              </p>
             </div>
           </div>
         );
@@ -78,6 +84,7 @@ function PocketTxList({ loading, txs, locale }: Readonly<PocketTxListProps>) {
 
 interface PocketDetailModalProps {
   pocket: AccountCardData | null;
+  dictionary: Record<string, unknown>;
   locale?: string;
   onClose: () => void;
   onEdit: (pocketId: string) => void;
@@ -94,6 +101,7 @@ function fmt(d: Date | string, locale: string) {
 
 export function PocketDetailModal({
   pocket,
+  dictionary,
   locale = 'es-CO',
   onClose,
   onEdit,
@@ -229,7 +237,9 @@ export function PocketDetailModal({
   if (!mounted || !pocket) return null;
 
   const rate = displayRate;
-  const annualCents = rate > 0 ? Math.floor((pocket.balanceCents * rate) / 100) : 0;
+  // T3: annual gain uses Decimal.js money utilities (Rule 1) instead of a raw
+  // float expression. balanceCents * rate / 100 with Banker's rounding.
+  const annualCents = rate > 0 ? divideCents(multiplyCents(pocket.balanceCents, rate), 100) : 0;
 
   const panelStyle: React.CSSProperties = {
     transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(24px)',
@@ -262,7 +272,7 @@ export function PocketDetailModal({
             <button
               type="button"
               onClick={handleClose}
-              aria-label="Volver"
+              aria-label={get(dictionary, 'pocketDetail.back')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -271,14 +281,14 @@ export function PocketDetailModal({
               {displayName}
             </h2>
             <span className="text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full">
-              Bolsillo
+              {get(dictionary, 'pocketDetail.badge')}
             </span>
           </div>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => onEdit(pocket.id)}
-              aria-label="Editar bolsillo"
+              aria-label={get(dictionary, 'pocketDetail.edit')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
             >
               <Pencil className="w-4 h-4" />
@@ -286,7 +296,7 @@ export function PocketDetailModal({
             <button
               type="button"
               onClick={() => onDelete(pocket.id, pocket.name)}
-              aria-label="Eliminar bolsillo"
+              aria-label={get(dictionary, 'pocketDetail.delete')}
               className="p-1.5 rounded-lg text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -308,7 +318,7 @@ export function PocketDetailModal({
             </div>
             <div>
               <p className="text-[10px] text-white/60 uppercase tracking-widest mb-0.5">
-                Saldo actual
+                {get(dictionary, 'pocketDetail.currentBalance')}
               </p>
               <p className="text-2xl font-bold text-white leading-none">
                 {formatMoney(pocket.balanceCents, pocket.currency, locale)}
@@ -322,13 +332,19 @@ export function PocketDetailModal({
               <div className="flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
                 <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">
-                  Rentabilidad
+                  {get(dictionary, 'pocketDetail.profitability')}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Tasa EA', value: `${rate.toFixed(2)}%` },
-                  { label: 'Ganancia', value: formatMoney(annualCents, pocket.currency, locale) },
+                  {
+                    label: get(dictionary, 'pocketDetail.rateEA'),
+                    value: `${rate.toFixed(2)}%`,
+                  },
+                  {
+                    label: get(dictionary, 'pocketDetail.gain'),
+                    value: formatMoney(annualCents, pocket.currency, locale),
+                  },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-white/5 rounded-xl p-3">
                     <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
@@ -346,13 +362,17 @@ export function PocketDetailModal({
               <div className="flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5 text-blue-400" />
                 <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">
-                  Movimientos
+                  {get(dictionary, 'pocketDetail.movements')}
                 </p>
               </div>
-              {!loading && <p className="text-[11px] text-white/30">{total} en total</p>}
+              {!loading && (
+                <p className="text-[11px] text-white/30">
+                  {total} {get(dictionary, 'pocketDetail.total')}
+                </p>
+              )}
             </div>
 
-            <PocketTxList loading={loading} txs={txs} locale={locale} />
+            <PocketTxList loading={loading} txs={txs} locale={locale} dictionary={dictionary} />
 
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-2">

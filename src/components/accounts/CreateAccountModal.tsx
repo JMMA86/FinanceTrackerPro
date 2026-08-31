@@ -48,6 +48,12 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
   const [cardColor, setCardColor] = useState<string | null>(null);
   const [cardNetwork, setCardNetwork] = useState<CardNetwork>('NONE');
   const [isVisible, setIsVisible] = useState(false);
+  // Holds a server-side error (e.g. SESSION_INVALID) rendered inline inside the
+  // modal. NOTE: the global ToastViewport is a fixed z-[100] element that sits
+  // BELOW the <dialog> top layer, so toasts are invisible while the modal is
+  // open. This inline alert is the primary (visible) error surface; the toast
+  // is kept as reinforcement in case the modal closes first.
+  const [serverError, setServerError] = useState('');
 
   const {
     register,
@@ -98,6 +104,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
       ...(prefillParentId ? { parentAccountId: prefillParentId } : {}),
     });
     const id = requestAnimationFrame(() => {
+      setServerError(''); // Clear any stale server error when (re)opening the modal
       setBalanceCents(0);
       setRateHundredths(0);
       setCardColor(null);
@@ -129,6 +136,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
       },
       'Create account submit'
     );
+    setServerError(''); // Clear any previous server error on each submit attempt
     const result = await createBankAccount({
       ...data,
       cardColor: cardColor ?? undefined,
@@ -150,6 +158,10 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
         result.code === 'SESSION_INVALID'
           ? get(dictionary, 'errors.sessionInvalid')
           : get(dictionary, 'errors.createFailed');
+      // Render the error inline inside the modal: the toast below the <dialog>
+      // top layer is invisible while the modal is open. Keep the toast too — it
+      // becomes visible if/when the modal closes.
+      setServerError(msg);
       addNotification('error', msg);
     }
   }
@@ -397,6 +409,16 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
                 dictionary={dictionary}
               />
             </>
+          )}
+
+          {/* Server error (inline — the toast is hidden below the <dialog> top layer) */}
+          {serverError && (
+            <div
+              role="alert"
+              className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3"
+            >
+              <p className="text-sm text-red-200 font-medium">{serverError}</p>
+            </div>
           )}
 
           <div className="flex gap-3 pt-1">

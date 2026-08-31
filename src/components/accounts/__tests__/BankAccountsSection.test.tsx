@@ -160,7 +160,7 @@ describe('BankAccountsSection', () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Agregar'));
+    fireEvent.click(screen.getByText('detail.addPocket'));
 
     expect(useUIStore.getState().activeModal).toBe('create-account');
     expect(useUIStore.getState().modalData).toMatchObject({
@@ -179,7 +179,7 @@ describe('BankAccountsSection', () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Editar'));
+    fireEvent.click(screen.getByLabelText('detail.edit'));
 
     expect(useUIStore.getState().activeModal).toBe('edit-account');
     expect(useUIStore.getState().modalData).toMatchObject({ accountId: PARENT.id });
@@ -195,7 +195,7 @@ describe('BankAccountsSection', () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Eliminar'));
+    fireEvent.click(screen.getByLabelText('detail.delete'));
 
     expect(useUIStore.getState().activeModal).toBe('delete-confirm');
     expect(useUIStore.getState().modalData).toMatchObject({
@@ -220,10 +220,10 @@ describe('BankAccountsSection', () => {
     fireEvent.click(pocketCard);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Editar bolsillo')).toBeInTheDocument();
+      expect(screen.getByLabelText('pocketDetail.edit')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Editar bolsillo'));
+    fireEvent.click(screen.getByLabelText('pocketDetail.edit'));
     expect(useUIStore.getState().activeModal).toBe('edit-pocket');
     expect(useUIStore.getState().modalData).toMatchObject({ pocketId: POCKET.id });
 
@@ -232,9 +232,9 @@ describe('BankAccountsSection', () => {
     fireEvent.click(pocketCard);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Eliminar bolsillo')).toBeInTheDocument();
+      expect(screen.getByLabelText('pocketDetail.delete')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByLabelText('Eliminar bolsillo'));
+    fireEvent.click(screen.getByLabelText('pocketDetail.delete'));
     expect(useUIStore.getState().activeModal).toBe('delete-confirm');
     expect(useUIStore.getState().modalData).toMatchObject({
       accountId: POCKET.id,
@@ -253,7 +253,7 @@ describe('BankAccountsSection', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Cuentas/ }));
+    fireEvent.click(screen.getByRole('button', { name: /detail.back/ }));
 
     act(() => {
       vi.advanceTimersByTime(240);

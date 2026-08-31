@@ -330,6 +330,58 @@ describe('CreateAccountModal', () => {
     expect(useUIStore.getState().activeModal).toBe('create-account');
   });
 
+  it('should render an inline server error alert and keep the modal open on failure', async () => {
+    mockCreateBankAccount.mockResolvedValue({
+      success: false,
+      code: 'VALIDATION_ERROR',
+      error: 'invalid',
+    });
+    useUIStore.getState().openModal('create-account');
+    const { container } = renderModal();
+
+    fireEvent.change(screen.getByLabelText('accountName'), { target: { value: 'Mi Cuenta' } });
+    fireEvent.change(screen.getByLabelText('accountType'), { target: { value: 'CHECKING' } });
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    // Inline alert with the localized message is visible inside the dialog
+    // (the toast below the <dialog> top layer is not), and the modal stays open.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('errors.createFailed');
+    });
+    expect(useUIStore.getState().activeModal).toBe('create-account');
+  });
+
+  it('should clear the inline server error on the next successful submit', async () => {
+    mockCreateBankAccount.mockResolvedValueOnce({
+      success: false,
+      code: 'X',
+      error: 'boom',
+    });
+    mockCreateBankAccount.mockResolvedValueOnce({
+      success: true,
+      data: { account: { id: 'acc-1' } },
+    });
+    useUIStore.getState().openModal('create-account');
+    const { container } = renderModal();
+
+    fireEvent.change(screen.getByLabelText('accountName'), { target: { value: 'Mi Cuenta' } });
+    fireEvent.change(screen.getByLabelText('accountType'), { target: { value: 'CHECKING' } });
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('errors.createFailed');
+    });
+
+    // Second attempt succeeds: the alert disappears and the modal closes.
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(useUIStore.getState().activeModal).toBeNull();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('should close the modal when the dialog close event fires', () => {
     useUIStore.getState().openModal('create-account');
     const { container } = renderModal();

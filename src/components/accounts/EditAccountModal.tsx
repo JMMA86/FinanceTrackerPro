@@ -107,7 +107,14 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
       { action: 'account.update.submit', accountId: data.accountId },
       'Account update submit'
     );
-    const result = await updateBankAccount({ ...data, cardColor, cardNetwork });
+    // cardColor is null when no custom card design is selected; convert null →
+    // undefined so the server schema (cardColor: z.string().optional()) accepts
+    // it (same pattern as CreateAccountModal). A raw null fails Zod validation.
+    const result = await updateBankAccount({
+      ...data,
+      cardColor: cardColor ?? undefined,
+      cardNetwork,
+    });
     if (result.success) {
       document.dispatchEvent(
         new CustomEvent('finance:account-updated', {

@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { PocketDetailModal } from '../PocketDetailModal';
 import type { AccountCardData } from '../AccountCard';
+import esAccountsDictionary from '@/locales/es/accounts.json';
 
 const mockGetAccountTransactions = vi.fn();
 
@@ -107,6 +108,7 @@ async function mountPocket(pocket: AccountCardData | null, props: PocketModalPro
   const utils = render(
     <PocketDetailModal
       pocket={null}
+      dictionary={esAccountsDictionary}
       locale="es-CO"
       onClose={props.onClose ?? noop}
       onEdit={props.onEdit ?? noop}
@@ -121,6 +123,7 @@ async function mountPocket(pocket: AccountCardData | null, props: PocketModalPro
     utils.rerender(
       <PocketDetailModal
         pocket={pocket}
+        dictionary={esAccountsDictionary}
         locale="es-CO"
         onClose={props.onClose ?? noop}
         onEdit={props.onEdit ?? noop}

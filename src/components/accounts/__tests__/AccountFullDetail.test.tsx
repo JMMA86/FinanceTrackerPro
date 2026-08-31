@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AccountFullDetail } from '../AccountFullDetail';
 import type { AccountCardData } from '../AccountCard';
+import esAccountsDictionary from '@/locales/es/accounts.json';
 
 const mockRefresh = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -115,6 +116,7 @@ function renderDetail(overrides: DetailOverrides = {}) {
       pockets={overrides.pockets ?? []}
       cardRect={'cardRect' in overrides ? (overrides.cardRect ?? null) : cardRect}
       isOpen={overrides.isOpen ?? true}
+      dictionary={esAccountsDictionary}
       locale="es-CO"
       onClose={overrides.onClose ?? noop}
       onEdit={overrides.onEdit ?? noop}

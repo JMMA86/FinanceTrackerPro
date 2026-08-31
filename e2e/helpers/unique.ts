@@ -16,6 +16,12 @@ import type { Page } from '@playwright/test';
 /** localStorage key where the unique account name is stored for the current scenario. */
 export const UNIQUE_ACCOUNT_NAME_KEY = '__e2eUniqueAccountName';
 
+/** localStorage key where the unique pocket name is stored for the current scenario. */
+export const UNIQUE_POCKET_NAME_KEY = '__e2eUniquePocketName';
+
+/** localStorage key where the unique EDITED account name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_NAME_KEY = '__e2eUniqueEditedName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -42,5 +48,33 @@ export async function storeUniqueAccountName(page: Page, prefix: string): Promis
 export async function getStoredAccountName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_ACCOUNT_NAME_KEY);
   if (!name) throw new Error('No unique account name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped pocket name, stores it and returns it. */
+export async function storeUniquePocketName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_POCKET_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique pocket name stored by the create/edit-pocket step. */
+export async function getStoredPocketName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_POCKET_NAME_KEY);
+  if (!name) throw new Error('No unique pocket name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED account name, stores it and returns it. */
+export async function storeUniqueEditedAccountName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED account name stored by the edit-account step. */
+export async function getStoredEditedAccountName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_NAME_KEY);
+  if (!name) throw new Error('No unique edited account name stored on the page');
   return name;
 }

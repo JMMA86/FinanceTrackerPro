@@ -22,7 +22,7 @@ export const CreateAccountSchema = z.object({
   initialBalanceCents: z
     .number()
     .int('Balance must be an integer')
-    .min(-9_999_999_999_999, 'Balance too low')
+    .min(0, 'Initial balance cannot be negative')
     .max(9_999_999_999_999, 'Balance too high'),
   interestRateEA: z.number().min(0).max(100).optional(),
   parentAccountId: CUID.optional(),

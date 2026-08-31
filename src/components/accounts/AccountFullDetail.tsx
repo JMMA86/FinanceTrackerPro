@@ -13,23 +13,33 @@ import {
   Activity,
   Plus,
 } from 'lucide-react';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, multiplyCents, divideCents } from '@/lib/money';
+import { get } from '@/lib/i18n';
 import { getAccountTransactions } from '@/actions/account-transactions.actions';
-import { NetworkLogo, TYPE_GRADIENTS, TYPE_LABELS } from './AccountCard';
+import { NetworkLogo, TYPE_GRADIENTS } from './AccountCard';
 import type { AccountCardData, CardNetwork } from './AccountCard';
 import { PRESETS, LIGHT_PRESET_KEYS, getPresetGradient } from './CardDesignPicker';
 import { PocketDetailModal } from './PocketDetailModal';
 
-const TX_TYPE_LABELS: Record<string, string> = {
-  INCOME: 'Ingreso',
-  EXPENSE: 'Gasto',
-  TRANSFER_OUT: 'Transferencia saliente',
-  TRANSFER_IN: 'Transferencia entrante',
-  INVESTMENT: 'Inversión',
-  LOAN_PAYMENT: 'Cuota préstamo',
-  CREDIT_PAYMENT: 'Pago tarjeta',
-};
-const TX_TYPES = Object.keys(TX_TYPE_LABELS);
+const TX_TYPES = [
+  'INCOME',
+  'EXPENSE',
+  'TRANSFER_OUT',
+  'TRANSFER_IN',
+  'INVESTMENT',
+  'LOAN_PAYMENT',
+  'CREDIT_PAYMENT',
+];
+
+/**
+ * Resolve a dictionary label with a fallback for missing keys/types.
+ * `get` from @/lib/i18n returns the key path itself when the key is absent,
+ * so a key path result is treated as "not found".
+ */
+function getLabel(dictionary: Record<string, unknown>, path: string, fallback: string): string {
+  const value = get(dictionary, path);
+  return value !== path ? value : fallback;
+}
 
 // iOS spring easing
 const IOS_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
@@ -102,6 +112,7 @@ interface AccountFullDetailProps {
   pockets: AccountCardData[];
   cardRect: DOMRect | null;
   isOpen: boolean;
+  dictionary: Record<string, unknown>;
   locale?: string;
   onClose: () => void;
   onEdit: (accountId: string) => void;
@@ -133,9 +144,10 @@ interface TxTableBodyProps {
   isLoading: boolean;
   transactions: Transaction[];
   locale: string;
+  dictionary: Record<string, unknown>;
 }
 
-function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyProps>) {
+function TxTableBody({ isLoading, transactions, locale, dictionary }: Readonly<TxTableBodyProps>) {
   if (isLoading) {
     const skeletonRows = [
       'skeleton-row-0',
@@ -186,7 +198,7 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
                 opacity="0.4"
               />
             </svg>
-            <p className="text-sm">Sin movimientos</p>
+            <p className="text-sm">{get(dictionary, 'detail.noMovements')}</p>
           </div>
         </td>
       </tr>
@@ -198,13 +210,15 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
     return (
       <tr key={tx.id} className="border-b border-white/6 hover:bg-white/[0.03] transition-colors">
         <td className="px-4 py-3.5 text-xs text-white/40 whitespace-nowrap">
-          {formatDateShort(tx.date)}
+          {formatDateShort(tx.date, locale)}
         </td>
         <td className="px-4 py-3.5 text-sm text-white max-w-0">
           <span className="block truncate">{tx.description ?? '—'}</span>
         </td>
         <td className="px-4 py-3.5 hidden lg:table-cell">
-          <span className="text-xs text-white/40">{TX_TYPE_LABELS[tx.type] ?? tx.type}</span>
+          <span className="text-xs text-white/40">
+            {getLabel(dictionary, `detail.typeLabels.${tx.type}`, tx.type)}
+          </span>
         </td>
         <td
           className={`px-4 py-3.5 text-right text-sm font-semibold tabular-nums whitespace-nowrap ${pos ? 'text-emerald-400' : 'text-rose-400'}`}
@@ -217,15 +231,15 @@ function TxTableBody({ isLoading, transactions, locale }: Readonly<TxTableBodyPr
   });
 }
 
-function formatDate(d: Date | string) {
-  return new Date(d).toLocaleDateString('es-CO', {
+function formatDate(d: Date | string, locale: string) {
+  return new Date(d).toLocaleDateString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 }
-function formatDateShort(d: Date | string) {
-  return new Date(d).toLocaleDateString('es-CO', {
+function formatDateShort(d: Date | string, locale: string) {
+  return new Date(d).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -290,6 +304,7 @@ export function AccountFullDetail({
   pockets,
   cardRect,
   isOpen,
+  dictionary,
   locale = 'es-CO',
   onClose,
   onEdit,
@@ -528,9 +543,15 @@ export function AccountFullDetail({
     LIGHT_PRESET_KEYS.has(liveCardColor ?? safeAcc.cardColor ?? '');
   const network = (safeAcc.cardNetwork ?? 'NONE') as CardNetwork;
   const rateNumber = safeAcc.interestRateEA == null ? 0 : Number(safeAcc.interestRateEA);
+  // T3: annual interest projection uses Decimal.js money utilities (Rule 1) instead
+  // of a raw float expression. balanceCents * rate / 100 with Banker's rounding.
   const projected =
     rateNumber > 0
-      ? formatMoney(Math.floor((safeAcc.balanceCents * rateNumber) / 100), safeAcc.currency, locale)
+      ? formatMoney(
+          divideCents(multiplyCents(safeAcc.balanceCents, rateNumber), 100),
+          safeAcc.currency,
+          locale
+        )
       : '—';
   const cardBg = getCardBackgroundWithLive(safeAcc, liveCardColor);
   const accentColor = getAccentColor(safeAcc, liveCardColor);
@@ -570,13 +591,13 @@ export function AccountFullDetail({
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Cuentas</span>
+            <span className="hidden sm:inline">{get(dictionary, 'detail.back')}</span>
           </button>
 
           <div className="flex-1 flex items-center gap-2 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{safeAcc.name}</p>
             <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider bg-white/15 text-white/80 px-2 py-0.5 rounded-full">
-              {TYPE_LABELS[safeAcc.type] ?? safeAcc.type}
+              {getLabel(dictionary, `detail.accountTypeLabels.${safeAcc.type}`, safeAcc.type)}
             </span>
           </div>
 
@@ -584,7 +605,7 @@ export function AccountFullDetail({
             <button
               type="button"
               onClick={() => onEdit(safeAcc.id)}
-              aria-label="Editar"
+              aria-label={get(dictionary, 'detail.edit')}
               className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
             >
               <Pencil className="w-4 h-4" />
@@ -592,7 +613,7 @@ export function AccountFullDetail({
             <button
               type="button"
               onClick={() => onDelete(safeAcc.id, safeAcc.name)}
-              aria-label="Eliminar"
+              aria-label={get(dictionary, 'detail.delete')}
               className="p-2 rounded-lg text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -635,7 +656,7 @@ export function AccountFullDetail({
 
             <div className="flex-1 min-w-0">
               <p className="text-[11px] uppercase tracking-widest text-white/40 mb-1">
-                {TYPE_LABELS[safeAcc.type] ?? safeAcc.type}
+                {getLabel(dictionary, `detail.accountTypeLabels.${safeAcc.type}`, safeAcc.type)}
               </p>
               <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6 leading-tight">
                 {safeAcc.name}
@@ -643,12 +664,18 @@ export function AccountFullDetail({
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                 {[
                   {
-                    label: 'Saldo actual',
+                    label: get(dictionary, 'detail.currentBalance'),
                     value: formatMoney(safeAcc.balanceCents, safeAcc.currency, locale),
                   },
-                  { label: 'Tasa EA', value: rateNumber > 0 ? `${rateNumber.toFixed(2)}%` : '—' },
-                  { label: 'Interés anual', value: projected },
-                  { label: 'Cuenta desde', value: formatDate(safeAcc.createdAt) },
+                  {
+                    label: get(dictionary, 'detail.rateEA'),
+                    value: rateNumber > 0 ? `${rateNumber.toFixed(2)}%` : '—',
+                  },
+                  { label: get(dictionary, 'detail.annualInterest'), value: projected },
+                  {
+                    label: get(dictionary, 'detail.since'),
+                    value: formatDate(safeAcc.createdAt, locale),
+                  },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
@@ -667,7 +694,9 @@ export function AccountFullDetail({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4" style={{ color: accentColor }} />
-                <h2 className="text-sm font-semibold text-white">Bolsillos</h2>
+                <h2 className="text-sm font-semibold text-white">
+                  {get(dictionary, 'detail.pockets')}
+                </h2>
                 <span className="text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full">
                   {pockets.length}
                 </span>
@@ -685,7 +714,7 @@ export function AccountFullDetail({
                 }}
               >
                 <Plus className="w-3.5 h-3.5" />
-                Agregar
+                {get(dictionary, 'detail.addPocket')}
               </button>
             </div>
             {pockets.length > 0 ? (
@@ -710,16 +739,16 @@ export function AccountFullDetail({
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-white/30 py-1">
-                Sin bolsillos. Crea uno para separar tu dinero.
-              </p>
+              <p className="text-xs text-white/30 py-1">{get(dictionary, 'detail.noPockets')}</p>
             )}
           </section>
 
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-blue-400" />
-              <h2 className="text-sm font-semibold text-white">Movimientos</h2>
+              <h2 className="text-sm font-semibold text-white">
+                {get(dictionary, 'detail.movements')}
+              </h2>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
@@ -732,7 +761,7 @@ export function AccountFullDetail({
                     setSearch(e.target.value);
                     setPage(1);
                   }}
-                  placeholder="Buscar movimiento..."
+                  placeholder={get(dictionary, 'detail.searchPlaceholder')}
                   className={`${inputCls} w-full pl-9 pr-4 py-2.5 text-sm`}
                 />
               </div>
@@ -745,11 +774,11 @@ export function AccountFullDetail({
                 className={`${inputCls} px-3 py-2.5 text-sm appearance-none min-w-[160px]`}
               >
                 <option value="" className="bg-slate-900">
-                  Todos los tipos
+                  {get(dictionary, 'detail.allTypes')}
                 </option>
                 {TX_TYPES.map((t) => (
                   <option key={t} value={t} className="bg-slate-900">
-                    {TX_TYPE_LABELS[t]}
+                    {getLabel(dictionary, `detail.typeLabels.${t}`, t)}
                   </option>
                 ))}
               </select>
@@ -757,8 +786,11 @@ export function AccountFullDetail({
 
             {!isLoading && (
               <p className="text-[11px] text-white/30">
-                {total} {total === 1 ? 'movimiento' : 'movimientos'}
-                {search || typeFilter ? ' encontrados' : ''}
+                {total}{' '}
+                {total === 1
+                  ? get(dictionary, 'detail.movement')
+                  : get(dictionary, 'detail.movementsPlural')}
+                {search || typeFilter ? ` ${get(dictionary, 'detail.found')}` : ''}
               </p>
             )}
 
@@ -767,13 +799,18 @@ export function AccountFullDetail({
                 <table className="w-full min-w-[600px]">
                   <thead>
                     <tr className="border-b border-white/8">
-                      {['Fecha', 'Descripción', 'Tipo', 'Monto'].map((h, i) => (
+                      {[
+                        { key: 'date', label: get(dictionary, 'detail.date') },
+                        { key: 'description', label: get(dictionary, 'detail.description') },
+                        { key: 'type', label: get(dictionary, 'detail.type') },
+                        { key: 'amount', label: get(dictionary, 'detail.amount') },
+                      ].map(({ key, label }, i) => (
                         <th
-                          key={h}
+                          key={key}
                           className={`text-left text-[10px] uppercase tracking-widest text-white/40 font-semibold px-4 py-3.5 ${getHeaderAlignClass(i)}`}
                           style={{ minWidth: getHeaderMinWidth(i) }}
                         >
-                          {h}
+                          {label}
                         </th>
                       ))}
                     </tr>
@@ -783,6 +820,7 @@ export function AccountFullDetail({
                       isLoading={isLoading}
                       transactions={transactions}
                       locale={locale}
+                      dictionary={dictionary}
                     />
                   </tbody>
                 </table>
@@ -798,7 +836,7 @@ export function AccountFullDetail({
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
-                  Anterior
+                  {get(dictionary, 'detail.prev')}
                 </button>
                 <span className="text-xs text-white/40 min-w-[80px] text-center">
                   {page} / {totalPages}
@@ -809,7 +847,7 @@ export function AccountFullDetail({
                   disabled={page >= totalPages || isLoading}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white/60 bg-white/6 hover:bg-white/12 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
-                  Siguiente
+                  {get(dictionary, 'detail.next')}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -820,6 +858,7 @@ export function AccountFullDetail({
 
       <PocketDetailModal
         pocket={selectedPocket}
+        dictionary={dictionary}
         locale={locale}
         onClose={() => setSelectedPocket(null)}
         onEdit={onEditPocket}

@@ -8,7 +8,11 @@ const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { ACCOUNTS_TEST_USER } from '../fixtures';
-import { resetUserFinancialData } from '../helpers/db';
+import {
+  resetUserFinancialData,
+  createTransaction,
+  getActiveAccountIdByEmail,
+} from '../helpers/db';
 import {
   storeUniqueAccountName,
   getStoredAccountName,
@@ -686,11 +690,109 @@ Then('el bolsillo no debe aparecer en la sección de bolsillos', async ({ page }
 // MOVIMIENTOS DEL DETALLE - BÚSQUEDA, FILTRO Y PAGINACIÓN
 // ============================================================================
 
-When('abre el detalle de la cuenta {string}', async ({ page }, accountName: string) => {
-  // AccountCard button has aria-label={account.name}
-  const card = page.getByRole('button', { name: accountName, exact: true });
-  await expect(card).toBeVisible({ timeout: 5000 });
-  await card.click();
+/**
+ * Seeds 12 deterministic movements DIRECTLY in the isolated e2e schema for the
+ * account created earlier in the scenario (unique timestamp name stored in
+ * localStorage). Bypasses the UI to keep the scenario fast and — critically —
+ * does NOT touch the shared transactions user (transactions@e2e...) that
+ * transactions.feature pagination asserts on ("11–20 de 20 transacciones").
+ *
+ * Dataset (12 rows → PAGE_SIZE=10 → 2 pages):
+ *   - 2 INCOME    "Ingreso de nómina 1/2"      → search "nómina" returns ONLY these
+ *   - 2 EXPENSE   "Gasto de supermercado 1/2"  → type filter "Gasto" shows these
+ *   - 8 variadas  (INCOME/EXPENSE/TRANSFER_IN) → totalize 12 for "1 / 2" pagination
+ *
+ * Dates are staggered (1 day apart) so the detail's `orderBy: { date: 'desc' }`
+ * produces a deterministic page 1 / page 2 split.
+ */
+When('siembra 12 movimientos en la cuenta recién creada', async ({ page }) => {
+  const accountName = await getStoredAccountName(page);
+  const accountId = await getActiveAccountIdByEmail(ACCOUNTS_TEST_USER.email, accountName);
+
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const movements: Array<{
+    type: 'INCOME' | 'EXPENSE' | 'TRANSFER_IN';
+    amountCents: number;
+    description: string;
+    date: Date;
+  }> = [
+    {
+      type: 'INCOME',
+      amountCents: 120000,
+      description: 'Ingreso de nómina 1',
+      date: new Date(now),
+    },
+    {
+      type: 'INCOME',
+      amountCents: 110000,
+      description: 'Ingreso de nómina 2',
+      date: new Date(now - 1 * DAY),
+    },
+    {
+      type: 'EXPENSE',
+      amountCents: -45000,
+      description: 'Gasto de supermercado 1',
+      date: new Date(now - 2 * DAY),
+    },
+    {
+      type: 'EXPENSE',
+      amountCents: -32000,
+      description: 'Gasto de supermercado 2',
+      date: new Date(now - 3 * DAY),
+    },
+    {
+      type: 'INCOME',
+      amountCents: 80000,
+      description: 'Pago de cliente',
+      date: new Date(now - 4 * DAY),
+    },
+    {
+      type: 'EXPENSE',
+      amountCents: -50000,
+      description: 'Restaurante',
+      date: new Date(now - 5 * DAY),
+    },
+    {
+      type: 'TRANSFER_IN',
+      amountCents: 200000,
+      description: 'Transferencia recibida',
+      date: new Date(now - 6 * DAY),
+    },
+    { type: 'INCOME', amountCents: 60000, description: 'Reembolso', date: new Date(now - 7 * DAY) },
+    {
+      type: 'EXPENSE',
+      amountCents: -28000,
+      description: 'Transporte',
+      date: new Date(now - 8 * DAY),
+    },
+    {
+      type: 'EXPENSE',
+      amountCents: -75000,
+      description: 'Servicios públicos',
+      date: new Date(now - 9 * DAY),
+    },
+    {
+      type: 'TRANSFER_IN',
+      amountCents: 50000,
+      description: 'Devolución',
+      date: new Date(now - 10 * DAY),
+    },
+    {
+      type: 'INCOME',
+      amountCents: 95000,
+      description: 'Venta ocasional',
+      date: new Date(now - 11 * DAY),
+    },
+  ];
+
+  if (movements.length !== 12) {
+    throw new Error(`Expected exactly 12 seed movements, got ${movements.length}`);
+  }
+
+  for (const movement of movements) {
+    await createTransaction(accountId, movement);
+  }
 });
 
 Then('debe ver la tabla de movimientos del detalle', async ({ page }) => {

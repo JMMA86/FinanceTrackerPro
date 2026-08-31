@@ -338,34 +338,31 @@ Feature: Gestión de Cuentas Bancarias
   # ============================================================================
   # MOVIMIENTOS DEL DETALLE - BÚSQUEDA, FILTRO Y PAGINACIÓN
   # ============================================================================
+  # AISLAMIENTO: este escenario usa el usuario de cuentas (accounts@e2e...),
+  # NUNCA el usuario de transacciones. Crea su propia cuenta por la UI y siembra
+  # 12 movimientos directo en la DB e2e (helper db.ts), así el usuario de
+  # transacciones conserva sus 20 transacciones del seed para transactions.feature
+  # (que aserta exactamente "11–20 de 20 transacciones").
 
   @accounts @detail
   Scenario: Movimientos del detalle filtra y pagina
-    # Usuario de transacciones: tiene 2 cuentas con 10 movimientos cada una.
-    # Creamos 2 movimientos extra en "Efectivo" para que supere los 10 y aparezca paginación.
-    Given que el usuario de transacciones ha iniciado sesión
-    And navega a la página de transacciones
-    Given que el modal de transacción está abierto
-    When selecciona "Ingreso" como tipo
-    And selecciona "Efectivo" como cuenta
-    And ingresa "50000" en el campo valor
-    And ingresa una descripción única "Movimiento extra paginación 1"
-    And envía el formulario de creación de transacción
-    Then la transacción creada debe aparecer en la tabla
-    Given que el modal de transacción está abierto
-    When selecciona "Ingreso" como tipo
-    And selecciona "Efectivo" como cuenta
-    And ingresa "60000" en el campo valor
-    And ingresa una descripción única "Movimiento extra paginación 2"
-    And envía el formulario de creación de transacción
-    Then la transacción creada debe aparecer en la tabla
-    When navega a la página de cuentas
-    And abre el detalle de la cuenta "Efectivo"
+    Given que el usuario de cuentas ha iniciado sesión
+    And que no existen cuentas bancarias
+    Given que el modal de creación está abierto
+    When ingresa un nombre único de cuenta con prefijo "Cuenta Movimientos"
+    And selecciona el tipo "Cuenta Corriente"
+    And ingresa "0" en el campo de saldo inicial
+    And envía el formulario de creación
+    Then la cuenta debe crearse exitosamente
+    And la nueva cuenta debe aparecer en el grid
+    When siembra 12 movimientos en la cuenta recién creada
+    And navega a la página de cuentas
+    And abre el panel de detalle de la cuenta con el nombre único
     Then debe ver la tabla de movimientos del detalle
     And debe ver el indicador de paginación "1 / 2" en el detalle
-    When escribe "supermercado" en el buscador de movimientos
-    Then la descripción "Ingreso de nómina 1" no debe estar visible en los movimientos
-    And la descripción "Gasto de supermercado 1" debe estar visible en los movimientos
+    When escribe "nómina" en el buscador de movimientos
+    Then la descripción "Ingreso de nómina 1" debe estar visible en los movimientos
+    And la descripción "Gasto de supermercado 1" no debe estar visible en los movimientos
     When limpia el buscador de movimientos
     And selecciona "Gasto" en el filtro de tipo de movimientos
     Then la descripción "Ingreso de nómina 1" no debe estar visible en los movimientos

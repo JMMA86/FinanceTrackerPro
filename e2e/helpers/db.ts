@@ -17,6 +17,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
 
 let prisma: PrismaClient | null = null;
 
@@ -76,4 +77,71 @@ export async function getAccountBalancesByEmail(email: string): Promise<Record<s
   const balances: Record<string, number> = {};
   for (const acc of accounts) balances[acc.name] = acc.balanceCents;
   return balances;
+}
+
+/**
+ * Creates a bank transaction DIRECTLY in the isolated e2e schema (bypasses the
+ * UI/server action). Used by the accounts movements-detail scenario to seed a
+ * deterministic movements dataset for the detail overlay.
+ *
+ * Why not the UI: seeding 12 movements through the create-transaction modal
+ * would take 12 slow submits. A single Prisma insert is fast and keeps the
+ * scenario self-contained on the ACCOUNTS user — it NEVER touches the shared
+ * transactions user (transactions@e2e...) whose exact 20-row pagination
+ * assertions depend on the untouched seed data.
+ *
+ * The connection uses the SAME DATABASE_URL loaded from .env.e2e
+ * (?schema=e2e), so it NEVER touches the development database.
+ */
+export async function createTransaction(
+  accountId: string,
+  input: {
+    type: 'INCOME' | 'EXPENSE' | 'TRANSFER_OUT' | 'TRANSFER_IN';
+    amountCents: number;
+    description: string;
+    date: Date;
+  }
+): Promise<void> {
+  const db = getPrisma();
+  const account = await db.account.findUnique({ where: { id: accountId } });
+  if (!account) {
+    throw new Error(`createTransaction: account ${accountId} not found`);
+  }
+
+  await db.transaction.create({
+    data: {
+      idempotencyKey: randomUUID(),
+      userId: account.userId,
+      accountId: account.id,
+      type: input.type,
+      amountCents: input.amountCents,
+      currency: account.currency,
+      description: input.description,
+      date: input.date,
+      isActive: true,
+      createdBy: account.userId,
+      lastModifiedBy: account.userId,
+    },
+  });
+}
+
+/**
+ * Resolves the ACTIVE account id for a given user email + exact account name.
+ * Used by scenarios that create an account via the UI (unique timestamp name)
+ * and then need the DB id to seed transactions directly.
+ */
+export async function getActiveAccountIdByEmail(email: string, name: string): Promise<string> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getActiveAccountIdByEmail: user ${email} not found`);
+  }
+  const account = await db.account.findFirst({
+    where: { userId: user.id, name, isActive: true },
+    select: { id: true },
+  });
+  if (!account) {
+    throw new Error(`getActiveAccountIdByEmail: active account "${name}" not found for ${email}`);
+  }
+  return account.id;
 }

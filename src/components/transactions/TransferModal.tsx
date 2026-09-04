@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -120,6 +120,11 @@ export function TransferModal({
   const sourcePockets = accounts.filter(isPocket);
   const destAccounts = destinationAccounts.filter((a) => !isPocket(a));
   const destPockets = destinationAccounts.filter(isPocket);
+  // accountId -> account name map so each pocket can show its parent account.
+  const parentNameById = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a.name])),
+    [accounts]
+  );
   // Defense in depth: the header hides the button with < 2 accounts, but the
   // submit also stays disabled here. A missing userId keeps it disabled too.
   const canSubmit = userId.length > 0 && accounts.length >= 2;
@@ -317,6 +322,7 @@ export function TransferModal({
               placeholder={get(dictionary, 'selectTransferFrom')}
               accountsGroupLabel={get(dictionary, 'accountsGroup')}
               pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
+              parentNameById={parentNameById}
               accounts={sourceAccounts}
               pockets={sourcePockets}
               showBalance
@@ -344,6 +350,7 @@ export function TransferModal({
               placeholder={get(dictionary, 'selectTransferTo')}
               accountsGroupLabel={get(dictionary, 'accountsGroup')}
               pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
+              parentNameById={parentNameById}
               accounts={destAccounts}
               pockets={destPockets}
               disabled={!selectedFromAccountId}

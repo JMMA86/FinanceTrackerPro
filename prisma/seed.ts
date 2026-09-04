@@ -375,69 +375,85 @@ async function main() {
   console.log('Seeding system categories...');
   const systemCategories = [
     {
-      id: 'cat-groceries',
+      id: 'cgroceries000000000000000',
       name: 'Mercado',
       type: 'GROCERIES' as const,
       color: '#3B82F6',
       icon: 'shopping-cart',
     },
     {
-      id: 'cat-transportation',
+      id: 'ctransportation000000000000',
       name: 'Transporte',
       type: 'TRANSPORTATION' as const,
       color: '#EF4444',
       icon: 'bus',
     },
     {
-      id: 'cat-utilities',
+      id: 'cutilities0000000000000000',
       name: 'Servicios',
       type: 'UTILITIES' as const,
       color: '#10B981',
       icon: 'zap',
     },
     {
-      id: 'cat-entertainment',
+      id: 'centertainment00000000000',
       name: 'Entretenimiento',
       type: 'ENTERTAINMENT' as const,
       color: '#F59E0B',
       icon: 'film',
     },
     {
-      id: 'cat-healthcare',
+      id: 'chealthcare00000000000000',
       name: 'Salud',
       type: 'HEALTHCARE' as const,
       color: '#8B5CF6',
       icon: 'heart-pulse',
     },
     {
-      id: 'cat-education',
+      id: 'ceducation000000000000000',
       name: 'Educación',
       type: 'EDUCATION' as const,
       color: '#06B6D4',
       icon: 'graduation-cap',
     },
     {
-      id: 'cat-shopping',
+      id: 'cshopping0000000000000000',
       name: 'Compras',
       type: 'SHOPPING' as const,
       color: '#EC4899',
       icon: 'shopping-bag',
     },
     {
-      id: 'cat-dining',
+      id: 'cdining000000000000000000',
       name: 'Restaurantes',
       type: 'DINING' as const,
       color: '#F97316',
       icon: 'utensils',
     },
     {
-      id: 'cat-other',
+      id: 'cother0000000000000000000',
       name: 'Otros',
       type: 'OTHER' as const,
       color: '#64748B',
       icon: 'more-horizontal',
     },
   ];
+
+  // Migrate legacy system category rows that used non-CUID ids (cat-*) before the
+  // strict CUID validation was enforced on Transaction.categoryId. Re-point any
+  // transactions that reference them and remove the old rows, so re-seeding an
+  // existing database does not create duplicates or violate the CUID contract.
+  for (const cat of systemCategories) {
+    const legacyId = `cat-${cat.type.toLowerCase()}`;
+    if (legacyId === cat.id) continue;
+    await prisma.transaction.updateMany({
+      where: { categoryId: legacyId },
+      data: { categoryId: cat.id },
+    });
+    await prisma.category.deleteMany({
+      where: { id: legacyId, userId: null },
+    });
+  }
 
   for (const cat of systemCategories) {
     await prisma.category.upsert({

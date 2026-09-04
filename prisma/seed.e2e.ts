@@ -531,69 +531,84 @@ async function main() {
   // ============================================================================
   const systemCategories = [
     {
-      id: 'e2e-cat-groceries',
+      id: 'ce2egroceries000000000000000',
       name: 'Mercado',
       type: 'GROCERIES' as const,
       color: '#3B82F6',
       icon: 'shopping-cart',
     },
     {
-      id: 'e2e-cat-transportation',
+      id: 'ce2etransportation00000000000',
       name: 'Transporte',
       type: 'TRANSPORTATION' as const,
       color: '#EF4444',
       icon: 'bus',
     },
     {
-      id: 'e2e-cat-utilities',
+      id: 'ce2eutilities000000000000000',
       name: 'Servicios',
       type: 'UTILITIES' as const,
       color: '#10B981',
       icon: 'zap',
     },
     {
-      id: 'e2e-cat-entertainment',
+      id: 'ce2eentertainment0000000000',
       name: 'Entretenimiento',
       type: 'ENTERTAINMENT' as const,
       color: '#F59E0B',
       icon: 'film',
     },
     {
-      id: 'e2e-cat-healthcare',
+      id: 'ce2ehealthcare00000000000000',
       name: 'Salud',
       type: 'HEALTHCARE' as const,
       color: '#8B5CF6',
       icon: 'heart-pulse',
     },
     {
-      id: 'e2e-cat-education',
+      id: 'ce2eeducation000000000000000',
       name: 'Educación',
       type: 'EDUCATION' as const,
       color: '#06B6D4',
       icon: 'graduation-cap',
     },
     {
-      id: 'e2e-cat-shopping',
+      id: 'ce2eshopping000000000000000',
       name: 'Compras',
       type: 'SHOPPING' as const,
       color: '#EC4899',
       icon: 'shopping-bag',
     },
     {
-      id: 'e2e-cat-dining',
+      id: 'ce2edining00000000000000000',
       name: 'Restaurantes',
       type: 'DINING' as const,
       color: '#F97316',
       icon: 'utensils',
     },
     {
-      id: 'e2e-cat-other',
+      id: 'ce2eother000000000000000000',
       name: 'Otros',
       type: 'OTHER' as const,
       color: '#64748B',
       icon: 'more-horizontal',
     },
   ];
+
+  // Migrate legacy system category rows that used non-CUID ids (e2e-cat-*) before
+  // the strict CUID validation was enforced on Transaction.categoryId. Re-point
+  // any transactions that reference them and remove the old rows.
+  for (const cat of systemCategories) {
+    const legacyId = `e2e-cat-${cat.type.toLowerCase()}`;
+    if (legacyId === cat.id) continue;
+    await prisma.transaction.updateMany({
+      where: { categoryId: legacyId },
+      data: { categoryId: cat.id },
+    });
+    await prisma.category.deleteMany({
+      where: { id: legacyId, userId: null },
+    });
+  }
 
   for (const cat of systemCategories) {
     await prisma.category.upsert({

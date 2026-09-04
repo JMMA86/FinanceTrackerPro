@@ -14,6 +14,8 @@ interface AccountSelectProps {
   pocketsGroupLabel: string;
   accounts: AccountBrief[]; // cuentas (no-bolsillo)
   pockets: AccountBrief[]; // bolsillos
+  /** Map accountId -> account name, used to resolve each pocket's parent account. */
+  parentNameById?: Record<string, string>;
   showBalance?: boolean;
   disabled?: boolean;
   locale?: string;
@@ -32,6 +34,7 @@ export function AccountSelect({
   pocketsGroupLabel,
   accounts,
   pockets,
+  parentNameById,
   showBalance = false,
   disabled = false,
   locale = 'es-CO',
@@ -49,6 +52,9 @@ export function AccountSelect({
     [accounts, pockets]
   );
   const selected = allOptions.find((o) => o.id === value);
+  const selectedParentName = selected
+    ? parentNameById?.[selected.parentAccountId ?? '']
+    : undefined;
 
   // Cerrar al hacer clic fuera o con Escape
   useEffect(() => {
@@ -103,6 +109,7 @@ export function AccountSelect({
   function renderOption(opt: AccountBrief, isPocket: boolean) {
     const isSelected = opt.id === value;
     const isHighlighted = opt.id === allOptions[highlight]?.id;
+    const parentName = isPocket ? parentNameById?.[opt.parentAccountId ?? ''] : undefined;
     return (
       <button
         key={opt.id}
@@ -123,8 +130,17 @@ export function AccountSelect({
           <span className={`flex-shrink-0 ${isPocket ? 'text-amber-400' : 'text-blue-400'}`}>
             {isPocket ? <Wallet className="w-3.5 h-3.5" /> : <Landmark className="w-3.5 h-3.5" />}
           </span>
-          <span className="truncate">{opt.name}</span>
-          <span className="text-slate-500 text-xs">({opt.currency})</span>
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate">{opt.name}</span>
+              <span className="text-slate-500 text-xs">({opt.currency})</span>
+            </span>
+            {isPocket && parentName && (
+              <span className="block text-[10px] font-medium text-amber-400/80 truncate">
+                {parentName}
+              </span>
+            )}
+          </span>
         </span>
         {showBalance && (
           <span className="flex-shrink-0 text-xs font-mono tabular-nums text-slate-400">
@@ -154,9 +170,16 @@ export function AccountSelect({
         onKeyDown={handleKeyDown}
         className="w-full flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-transparent transition-all appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <span className={`truncate ${selected ? 'text-white' : 'text-slate-500'}`}>
-          {selected ? selected.name : placeholder}
-          {selected && <span className="text-slate-500 ml-1">({selected.currency})</span>}
+        <span className="min-w-0 flex-1 text-left">
+          <span className={`block truncate ${selected ? 'text-white' : 'text-slate-500'}`}>
+            {selected ? selected.name : placeholder}
+            {selected && <span className="text-slate-500 ml-1">({selected.currency})</span>}
+          </span>
+          {selected?.isPocket && selectedParentName && (
+            <span className="block text-[10px] font-medium text-amber-400/80 truncate">
+              {selectedParentName}
+            </span>
+          )}
         </span>
         <ChevronDown
           className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}

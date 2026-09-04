@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -129,6 +129,11 @@ export function CreateTransactionModal({
   // Split accounts into non-pocket accounts and pockets for the custom selector
   const accountOptions = accounts.filter((a) => !isPocket(a));
   const pocketOptions = accounts.filter(isPocket);
+  // accountId -> account name map so each pocket can show its parent account.
+  const parentNameById = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a.name])),
+    [accounts]
+  );
   const isExpense = selectedType === 'EXPENSE';
 
   // -----------------------------------------------------------------------
@@ -447,6 +452,7 @@ export function CreateTransactionModal({
               placeholder={get(dictionary, 'selectAccount')}
               accountsGroupLabel={get(dictionary, 'accountsGroup')}
               pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
+              parentNameById={parentNameById}
               accounts={accountOptions}
               pockets={pocketOptions}
               showBalance

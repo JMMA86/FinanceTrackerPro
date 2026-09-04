@@ -61,6 +61,11 @@ const mockGetSession = vi.mocked(getSession);
 const VALID_USER_ID = 'clh1234567890abcdefghij';
 const VALID_FROM_ACCOUNT = 'clh1234567890abcdefghik';
 const VALID_TO_ACCOUNT = 'clh1234567890abcdefghil';
+// Pocket-hierarchy test accounts
+const VALID_PARENT_ACCOUNT = 'clh1234567890abcdefghim';
+const VALID_POCKET_1 = 'clh1234567890abcdefghin';
+const VALID_POCKET_2 = 'clh1234567890abcdefghio';
+const VALID_EXTERNAL_ACCOUNT = 'clh1234567890abcdefghip';
 
 const asTransactionClient = (tx: object): Prisma.TransactionClient =>
   tx as Prisma.TransactionClient;
@@ -82,6 +87,8 @@ const buildMockAccount = (id: string, overrides: Record<string, unknown> = {}) =
   balanceCents: id === VALID_FROM_ACCOUNT ? 100000 : 50000,
   currency: 'USD',
   isActive: true,
+  type: 'SAVINGS',
+  parentAccountId: null,
   ...overrides,
 });
 
@@ -611,6 +618,147 @@ describe('transfer.actions.ts', () => {
         expect(response.success).toBe(true);
         expect(response.data?.transferId).toBeDefined();
       });
+    });
+  });
+
+  describe('pocket transfer rules (assertValidTransferPair)', () => {
+    /**
+     * Mock prisma.$transaction to return the given source/destination account
+     * records (with type + parentAccountId) and a working double-entry flow.
+     */
+    async function mockTransferWithAccounts(
+      from: Record<string, unknown>,
+      to: Record<string, unknown>
+    ) {
+      const { prisma } = await import('@/lib/db');
+      vi.mocked(prisma.$transaction).mockImplementation(
+        async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
+          const mockTx = {
+            account: {
+              findUnique: vi
+                .fn()
+                .mockResolvedValueOnce(buildMockAccount((from.id as string) ?? '', from))
+                .mockResolvedValueOnce(buildMockAccount((to.id as string) ?? '', to)),
+              update: vi.fn().mockResolvedValue({}),
+            },
+            transaction: {
+              create: vi
+                .fn()
+                .mockResolvedValueOnce(
+                  buildMockTransaction({
+                    id: 'tx-debit',
+                    type: 'TRANSFER_OUT',
+                    amountCents: -10000,
+                  })
+                )
+                .mockResolvedValueOnce(
+                  buildMockTransaction({ id: 'tx-credit', type: 'TRANSFER_IN', amountCents: 10000 })
+                ),
+            },
+          };
+          return callback(asTransactionClient(mockTx));
+        }
+      );
+    }
+
+    it('should reject a pocket transferring to an external account with POCKET_TRANSFER_NOT_ALLOWED', async () => {
+      const { getTrueBalance } = await import('@/services/reconciliation.service');
+      vi.mocked(getTrueBalance).mockResolvedValue(100000);
+
+      await mockTransferWithAccounts(
+        { id: VALID_POCKET_1, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT },
+        { id: VALID_EXTERNAL_ACCOUNT, type: 'CHECKING', parentAccountId: null }
+      );
+
+      const response = await transferBetweenAccounts(
+        buildValidTransferInput({
+          fromAccountId: VALID_POCKET_1,
+          toAccountId: VALID_EXTERNAL_ACCOUNT,
+        })
+      );
+
+      expect(response.success).toBe(false);
+      expect(response.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
+    });
+
+    it('should reject a non-pocket account transferring to another account pocket with POCKET_TRANSFER_NOT_ALLOWED', async () => {
+      const { getTrueBalance } = await import('@/services/reconciliation.service');
+      vi.mocked(getTrueBalance).mockResolvedValue(100000);
+
+      await mockTransferWithAccounts(
+        { id: VALID_EXTERNAL_ACCOUNT, type: 'CHECKING', parentAccountId: null },
+        { id: VALID_POCKET_1, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT }
+      );
+
+      const response = await transferBetweenAccounts(
+        buildValidTransferInput({
+          fromAccountId: VALID_EXTERNAL_ACCOUNT,
+          toAccountId: VALID_POCKET_1,
+        })
+      );
+
+      expect(response.success).toBe(false);
+      expect(response.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
+    });
+
+    it('should allow a pocket transferring to its parent account (full success flow)', async () => {
+      const { getTrueBalance } = await import('@/services/reconciliation.service');
+      vi.mocked(getTrueBalance).mockResolvedValue(100000);
+
+      await mockTransferWithAccounts(
+        { id: VALID_POCKET_1, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT },
+        { id: VALID_PARENT_ACCOUNT, type: 'SAVINGS', parentAccountId: null }
+      );
+
+      const response = await transferBetweenAccounts(
+        buildValidTransferInput({
+          fromAccountId: VALID_POCKET_1,
+          toAccountId: VALID_PARENT_ACCOUNT,
+        })
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.data?.transferId).toBeDefined();
+    });
+
+    it('should allow a non-pocket account transferring to its own pocket (full success flow)', async () => {
+      const { getTrueBalance } = await import('@/services/reconciliation.service');
+      vi.mocked(getTrueBalance).mockResolvedValue(100000);
+
+      await mockTransferWithAccounts(
+        { id: VALID_PARENT_ACCOUNT, type: 'SAVINGS', parentAccountId: null },
+        { id: VALID_POCKET_1, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT }
+      );
+
+      const response = await transferBetweenAccounts(
+        buildValidTransferInput({
+          fromAccountId: VALID_PARENT_ACCOUNT,
+          toAccountId: VALID_POCKET_1,
+        })
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.data?.transferId).toBeDefined();
+    });
+
+    it('should allow a pocket transferring to a sibling pocket (full success flow)', async () => {
+      const { getTrueBalance } = await import('@/services/reconciliation.service');
+      vi.mocked(getTrueBalance).mockResolvedValue(100000);
+
+      await mockTransferWithAccounts(
+        { id: VALID_POCKET_1, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT },
+        { id: VALID_POCKET_2, type: 'POCKET', parentAccountId: VALID_PARENT_ACCOUNT }
+      );
+
+      const response = await transferBetweenAccounts(
+        buildValidTransferInput({
+          fromAccountId: VALID_POCKET_1,
+          toAccountId: VALID_POCKET_2,
+        })
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.data?.transferId).toBeDefined();
     });
   });
 

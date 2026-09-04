@@ -12,7 +12,8 @@
 import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page, type Locator } from '@playwright/test';
-import { getAccountBalancesByEmail } from '../helpers/db';
+import { loginAs } from '../helpers/auth';
+import { getAccountBalancesByEmail, getAccountTotalBalancesByEmail } from '../helpers/db';
 
 // ============================================================================
 // CONSTANTS
@@ -21,6 +22,19 @@ import { getAccountBalancesByEmail } from '../helpers/db';
 /** Shared transactions user (seeded with "Efectivo" + "Bancolombia Ahorros"). */
 const TRANSACTIONS_USER = {
   email: process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD || 'E2ePassword123',
+};
+
+/**
+ * Isolated pockets user (seeded in prisma/seed.e2e.ts):
+ *   - "Cuenta Principal" (CHECKING)   balanceCents =  700.000 (external)
+ *   - "Bolsillo Viajes"  (POCKET)      balanceCents =  200.000 (parent = Cuenta Principal)
+ *   - "Bolsillo Mercado" (POCKET)      balanceCents =  100.000 (parent = Cuenta Principal)
+ *   - "Cuenta Externa"   (SAVINGS)     balanceCents =  500.000
+ * Displayed total on the parent card = 700.000 + 200.000 + 100.000 = 1.000.000.
+ */
+const POCKETS_USER = {
+  email: process.env.E2E_POCKETS_USER || 'pockets@e2e.financetrackerpro.com',
   password: process.env.E2E_TEST_PASSWORD || 'E2ePassword123',
 };
 
@@ -37,6 +51,13 @@ const TRANSFER_DESC_KEY = '__e2eUniqueTransferDescription';
  * post-transfer DELTA instead of an absolute seed value.
  */
 const TRANSFER_BALANCES_KEY = '__e2eTransferBalances';
+
+/**
+ * localStorage key where the pre-transfer TOTAL balances (external + pockets)
+ * of the pockets user are stored. The pockets scenarios assert that an internal
+ * transfer does NOT change the displayed total on the parent account card.
+ */
+const POCKET_TOTALS_KEY = '__e2ePocketTotalBalances';
 
 // ============================================================================
 // HELPERS
@@ -66,20 +87,20 @@ async function getStoredTransferDescription(page: Page): Promise<string> {
   return description;
 }
 
-/** Selects an account in a transfer select (origin/destination) by partial name. */
+/** Selects an account in a transfer AccountSelect (origin/destination) by partial name. */
 async function selectTransferAccount(page: Page, selectName: string, accountName: string) {
   const dialog = getTransferDialog(page);
   const combo = dialog.getByRole('combobox', { name: new RegExp(selectName, 'i') });
-  // Option text is "Name (COP)" — match by partial label like the create flow.
-  const options = await combo.locator('option').allTextContents();
-  const match = options.find((o) => o.toLowerCase().includes(accountName.toLowerCase()));
-  if (!match) {
-    throw new Error(
-      `Account "${accountName}" not found in the "${selectName}" select. Options: ${options.join(' | ')}`
-    );
-  }
-  await combo.selectOption({ label: match });
-  await page.waitForTimeout(200);
+  await combo.click();
+
+  const controlsId = await combo.getAttribute('aria-controls');
+  const listbox = controlsId ? dialog.locator(`#${controlsId}`) : dialog.getByRole('listbox');
+  await expect(listbox).toBeVisible({ timeout: 5000 });
+
+  const option = listbox.getByRole('option', { name: new RegExp(accountName, 'i') });
+  await option.click();
+  await expect(listbox).not.toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(150);
 }
 
 /**
@@ -119,6 +140,14 @@ async function getStoredTransferBalances(page: Page): Promise<Record<string, num
   return JSON.parse(raw) as Record<string, number>;
 }
 
+/** Reads the pre-transfer TOTAL balances (external + pockets) stored by the Given step. */
+async function getStoredPocketTotals(page: Page): Promise<Record<string, number>> {
+  const raw = await page.evaluate((key) => {
+    return window.localStorage.getItem(key) ?? '{}';
+  }, POCKET_TOTALS_KEY);
+  return JSON.parse(raw) as Record<string, number>;
+}
+
 // ============================================================================
 // GIVEN - State
 // ============================================================================
@@ -130,6 +159,20 @@ Given('guarda los saldos actuales de las cuentas de transferencia', async ({ pag
       window.localStorage.setItem(key, JSON.stringify(value));
     },
     { key: TRANSFER_BALANCES_KEY, value: balances }
+  );
+});
+
+Given('que el usuario de bolsillos ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, POCKETS_USER.email, POCKETS_USER.password);
+});
+
+Given('guarda los saldos totales de las cuentas de bolsillo', async ({ page }) => {
+  const totals = await getAccountTotalBalancesByEmail(POCKETS_USER.email);
+  await page.evaluate(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    },
+    { key: POCKET_TOTALS_KEY, value: totals }
   );
 });
 
@@ -272,8 +315,16 @@ Then(
   async ({ page }, accountName: string) => {
     const dialog = getTransferDialog(page);
     const combo = dialog.getByRole('combobox', { name: /cuenta destino/i });
-    const options = await combo.locator('option').allTextContents();
+    // The AccountSelect listbox is only in the DOM while the dropdown is open.
+    await combo.click();
+    const listbox = dialog.getByRole('listbox');
+    await expect(listbox).toBeVisible({ timeout: 5000 });
+    const options = await listbox.getByRole('option').allTextContents();
     expect(options.some((o) => o.toLowerCase().includes(accountName.toLowerCase()))).toBeFalsy();
+    // Close the dropdown by clicking OUTSIDE it but INSIDE the dialog (the modal
+    // header title). Pressing Escape would also close the native <dialog>.
+    await dialog.getByRole('heading', { name: 'Transferir entre cuentas' }).click();
+    await expect(listbox).not.toBeVisible({ timeout: 5000 });
   }
 );
 
@@ -282,8 +333,13 @@ Then(
   async ({ page }, accountName: string) => {
     const dialog = getTransferDialog(page);
     const combo = dialog.getByRole('combobox', { name: /cuenta destino/i });
-    const options = await combo.locator('option').allTextContents();
+    await combo.click();
+    const listbox = dialog.getByRole('listbox');
+    await expect(listbox).toBeVisible({ timeout: 5000 });
+    const options = await listbox.getByRole('option').allTextContents();
     expect(options.some((o) => o.toLowerCase().includes(accountName.toLowerCase()))).toBeTruthy();
+    await dialog.getByRole('heading', { name: 'Transferir entre cuentas' }).click();
+    await expect(listbox).not.toBeVisible({ timeout: 5000 });
   }
 );
 
@@ -312,5 +368,20 @@ Then(
       throw new Error(`No pre-transfer balance stored for account "${accountName}"`);
     }
     await expectAccountBalance(page, accountName, before + amountCents);
+  }
+);
+
+Then(
+  'la cuenta {string} debe mostrar el MISMO saldo total tras la transferencia a bolsillo',
+  async ({ page }, accountName: string) => {
+    const totals = await getStoredPocketTotals(page);
+    const expected = totals[accountName];
+    if (expected === undefined) {
+      throw new Error(`No pre-transfer total balance stored for account "${accountName}"`);
+    }
+    // An internal transfer (parent ⇄ pocket or pocket ⇄ sibling pocket) moves
+    // money WITHIN the parent account, so the parent card total (external +
+    // pockets) must be identical before and after the transfer.
+    await expectAccountBalance(page, accountName, expected);
   }
 );

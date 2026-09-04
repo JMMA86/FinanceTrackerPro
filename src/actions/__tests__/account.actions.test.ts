@@ -62,6 +62,7 @@ const mockGetTransactionRepository = vi.mocked(getTransactionRepository);
 
 const USER_ID = 'cuser000000000000000001';
 const ACCOUNT_ID = 'cacct000000000000000001';
+const PARENT_ID = 'cacct000000000000000099';
 const IDEM_KEY = '550e8400-e29b-41d4-a716-446655440000';
 
 function makeSession() {
@@ -277,19 +278,110 @@ describe('account.actions.ts', () => {
       );
     });
 
-    it('creates opening transaction for POCKET with positive balance', async () => {
+    it('returns ValidationError for POCKET with positive initial balance', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'POCKET', parentAccountId: PARENT_ID, initialBalanceCents: 25_000 })
+      );
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('returns ValidationError for POCKET without parentAccountId', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      const result = await createBankAccount(makeCreateInput({ type: 'POCKET' }));
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('returns ValidationError for NON-POCKET with parentAccountId', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'SAVINGS', parentAccountId: PARENT_ID })
+      );
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('returns UnauthorizedError when the pocket parent belongs to another user', async () => {
       mockGetSession.mockResolvedValue(makeSession());
       mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
-      mockAccount.findUnique.mockResolvedValue(null);
-      mockAccount.create.mockResolvedValue(
-        makeAccountRow({ type: 'POCKET', balanceCents: 25_000 })
+      // First findUnique is the idempotency pre-check (null), second is the parent lookup
+      mockAccount.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(
+          makeAccountRow({ id: PARENT_ID, userId: 'cother00000000000000001' })
+        );
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'POCKET', parentAccountId: PARENT_ID })
       );
-      await createBankAccount(makeCreateInput({ type: 'POCKET', initialBalanceCents: 25_000 }));
-      expect(mockTransaction.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ type: 'INCOME', amountCents: 25_000 }),
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('returns ValidationError when the pocket parent is itself a pocket (nested pockets)', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(
+          makeAccountRow({ id: PARENT_ID, type: 'POCKET', parentAccountId: ACCOUNT_ID })
+        );
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'POCKET', parentAccountId: PARENT_ID })
+      );
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('returns CurrencyMismatchError when the pocket parent currency differs', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeAccountRow({ id: PARENT_ID, currency: 'USD' }));
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'POCKET', parentAccountId: PARENT_ID, currency: 'COP' })
+      );
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('CURRENCY_MISMATCH');
+      expect(mockAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a valid POCKET linked to its parent without an opening transaction', async () => {
+      mockGetSession.mockResolvedValue(makeSession());
+      mockUser.findUnique.mockResolvedValue({ id: USER_ID, language: 'SPANISH' } as never);
+      mockAccount.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeAccountRow({ id: PARENT_ID, type: 'SAVINGS' }));
+      mockAccount.create.mockResolvedValue(
+        makeAccountRow({
+          id: 'cacct000000000000000101',
+          type: 'POCKET',
+          parentAccountId: PARENT_ID,
+          balanceCents: 0,
         })
       );
+      const result = await createBankAccount(
+        makeCreateInput({ type: 'POCKET', parentAccountId: PARENT_ID, initialBalanceCents: 0 })
+      );
+      expect(result.success).toBe(true);
+      expect(mockAccount.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'POCKET',
+            parentAccountId: PARENT_ID,
+            balanceCents: 0,
+          }),
+        })
+      );
+      // A pocket starts at zero → no opening INCOME transaction
+      expect(mockTransaction.create).not.toHaveBeenCalled();
     });
 
     it('is idempotent: same idempotencyKey returns wasIdempotent=true and no duplicate opening transaction', async () => {

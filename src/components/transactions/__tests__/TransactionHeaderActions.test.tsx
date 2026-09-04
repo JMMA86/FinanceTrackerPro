@@ -1,6 +1,7 @@
 /**
  * TransactionHeaderActions Component Tests
- * Tests Transfer button visibility based on account count and modal wiring
+ * Tests Transfer button visibility based on the pocket transfer contract
+ * (hasAnyValidPair) and modal wiring
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -41,7 +42,7 @@ vi.mock('@/lib/i18n', () => ({
 }));
 
 // The heavy modal implementations are mocked so this suite stays focused on
-// the header's button visibility and the TransferModal wiring (open + userId).
+// the header's button visibility and the TransferModal wiring (open + userId + locale).
 const mockTransferModal = vi.fn();
 vi.mock('@/components/transactions/TransferModal', () => ({
   TransferModal: (props: {
@@ -50,6 +51,7 @@ vi.mock('@/components/transactions/TransferModal', () => ({
     userId: string;
     dictionary: Record<string, unknown>;
     onClose: () => void;
+    locale?: string;
   }) => {
     mockTransferModal(props);
     return <div data-testid="transfer-modal" data-open={String(props.open)} />;
@@ -98,6 +100,7 @@ const renderHeader = (overrides: Record<string, unknown> = {}) =>
       hasAccounts
       lang="es"
       userId="user-1"
+      locale="es-CO"
       {...overrides}
     />
   );
@@ -111,7 +114,7 @@ describe('TransactionHeaderActions', () => {
     vi.clearAllMocks();
   });
 
-  it('should render the Transfer button when there are two or more accounts', () => {
+  it('should render the Transfer button when there is at least one valid transfer pair', () => {
     renderHeader();
 
     expect(screen.getByRole('button', { name: 'Transferir' })).toBeInTheDocument();
@@ -123,7 +126,36 @@ describe('TransactionHeaderActions', () => {
     expect(screen.queryByRole('button', { name: 'Transferir' })).not.toBeInTheDocument();
   });
 
-  it('should open the transfer modal with the userId prop when Transfer is clicked', async () => {
+  it('should NOT render the Transfer button when only pockets without a valid parent exist', () => {
+    const orphanPocket = {
+      id: 'pocket-1',
+      name: 'Orphan Pocket',
+      currency: 'USD',
+      type: 'POCKET',
+      parentAccountId: null,
+      balanceCents: 0,
+    };
+    renderHeader({ accounts: [orphanPocket, mockAccounts[1]] });
+
+    expect(screen.queryByRole('button', { name: 'Transferir' })).not.toBeInTheDocument();
+  });
+
+  it('should NOT render the Transfer button when all pairs are invalid pockets of another account', () => {
+    const pocket = {
+      id: 'pocket-1',
+      name: 'Travel Pocket',
+      currency: 'USD',
+      type: 'POCKET',
+      parentAccountId: 'acc-2',
+      balanceCents: 1000,
+    };
+    // acc-1 cannot transfer to acc-2's pocket and vice versa
+    renderHeader({ accounts: [mockAccounts[0], pocket] });
+
+    expect(screen.queryByRole('button', { name: 'Transferir' })).not.toBeInTheDocument();
+  });
+
+  it('should open the transfer modal with the userId and locale props when Transfer is clicked', async () => {
     const user = userEvent.setup();
     renderHeader();
 
@@ -132,9 +164,9 @@ describe('TransactionHeaderActions', () => {
     const transferModal = screen.getByTestId('transfer-modal');
     expect(transferModal).toHaveAttribute('data-open', 'true');
 
-    // The page (server component) passes the session userId down to the modal
+    // The page (server component) passes the session userId and locale down to the modal
     expect(mockTransferModal).toHaveBeenCalledWith(
-      expect.objectContaining({ open: true, userId: 'user-1' })
+      expect.objectContaining({ open: true, userId: 'user-1', locale: 'es-CO' })
     );
   });
 });

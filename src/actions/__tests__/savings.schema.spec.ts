@@ -245,6 +245,7 @@ describe('ContributeToGoalSchema', () => {
     goalId: VALID_CUID,
     amountCents: 50000,
     currency: 'COP',
+    sourceAccountId: VALID_CUID,
     idempotencyKey: VALID_UUID,
   };
 
@@ -253,17 +254,22 @@ describe('ContributeToGoalSchema', () => {
     expect(result.goalId).toBe(VALID_CUID);
     expect(result.amountCents).toBe(50000);
     expect(result.currency).toBe('COP');
+    expect(result.sourceAccountId).toBe(VALID_CUID);
     expect(result.idempotencyKey).toBe(VALID_UUID);
   });
 
-  it('should accept input with optional sourceAccountId and notes', () => {
+  it('should accept input with notes', () => {
     const result = ContributeToGoalSchema.parse({
       ...validInput,
-      sourceAccountId: VALID_CUID,
       notes: 'Monthly contribution',
     });
     expect(result.sourceAccountId).toBe(VALID_CUID);
     expect(result.notes).toBe('Monthly contribution');
+  });
+
+  it('should reject missing sourceAccountId', () => {
+    const { sourceAccountId: _, ...withoutSource } = validInput;
+    expect(() => ContributeToGoalSchema.parse(withoutSource)).toThrow();
   });
 
   it('should reject negative amountCents', () => {

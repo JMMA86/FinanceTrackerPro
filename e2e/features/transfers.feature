@@ -119,3 +119,62 @@ Feature: Transferencias entre cuentas
     And las opciones del campo destino deben incluir "Bancolombia Ahorros"
     When hace clic en "Cancelar" en el modal de transferencia
     Then el modal de transferencia debe cerrarse
+
+  # ============================================================================
+  # TRANSFERENCIAS CON BOLSILLOS (usuario pockets@e2e...)
+  # ============================================================================
+
+  @transfers @pockets
+  Scenario: Transferencias: cuenta a su bolsillo mantiene el saldo total de la cuenta
+    Given que el usuario de bolsillos ha iniciado sesión
+    And guarda los saldos totales de las cuentas de bolsillo
+    And navega a la página de transacciones
+    When abre el modal de transferencia
+    And selecciona "Cuenta Principal" como cuenta origen
+    And selecciona "Bolsillo Viajes" como cuenta destino
+    And ingresa "50000" en el campo valor de transferencia
+    And ingresa una descripción única de transferencia "Cuenta a bolsillo E2E"
+    And envía la transferencia
+    Then el modal de transferencia debe cerrarse
+    And la fila de transferencia enviada debe aparecer con monto negativo
+    And la fila de transferencia recibida debe aparecer con monto positivo
+    When navega a la página de cuentas
+    Then la cuenta "Cuenta Principal" debe mostrar el MISMO saldo total tras la transferencia a bolsillo
+
+  @transfers @pockets
+  Scenario: Transferencias: bolsillo a su cuenta mantiene el saldo total de la cuenta
+    Given que el usuario de bolsillos ha iniciado sesión
+    And guarda los saldos totales de las cuentas de bolsillo
+    And navega a la página de transacciones
+    When abre el modal de transferencia
+    And selecciona "Bolsillo Viajes" como cuenta origen
+    And selecciona "Cuenta Principal" como cuenta destino
+    And ingresa "30000" en el campo valor de transferencia
+    And envía la transferencia
+    Then el modal de transferencia debe cerrarse
+    When navega a la página de cuentas
+    Then la cuenta "Cuenta Principal" debe mostrar el MISMO saldo total tras la transferencia a bolsillo
+
+  @transfers @pockets
+  Scenario: Transferencias: entre bolsillos hermanos mantiene el saldo total de la cuenta
+    Given que el usuario de bolsillos ha iniciado sesión
+    And guarda los saldos totales de las cuentas de bolsillo
+    And navega a la página de transacciones
+    When abre el modal de transferencia
+    And selecciona "Bolsillo Viajes" como cuenta origen
+    And selecciona "Bolsillo Mercado" como cuenta destino
+    And ingresa "20000" en el campo valor de transferencia
+    And envía la transferencia
+    Then el modal de transferencia debe cerrarse
+    When navega a la página de cuentas
+    Then la cuenta "Cuenta Principal" debe mostrar el MISMO saldo total tras la transferencia a bolsillo
+
+  @transfers @pockets
+  Scenario: Transferencias: un bolsillo no puede transferir a una cuenta externa
+    Given que el usuario de bolsillos ha iniciado sesión
+    And navega a la página de transacciones
+    When abre el modal de transferencia
+    And selecciona "Bolsillo Viajes" como cuenta origen
+    Then las opciones del campo destino no deben incluir "Cuenta Externa"
+    When hace clic en "Cancelar" en el modal de transferencia
+    Then el modal de transferencia debe cerrarse

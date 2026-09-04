@@ -356,6 +356,177 @@ async function main() {
   console.log('✓ Savings user seeded with bank account, savings account, and 5 goals');
 
   // ============================================================================
+  // Pockets E2E user (transfers.feature @pockets scenarios)
+  // Isolated from the transactions user so balance assertions never collide.
+  // Accounts (COP):
+  //   - "Cuenta Principal" (CHECKING) balanceCents =  700.000  (external)
+  //   - "Bolsillo Viajes"  (POCKET)   balanceCents =  200.000  (parent = Cuenta Principal)
+  //   - "Bolsillo Mercado" (POCKET)   balanceCents =  100.000  (parent = Cuenta Principal)
+  //   - "Cuenta Externa"   (SAVINGS)  balanceCents =  500.000
+  // Parent card displays external + pockets = 700.000 + 200.000 + 100.000 = 1.000.000.
+  // ============================================================================
+  const pocketsUserEmail = process.env.E2E_POCKETS_USER || 'pockets@e2e.financetrackerpro.com';
+  const pocketsUser = await upsertUserAndGet(pocketsUserEmail, 'Pockets E2E User');
+
+  const pocketsPrincipal = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-pockets-principal-account' },
+    create: {
+      idempotencyKey: 'e2e-pockets-principal-account',
+      userId: pocketsUser.id,
+      name: 'Cuenta Principal',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 700000,
+      createdBy: pocketsUser.id,
+      lastModifiedBy: pocketsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const pocketsViajes = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-pockets-viajes-account' },
+    create: {
+      idempotencyKey: 'e2e-pockets-viajes-account',
+      userId: pocketsUser.id,
+      name: 'Bolsillo Viajes',
+      type: 'POCKET',
+      currency: 'COP',
+      balanceCents: 200000,
+      parentAccountId: pocketsPrincipal.id,
+      createdBy: pocketsUser.id,
+      lastModifiedBy: pocketsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const pocketsMercado = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-pockets-mercado-account' },
+    create: {
+      idempotencyKey: 'e2e-pockets-mercado-account',
+      userId: pocketsUser.id,
+      name: 'Bolsillo Mercado',
+      type: 'POCKET',
+      currency: 'COP',
+      balanceCents: 100000,
+      parentAccountId: pocketsPrincipal.id,
+      createdBy: pocketsUser.id,
+      lastModifiedBy: pocketsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const pocketsExternal = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-pockets-external-account' },
+    create: {
+      idempotencyKey: 'e2e-pockets-external-account',
+      userId: pocketsUser.id,
+      name: 'Cuenta Externa',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 500000,
+      createdBy: pocketsUser.id,
+      lastModifiedBy: pocketsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Transactions that fund those balances (idempotency-guarded so re-seeding is
+  // a no-op). Double-entry transfers use a FIXED transferId to link the pair.
+  const pocketsTxs: Array<{
+    idempotencyKey: string;
+    accountId: string;
+    type: 'INCOME' | 'TRANSFER_OUT' | 'TRANSFER_IN';
+    amountCents: number;
+    description: string;
+    transferId?: string;
+    transferToAccountId?: string;
+    transferFromAccountId?: string;
+  }> = [
+    {
+      idempotencyKey: 'e2e-pockets-principal-opening',
+      accountId: pocketsPrincipal.id,
+      type: 'INCOME',
+      amountCents: 1000000,
+      description: 'Apertura Cuenta Principal',
+    },
+    {
+      idempotencyKey: 'e2e-pockets-viajes-out',
+      accountId: pocketsPrincipal.id,
+      type: 'TRANSFER_OUT',
+      amountCents: -200000,
+      description: 'Alimentar Bolsillo Viajes',
+      transferId: 'e2e-pockets-transfer-viajes',
+      transferToAccountId: pocketsViajes.id,
+    },
+    {
+      idempotencyKey: 'e2e-pockets-viajes-in',
+      accountId: pocketsViajes.id,
+      type: 'TRANSFER_IN',
+      amountCents: 200000,
+      description: 'Alimentar Bolsillo Viajes',
+      transferId: 'e2e-pockets-transfer-viajes',
+      transferFromAccountId: pocketsPrincipal.id,
+    },
+    {
+      idempotencyKey: 'e2e-pockets-mercado-out',
+      accountId: pocketsPrincipal.id,
+      type: 'TRANSFER_OUT',
+      amountCents: -100000,
+      description: 'Alimentar Bolsillo Mercado',
+      transferId: 'e2e-pockets-transfer-mercado',
+      transferToAccountId: pocketsMercado.id,
+    },
+    {
+      idempotencyKey: 'e2e-pockets-mercado-in',
+      accountId: pocketsMercado.id,
+      type: 'TRANSFER_IN',
+      amountCents: 100000,
+      description: 'Alimentar Bolsillo Mercado',
+      transferId: 'e2e-pockets-transfer-mercado',
+      transferFromAccountId: pocketsPrincipal.id,
+    },
+    {
+      idempotencyKey: 'e2e-pockets-external-opening',
+      accountId: pocketsExternal.id,
+      type: 'INCOME',
+      amountCents: 500000,
+      description: 'Apertura Cuenta Externa',
+    },
+  ];
+
+  for (const tx of pocketsTxs) {
+    const exists = await prisma.transaction.findFirst({
+      where: { idempotencyKey: tx.idempotencyKey },
+    });
+    if (!exists) {
+      await prisma.transaction.create({
+        data: {
+          idempotencyKey: tx.idempotencyKey,
+          userId: pocketsUser.id,
+          accountId: tx.accountId,
+          type: tx.type,
+          amountCents: tx.amountCents,
+          currency: 'COP',
+          description: tx.description,
+          date: new Date('2026-01-15'),
+          transferId: tx.transferId,
+          transferToAccountId: tx.transferToAccountId,
+          transferFromAccountId: tx.transferFromAccountId,
+          createdBy: pocketsUser.id,
+          lastModifiedBy: pocketsUser.id,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  console.log('✓ Pockets user seeded with parent account, 2 pockets, and external account');
+
+  // ============================================================================
   // System categories (shared, userId: null)
   // ============================================================================
   const systemCategories = [

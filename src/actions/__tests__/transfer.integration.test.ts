@@ -81,6 +81,8 @@ vi.mock('@/lib/repositories', () => ({
 const TEST_DB_URL = process.env.DATABASE_URL!;
 const TEST_USER_ID = 'test-user-integration-' + Date.now();
 const TEST_USER_ID_2 = 'test-user-integration-2-' + Date.now();
+// Pocket tests need a CUID userId (TransferSchema validates /^c[a-z0-9]{20,}$/)
+const POCKET_USER_ID = 'clpocketuser00000000000001';
 
 let pool: Pool;
 let prisma: PrismaClient;
@@ -119,25 +121,33 @@ describe('Transfer Integration Tests', () => {
 
   beforeEach(async () => {
     await prisma.transaction.deleteMany({
-      where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
+      where: {
+        OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }, { userId: POCKET_USER_ID }],
+      },
     });
     await prisma.account.deleteMany({
-      where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
+      where: {
+        OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }, { userId: POCKET_USER_ID }],
+      },
     });
     await prisma.user.deleteMany({
-      where: { OR: [{ id: TEST_USER_ID }, { id: TEST_USER_ID_2 }] },
+      where: { OR: [{ id: TEST_USER_ID }, { id: TEST_USER_ID_2 }, { id: POCKET_USER_ID }] },
     });
   });
 
   afterEach(async () => {
     await prisma.transaction.deleteMany({
-      where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
+      where: {
+        OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }, { userId: POCKET_USER_ID }],
+      },
     });
     await prisma.account.deleteMany({
-      where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
+      where: {
+        OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }, { userId: POCKET_USER_ID }],
+      },
     });
     await prisma.user.deleteMany({
-      where: { OR: [{ id: TEST_USER_ID }, { id: TEST_USER_ID_2 }] },
+      where: { OR: [{ id: TEST_USER_ID }, { id: TEST_USER_ID_2 }, { id: POCKET_USER_ID }] },
     });
   });
 
@@ -506,6 +516,217 @@ describe('Transfer Integration Tests', () => {
         where: { id: fromAccount.id },
       });
       expect(updatedFromAccount?.balanceCents).toBe(10000);
+    });
+  });
+
+  describe('Pocket Transfer Rules', () => {
+    // Creates a CUID user plus a parent account, two pockets under it and an
+    // external account. All balances are cached on the accounts; getTrueBalance
+    // is mocked to a high value so the balance check never blocks the flow.
+    async function setupPocketHierarchy() {
+      await prisma.user.create({
+        data: {
+          id: POCKET_USER_ID,
+          email: `pocket-${Date.now()}@example.com`,
+          name: 'Pocket User',
+          passwordHash: 'hashed_test_password',
+          language: Language.SPANISH,
+          theme: Theme.LIGHT,
+          baseCurrency: Currency.USD,
+          isActive: true,
+        },
+      });
+
+      const parent = await prisma.account.create({
+        data: {
+          userId: POCKET_USER_ID,
+          name: 'Parent SAVINGS',
+          type: AccountType.SAVINGS,
+          balanceCents: 10000,
+          currency: Currency.USD,
+          isActive: true,
+          createdBy: POCKET_USER_ID,
+          lastModifiedBy: POCKET_USER_ID,
+        },
+      });
+
+      const pocket1 = await prisma.account.create({
+        data: {
+          userId: POCKET_USER_ID,
+          name: 'Pocket 1',
+          type: AccountType.POCKET,
+          balanceCents: 5000,
+          currency: Currency.USD,
+          parentAccountId: parent.id,
+          isActive: true,
+          createdBy: POCKET_USER_ID,
+          lastModifiedBy: POCKET_USER_ID,
+        },
+      });
+
+      const pocket2 = await prisma.account.create({
+        data: {
+          userId: POCKET_USER_ID,
+          name: 'Pocket 2',
+          type: AccountType.POCKET,
+          balanceCents: 3000,
+          currency: Currency.USD,
+          parentAccountId: parent.id,
+          isActive: true,
+          createdBy: POCKET_USER_ID,
+          lastModifiedBy: POCKET_USER_ID,
+        },
+      });
+
+      const external = await prisma.account.create({
+        data: {
+          userId: POCKET_USER_ID,
+          name: 'External Account',
+          type: AccountType.CHECKING,
+          balanceCents: 7000,
+          currency: Currency.USD,
+          isActive: true,
+          createdBy: POCKET_USER_ID,
+          lastModifiedBy: POCKET_USER_ID,
+        },
+      });
+
+      return { parent, pocket1, pocket2, external };
+    }
+
+    function buildInput(overrides: Record<string, unknown>) {
+      return {
+        userId: POCKET_USER_ID,
+        idempotencyKey: crypto.randomUUID(),
+        amountCents: 2000,
+        currency: 'USD',
+        ...overrides,
+      };
+    }
+
+    it('allows account → its pocket and creates paired TRANSFER_OUT/TRANSFER_IN', async () => {
+      const { parent, pocket1 } = await setupPocketHierarchy();
+      mockGetSession.mockResolvedValue({
+        userId: POCKET_USER_ID,
+        email: 'pocket@test.com',
+        name: 'Pocket User',
+      });
+
+      const result = await transferBetweenAccounts(
+        buildInput({ fromAccountId: parent.id, toAccountId: pocket1.id })
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data?.transferId).toBeDefined();
+
+      const transferId = result.data!.transferId;
+      const txs = await prisma.transaction.findMany({ where: { transferId } });
+      expect(txs).toHaveLength(2);
+
+      const debit = txs.find((t) => t.type === 'TRANSFER_OUT');
+      const credit = txs.find((t) => t.type === 'TRANSFER_IN');
+      expect(debit?.accountId).toBe(parent.id);
+      expect(debit?.transferToAccountId).toBe(pocket1.id);
+      expect(debit?.amountCents).toBe(-2000);
+      expect(credit?.accountId).toBe(pocket1.id);
+      expect(credit?.transferFromAccountId).toBe(parent.id);
+      expect(credit?.amountCents).toBe(2000);
+
+      // Cached balances move from parent to pocket
+      const updatedParent = await prisma.account.findUnique({ where: { id: parent.id } });
+      const updatedPocket = await prisma.account.findUnique({ where: { id: pocket1.id } });
+      expect(updatedParent?.balanceCents).toBe(8000);
+      expect(updatedPocket?.balanceCents).toBe(7000);
+    });
+
+    it('allows pocket → its parent account', async () => {
+      const { parent, pocket1 } = await setupPocketHierarchy();
+      mockGetSession.mockResolvedValue({
+        userId: POCKET_USER_ID,
+        email: 'pocket@test.com',
+        name: 'Pocket User',
+      });
+
+      const result = await transferBetweenAccounts(
+        buildInput({ fromAccountId: pocket1.id, toAccountId: parent.id, amountCents: 1500 })
+      );
+
+      expect(result.success).toBe(true);
+
+      const txs = await prisma.transaction.findMany({
+        where: { transferId: result.data!.transferId },
+      });
+      expect(txs).toHaveLength(2);
+      const debit = txs.find((t) => t.type === 'TRANSFER_OUT');
+      expect(debit?.accountId).toBe(pocket1.id);
+      expect(debit?.transferToAccountId).toBe(parent.id);
+      expect(debit?.amountCents).toBe(-1500);
+    });
+
+    it('allows pocket → sibling pocket', async () => {
+      const { pocket1, pocket2 } = await setupPocketHierarchy();
+      mockGetSession.mockResolvedValue({
+        userId: POCKET_USER_ID,
+        email: 'pocket@test.com',
+        name: 'Pocket User',
+      });
+
+      const result = await transferBetweenAccounts(
+        buildInput({ fromAccountId: pocket1.id, toAccountId: pocket2.id, amountCents: 1000 })
+      );
+
+      expect(result.success).toBe(true);
+
+      const txs = await prisma.transaction.findMany({
+        where: { transferId: result.data!.transferId },
+      });
+      expect(txs).toHaveLength(2);
+      const credit = txs.find((t) => t.type === 'TRANSFER_IN');
+      expect(credit?.accountId).toBe(pocket2.id);
+      expect(credit?.transferFromAccountId).toBe(pocket1.id);
+      expect(credit?.amountCents).toBe(1000);
+    });
+
+    it('rejects pocket → external account with POCKET_TRANSFER_NOT_ALLOWED', async () => {
+      const { pocket1, external } = await setupPocketHierarchy();
+      mockGetSession.mockResolvedValue({
+        userId: POCKET_USER_ID,
+        email: 'pocket@test.com',
+        name: 'Pocket User',
+      });
+
+      const result = await transferBetweenAccounts(
+        buildInput({ fromAccountId: pocket1.id, toAccountId: external.id })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
+
+      const transactions = await prisma.transaction.findMany({
+        where: { userId: POCKET_USER_ID },
+      });
+      expect(transactions).toHaveLength(0);
+    });
+
+    it('rejects account → pocket of another account with POCKET_TRANSFER_NOT_ALLOWED', async () => {
+      const { external, pocket1 } = await setupPocketHierarchy();
+      mockGetSession.mockResolvedValue({
+        userId: POCKET_USER_ID,
+        email: 'pocket@test.com',
+        name: 'Pocket User',
+      });
+
+      const result = await transferBetweenAccounts(
+        buildInput({ fromAccountId: external.id, toAccountId: pocket1.id })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
+
+      const transactions = await prisma.transaction.findMany({
+        where: { userId: POCKET_USER_ID },
+      });
+      expect(transactions).toHaveLength(0);
     });
   });
 });

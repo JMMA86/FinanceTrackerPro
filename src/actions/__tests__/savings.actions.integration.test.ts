@@ -648,6 +648,7 @@ describe('Savings Actions Integration', () => {
 
   describe('contributeToGoal', () => {
     it('should create a contribution and update currentAmountCents', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Contribution Test',
         targetAmountCents: 100000,
@@ -658,6 +659,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 25000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: genUUID(),
       });
 
@@ -670,6 +672,7 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should be idempotent (same idempotencyKey returns wasIdempotent: true)', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Idempotent Goal',
         targetAmountCents: 100000,
@@ -680,6 +683,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 10000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: key,
       });
       expect(result1.success).toBe(true);
@@ -689,6 +693,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 10000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: key,
       });
       expect(result2.success).toBe(true);
@@ -702,6 +707,7 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should auto-complete goal when balance reaches target', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Complete Me',
         targetAmountCents: 50000,
@@ -712,6 +718,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 10000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: genUUID(),
       });
 
@@ -722,7 +729,8 @@ describe('Savings Actions Integration', () => {
       expect(updatedGoal!.currentAmountCents).toBe(50000);
     });
 
-    it('should reject contribution to a completed goal', async () => {
+    it('should reject contribution to a completed goal with GOAL_COMPLETED', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Already Complete',
         targetAmountCents: 50000,
@@ -734,14 +742,16 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 5000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: genUUID(),
       });
 
       expect(result.success).toBe(false);
+      expect(result.code).toBe('GOAL_COMPLETED');
       expect(result.error).toContain('Cannot contribute');
     });
 
-    it('should succeed without sourceAccountId', async () => {
+    it('should reject missing sourceAccountId with VALIDATION_ERROR', async () => {
       const goal = await createSavingsGoal({
         name: 'No Source Account',
         targetAmountCents: 100000,
@@ -754,8 +764,8 @@ describe('Savings Actions Integration', () => {
         idempotencyKey: genUUID(),
       });
 
-      expect(result.success).toBe(true);
-      expect(result.data!.contribution.amountCents).toBe(15000);
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
     });
 
     it('should contribute with sourceAccountId and verify true balance', async () => {
@@ -800,7 +810,85 @@ describe('Savings Actions Integration', () => {
       expect(result.code).toBe('INSUFFICIENT_FUNDS');
     });
 
+    it('should create a linked EXPENSE transaction and reduce the source account balance', async () => {
+      const bankAccount = await createBankAccount({ balanceCents: 500000 });
+      const goal = await createSavingsGoal({
+        name: 'Linked Transaction Goal',
+        targetAmountCents: 100000,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 25000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(true);
+
+      // The contribution must be linked to a real EXPENSE transaction
+      const contribution = await prisma.savingsContribution.findUnique({
+        where: { id: result.data!.contribution.id },
+      });
+      expect(contribution?.transactionId).not.toBeNull();
+
+      const tx = await prisma.transaction.findUnique({
+        where: { id: contribution!.transactionId! },
+      });
+      expect(tx).toBeDefined();
+      expect(tx!.accountId).toBe(bankAccount.id);
+      expect(tx!.type).toBe('EXPENSE');
+      expect(tx!.amountCents).toBe(-25000);
+      expect(tx!.currency).toBe('COP');
+
+      // The source account cached balance must be reduced
+      const updatedAccount = await prisma.account.findUnique({ where: { id: bankAccount.id } });
+      expect(updatedAccount!.balanceCents).toBe(500000 - 25000);
+    });
+
+    it('should reject when the source account currency differs from the contribution', async () => {
+      const usdAccount = await createBankAccount({ currency: Currency.USD });
+      const goal = await createSavingsGoal({
+        name: 'Currency Mismatch Source',
+        targetAmountCents: 100000,
+        currency: Currency.COP,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: usdAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('CURRENCY_MISMATCH');
+    });
+
+    it('should reject when the goal currency differs from the contribution', async () => {
+      const copAccount = await createBankAccount({ currency: Currency.COP });
+      const goal = await createSavingsGoal({
+        name: 'Currency Mismatch Goal',
+        targetAmountCents: 100000,
+        currency: Currency.USD,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 10000,
+        currency: 'USD',
+        sourceAccountId: copAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('CURRENCY_MISMATCH');
+    });
+
     it('should record audit fields on contribution', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Audit Trail Goal',
         targetAmountCents: 100000,
@@ -811,6 +899,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 10000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: key,
       });
 
@@ -824,6 +913,7 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should support optional notes field', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Notes Test',
         targetAmountCents: 100000,
@@ -833,6 +923,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 20000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         notes: 'Monthly contribution for March',
         idempotencyKey: genUUID(),
       });
@@ -842,6 +933,7 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should accept multiple contributions cumulatively', async () => {
+      const bankAccount = await createBankAccount();
       const goal = await createSavingsGoal({
         name: 'Cumulative Goal',
         targetAmountCents: 100000,
@@ -851,6 +943,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 25000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: genUUID(),
       });
 
@@ -858,6 +951,7 @@ describe('Savings Actions Integration', () => {
         goalId: goal.id,
         amountCents: 25000,
         currency: 'COP',
+        sourceAccountId: bankAccount.id,
         idempotencyKey: genUUID(),
       });
 

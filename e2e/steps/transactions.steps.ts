@@ -8,6 +8,7 @@ const { Given, When, Then } = createBdd();
 import { expect, type Page, type Locator } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { getStoredAccountName } from '../helpers/unique';
+import { selectAccount } from '../helpers/select';
 
 // ============================================================================
 // CONSTANTS
@@ -275,19 +276,9 @@ When('selecciona {string} como tipo', async ({ page }, typeName: string) => {
 });
 
 When('selecciona {string} como cuenta', async ({ page }, accountName: string) => {
-  const dialog = getOpenDialog(page);
-  // Account selection combobox
-  const accountCombo = dialog.getByRole('combobox', { name: 'Cuenta' });
-  // Match by partial label text — find the option that contains the account name
-  const options = await accountCombo.locator('option').allTextContents();
-  const matchingOption = options.find((o) => o.toLowerCase().includes(accountName.toLowerCase()));
-  if (matchingOption) {
-    await accountCombo.selectOption({ label: matchingOption });
-  } else {
-    // Fallback: try by value
-    await accountCombo.selectOption(accountName);
-  }
-  await page.waitForTimeout(200);
+  // The account selector is a custom AccountSelect (combobox + listbox + options),
+  // not a native <select>. The combobox accessible name is "Cuenta" (label).
+  await selectAccount(page, 'Cuenta', accountName);
 });
 
 /**
@@ -423,6 +414,25 @@ Then('debe ver el texto de paginación', async ({ page }) => {
   const paginationText = page.locator('p').filter({ hasText: /transacciones/ });
   await expect(paginationText.first()).toBeVisible({ timeout: 5000 });
 });
+
+Then(
+  'el paginador muestra la página 2 con al menos {int} transacciones',
+  async ({ page }, minTotal: number) => {
+    // Robustness against cross-feature parallelism: the transfers feature reuses
+    // the shared transactions user and may add double-entry rows (TRANSFER_OUT +
+    // TRANSFER_IN) BEFORE this scenario runs, so the exact "de 20" count is racy.
+    // Assert the page-2 range "11–20 de N" with N >= the seeded minimum instead.
+    const paragraph = page
+      .locator('p')
+      .filter({ hasText: /transacciones/ })
+      .first();
+    await expect(paragraph).toBeVisible({ timeout: 5000 });
+    const text = (await paragraph.textContent()) ?? '';
+    const match = text.match(/11\s*[–—-]\s*20\s*de\s+(\d+)\s+transacciones/);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeGreaterThanOrEqual(minTotal);
+  }
+);
 
 Then('debe ver el texto {string}', async ({ page }, expectedText: string) => {
   await expect(page.getByText(expectedText, { exact: false }).first()).toBeVisible({
@@ -688,17 +698,8 @@ Then('el diálogo de eliminación debe cerrarse', async ({ page }) => {
 
 When('selecciona la cuenta recién creada como cuenta', async ({ page }) => {
   const accountName = await getStoredAccountName(page);
-  const dialog = getOpenDialog(page);
-  const accountCombo = dialog.getByRole('combobox', { name: 'Cuenta' });
-  const options = await accountCombo.locator('option').allTextContents();
-  const matchingOption = options.find((o) => o.toLowerCase().includes(accountName.toLowerCase()));
-  if (!matchingOption) {
-    throw new Error(
-      `Account "${accountName}" not found in the create-transaction combobox. Options: ${options.join(' | ')}`
-    );
-  }
-  await accountCombo.selectOption({ label: matchingOption });
-  await page.waitForTimeout(200);
+  // Custom AccountSelect dropdown — select the unique account by partial name.
+  await selectAccount(page, 'Cuenta', accountName);
 });
 
 /**

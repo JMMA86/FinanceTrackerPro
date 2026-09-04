@@ -108,6 +108,7 @@ function makeAccount(overrides: Record<string, unknown> = {}) {
     type: 'SAVINGS',
     creditLimitCents: null,
     interestRateEA: null,
+    parentAccountId: null,
     ...overrides,
   } as unknown as Awaited<ReturnType<typeof prisma.account.findMany>>[number];
 }
@@ -129,6 +130,9 @@ function makeTxRow(overrides: Record<string, unknown> = {}) {
     currency: 'COP',
     type: 'INCOME',
     date: new Date('2024-06-10T00:00:00.000Z'),
+    accountId: 'acc-1',
+    transferToAccountId: null,
+    transferFromAccountId: null,
     ...overrides,
   } as unknown as Awaited<ReturnType<typeof prisma.transaction.findMany>>[number];
 }
@@ -497,6 +501,149 @@ describe('dashboard.actions.ts', () => {
       const result = await getDashboardMetricsByUser(USER_ID, 'en');
 
       expect(result.maxSpendable.amount).toBe(0);
+    });
+  });
+
+  // ── Internal transfer exclusion (pocket-aware dashboard) ─────────────────
+
+  describe('internal transfer exclusion', () => {
+    const start = new Date('2024-06-01T00:00:00.000Z');
+    const startLast = new Date('2024-05-01T00:00:00.000Z');
+    const endLast = new Date('2024-05-31T23:59:59.999Z');
+    const hierarchy = {
+      'parent-1': { id: 'parent-1', type: 'CHECKING', parentAccountId: null },
+      'pocket-1': { id: 'pocket-1', type: 'POCKET', parentAccountId: 'parent-1' },
+      'pocket-2': { id: 'pocket-2', type: 'POCKET', parentAccountId: 'parent-1' },
+      'acc-a': { id: 'acc-a', type: 'CHECKING', parentAccountId: null },
+      'acc-b': { id: 'acc-b', type: 'SAVINGS', parentAccountId: null },
+    };
+
+    it('marks a TRANSFER_IN from a parent into its pocket as an internal transfer', async () => {
+      const { isInternalTransfer } = await import('@/lib/dashboard-metrics');
+      expect(isInternalTransfer('pocket-1', 'parent-1', hierarchy)).toBe(true);
+    });
+
+    it('marks a TRANSFER_OUT from an account into its pocket as an internal transfer', async () => {
+      const { isInternalTransfer } = await import('@/lib/dashboard-metrics');
+      expect(isInternalTransfer('parent-1', 'pocket-1', hierarchy)).toBe(true);
+    });
+
+    it('marks a pocket-to-sibling-pocket transfer as an internal transfer', async () => {
+      const { isInternalTransfer } = await import('@/lib/dashboard-metrics');
+      expect(isInternalTransfer('pocket-1', 'pocket-2', hierarchy)).toBe(true);
+    });
+
+    it('does NOT mark a TRANSFER_OUT between two unrelated accounts as internal', async () => {
+      const { isInternalTransfer } = await import('@/lib/dashboard-metrics');
+      expect(isInternalTransfer('acc-a', 'acc-b', hierarchy)).toBe(false);
+    });
+
+    it('excludes an internal TRANSFER_IN (parent → pocket) from monthlyIncome', async () => {
+      const { calculateTransactionMetrics } = await import('@/lib/dashboard-metrics');
+      const tx = {
+        id: 'tx-internal-in',
+        description: null,
+        amountCents: 500_000,
+        currency: 'COP' as const,
+        type: 'TRANSFER_IN',
+        date: new Date('2024-06-10T00:00:00.000Z'),
+        accountId: 'pocket-1',
+        transferToAccountId: null,
+        transferFromAccountId: 'parent-1',
+      };
+      const result = calculateTransactionMetrics([tx], start, startLast, endLast, hierarchy);
+      expect(result.monthlyIncome).toBe(0);
+      expect(result.monthlyExpenses).toBe(0);
+    });
+
+    it('excludes an internal TRANSFER_OUT (account → its pocket) from monthlyExpenses', async () => {
+      const { calculateTransactionMetrics } = await import('@/lib/dashboard-metrics');
+      const tx = {
+        id: 'tx-internal-out',
+        description: null,
+        amountCents: -200_000,
+        currency: 'COP' as const,
+        type: 'TRANSFER_OUT',
+        date: new Date('2024-06-10T00:00:00.000Z'),
+        accountId: 'parent-1',
+        transferToAccountId: 'pocket-1',
+        transferFromAccountId: null,
+      };
+      const result = calculateTransactionMetrics([tx], start, startLast, endLast, hierarchy);
+      expect(result.monthlyExpenses).toBe(0);
+    });
+
+    it('excludes an internal pocket-to-sibling TRANSFER_OUT from monthlyExpenses', async () => {
+      const { calculateTransactionMetrics } = await import('@/lib/dashboard-metrics');
+      const tx = {
+        id: 'tx-internal-sibling',
+        description: null,
+        amountCents: -80_000,
+        currency: 'COP' as const,
+        type: 'TRANSFER_OUT',
+        date: new Date('2024-06-10T00:00:00.000Z'),
+        accountId: 'pocket-1',
+        transferToAccountId: 'pocket-2',
+        transferFromAccountId: null,
+      };
+      const result = calculateTransactionMetrics([tx], start, startLast, endLast, hierarchy);
+      expect(result.monthlyExpenses).toBe(0);
+    });
+
+    it('still counts an external TRANSFER_OUT between unrelated accounts as an expense', async () => {
+      const { calculateTransactionMetrics } = await import('@/lib/dashboard-metrics');
+      const tx = {
+        id: 'tx-external-out',
+        description: null,
+        amountCents: -150_000,
+        currency: 'COP' as const,
+        type: 'TRANSFER_OUT',
+        date: new Date('2024-06-10T00:00:00.000Z'),
+        accountId: 'acc-a',
+        transferToAccountId: 'acc-b',
+        transferFromAccountId: null,
+      };
+      const result = calculateTransactionMetrics([tx], start, startLast, endLast, hierarchy);
+      expect(result.monthlyExpenses).toBe(150_000);
+    });
+
+    it('still counts an external TRANSFER_IN as income', async () => {
+      const { calculateTransactionMetrics } = await import('@/lib/dashboard-metrics');
+      const tx = {
+        id: 'tx-external-in',
+        description: null,
+        amountCents: 300_000,
+        currency: 'COP' as const,
+        type: 'TRANSFER_IN',
+        date: new Date('2024-06-10T00:00:00.000Z'),
+        accountId: 'acc-b',
+        transferToAccountId: null,
+        transferFromAccountId: 'acc-a',
+      };
+      const result = calculateTransactionMetrics([tx], start, startLast, endLast, hierarchy);
+      expect(result.monthlyIncome).toBe(300_000);
+    });
+
+    it('keeps monthlyExpenses observable via getDashboardMetricsByUser when internal transfers are excluded', async () => {
+      mockTx.mockResolvedValue([
+        makeTxRow({
+          id: 'internal-out',
+          accountId: 'parent-1',
+          transferToAccountId: 'pocket-1',
+          amountCents: -120_000,
+          type: 'TRANSFER_OUT',
+        }),
+      ]);
+      mockAccount.mockResolvedValue([
+        makeAccount({ id: 'parent-1', type: 'CHECKING', parentAccountId: null }),
+        makeAccount({ id: 'pocket-1', type: 'POCKET', parentAccountId: 'parent-1' }),
+      ]);
+      mockGetTrueBalance.mockResolvedValue(0);
+
+      const result = await getDashboardMetricsByUser(USER_ID, 'en');
+
+      // The parent→pocket transfer is internal → excluded from expenses
+      expect(result.monthlyExpenses.amount).toBe(0);
     });
   });
 

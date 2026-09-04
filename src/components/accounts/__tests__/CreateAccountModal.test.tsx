@@ -401,7 +401,7 @@ describe('CreateAccountModal', () => {
     const dialog = container.querySelector('dialog')!;
     expect(dialog).toHaveAttribute('open');
 
-    const closeBtn = screen.getAllByLabelText('Close')[0];
+    const closeBtn = screen.getAllByLabelText('close')[0];
     fireEvent.click(closeBtn);
 
     act(() => {

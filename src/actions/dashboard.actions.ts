@@ -11,6 +11,11 @@ import { getTrueBalance } from '@/services/reconciliation.service';
 import { getMaxSpendable, getSavingsSummary } from '@/services/savings.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { formatMoney, addCents, subtractCents } from '@/lib/money';
+import {
+  calculateTransactionMetrics,
+  type TransactionData,
+  type AccountHierarchyEntry,
+} from '@/lib/dashboard-metrics';
 import Decimal from 'decimal.js';
 import { getSession } from '@/lib/auth/session';
 import type { Currency } from '@prisma/client';
@@ -84,44 +89,6 @@ interface LoanData {
   id: string;
   name: string;
   balanceCents: number;
-}
-
-interface TransactionData {
-  id: string;
-  description: string | null;
-  amountCents: number;
-  currency: Currency;
-  type: string;
-  date: Date;
-  accountId: string;
-  transferToAccountId: string | null;
-  transferFromAccountId: string | null;
-}
-
-interface AccountHierarchyEntry {
-  id: string;
-  type: string;
-  parentAccountId: string | null;
-}
-
-function isInternalTransfer(
-  fromAccountId: string,
-  toAccountId: string | null,
-  hierarchy: Record<string, AccountHierarchyEntry>
-): boolean {
-  if (!toAccountId) return false;
-  const from = hierarchy[fromAccountId];
-  const to = hierarchy[toAccountId];
-  if (!from || !to) return false;
-  if (from.type === 'POCKET') {
-    return (
-      to.id === from.parentAccountId ||
-      (to.type === 'POCKET' &&
-        to.parentAccountId === from.parentAccountId &&
-        from.parentAccountId !== null)
-    );
-  }
-  return to.type === 'POCKET' && to.parentAccountId === from.id;
 }
 
 interface FixedExpenseData {
@@ -294,46 +261,6 @@ function calculateLoanMetrics(loans: LoanData[]): number {
     }
   }
   return externalDebts;
-}
-
-/**
- * Calculate transaction metrics for income and expenses
- */
-function calculateTransactionMetrics(
-  transactions: TransactionData[],
-  startOfCurrentMonth: Date,
-  startOfLastMonth: Date,
-  endOfLastMonth: Date,
-  hierarchy: Record<string, AccountHierarchyEntry>
-): { monthlyIncome: number; monthlyExpenses: number; lastMonthExpenses: number } {
-  let monthlyIncome = 0;
-  let monthlyExpenses = 0;
-  let lastMonthExpenses = 0;
-
-  for (const tx of transactions) {
-    const isCurrentMonth = tx.date >= startOfCurrentMonth;
-    const isLastMonth = tx.date >= startOfLastMonth && tx.date <= endOfLastMonth;
-    const isInternal =
-      (tx.type === 'TRANSFER_OUT' &&
-        isInternalTransfer(tx.accountId, tx.transferToAccountId, hierarchy)) ||
-      (tx.type === 'TRANSFER_IN' &&
-        isInternalTransfer(tx.accountId, tx.transferFromAccountId, hierarchy));
-
-    const isIncome =
-      !isInternal && tx.amountCents > 0 && (tx.type === 'INCOME' || tx.type === 'TRANSFER_IN');
-    const isExpense =
-      !isInternal && tx.amountCents < 0 && (tx.type === 'EXPENSE' || tx.type === 'TRANSFER_OUT');
-
-    if (isCurrentMonth && isIncome) {
-      monthlyIncome = addCents(monthlyIncome, tx.amountCents);
-    } else if (isCurrentMonth && isExpense) {
-      monthlyExpenses = addCents(monthlyExpenses, Math.abs(tx.amountCents));
-    } else if (isLastMonth && isExpense) {
-      lastMonthExpenses = addCents(lastMonthExpenses, Math.abs(tx.amountCents));
-    }
-  }
-
-  return { monthlyIncome, monthlyExpenses, lastMonthExpenses };
 }
 
 /**

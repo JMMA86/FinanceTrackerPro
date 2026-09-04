@@ -1,10 +1,11 @@
 /**
  * CreateTransactionModal Component Tests
  * Tests modal open/close, form validation, submission, accessibility
+ * The account field uses the custom AccountSelect dropdown (combobox/listbox).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateTransactionModal } from '../CreateTransactionModal';
 
@@ -68,6 +69,9 @@ vi.mock('@/lib/i18n', () => ({
       editTitle: 'Edit Transaction',
       updateSuccess: 'Transaction updated',
       validationError: 'Please check the form data',
+      accountsGroup: 'Accounts',
+      pocketsGroup: 'Pockets',
+      availableToSpend: 'Available to spend',
     };
     return labels[key] ?? key;
   }),
@@ -142,6 +146,14 @@ const mockAccounts = [
     parentAccountId: null,
     balanceCents: 500000,
   },
+  {
+    id: 'pocket-1',
+    name: 'Travel Pocket',
+    currency: 'USD',
+    type: 'POCKET',
+    parentAccountId: 'acc-1',
+    balanceCents: 100000,
+  },
 ];
 
 const mockCategories = [
@@ -198,6 +210,9 @@ const dictionary = {
   editTitle: 'Edit Transaction',
   updateSuccess: 'Transaction updated',
   validationError: 'Please check the form data',
+  accountsGroup: 'Accounts',
+  pocketsGroup: 'Pockets',
+  availableToSpend: 'Available to spend',
 };
 
 const renderModal = (overrides: Record<string, unknown> = {}) =>
@@ -210,6 +225,23 @@ const renderModal = (overrides: Record<string, unknown> = {}) =>
       {...overrides}
     />
   );
+
+/**
+ * Select an option inside the account AccountSelect by clicking the combobox
+ * trigger and then the option whose accessible name contains `accountName`.
+ *
+ * The modal's mount effect schedules a requestAnimationFrame that remounts the
+ * AccountSelect (bumped `modalSession` key). We let that rAF fire BEFORE any
+ * interaction so the dropdown does not get remounted mid-click.
+ */
+async function selectAccount(user: ReturnType<typeof userEvent.setup>, accountName: string) {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  const trigger = screen.getByRole('combobox', { name: 'Account' });
+  await user.click(trigger);
+  await user.click(screen.getByRole('option', { name: new RegExp(accountName) }));
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -246,13 +278,26 @@ describe('CreateTransactionModal', () => {
     expect(screen.getByLabelText('Income')).toBeInTheDocument();
   });
 
-  it('should display account select with options', () => {
+  it('should display account dropdown with grouped options', async () => {
+    const user = userEvent.setup();
     renderModal();
+    // Let the mount rAF remount the AccountSelect before interacting
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
 
-    const accountSelect = screen.getByLabelText('Account');
-    expect(accountSelect).toBeInTheDocument();
-    expect(screen.getByText('Main Account (USD)')).toBeInTheDocument();
-    expect(screen.getByText('Savings Account (USD)')).toBeInTheDocument();
+    const accountCombobox = screen.getByRole('combobox', { name: 'Account' });
+    expect(accountCombobox).toBeInTheDocument();
+    expect(accountCombobox).toHaveAttribute('aria-haspopup', 'listbox');
+
+    await user.click(accountCombobox);
+
+    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
+    // Group headers render inside the listbox
+    expect(screen.getByText('Accounts')).toBeInTheDocument();
+    expect(screen.getByText('Pockets')).toBeInTheDocument();
   });
 
   it('should display amount input, description textarea, and date input', () => {
@@ -313,11 +358,11 @@ describe('CreateTransactionModal', () => {
       () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
     );
 
+    const user = userEvent.setup();
     renderModal();
 
     // Select an account first
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     // Set amount (required field)
     const amountInput = screen.getByTestId('formatted-numeric-input');
@@ -325,7 +370,7 @@ describe('CreateTransactionModal', () => {
 
     // Submit the form
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     // Should show "Creating..." during submission
     await waitFor(() => {
@@ -336,11 +381,11 @@ describe('CreateTransactionModal', () => {
   it('should call createTransaction with correct data on valid submit', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
     // Select account (required)
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     // Set amount via fireEvent (more reliable with controlled inputs)
     const amountInput = screen.getByTestId('formatted-numeric-input');
@@ -348,11 +393,11 @@ describe('CreateTransactionModal', () => {
 
     // Set description
     const descriptionInput = screen.getByLabelText('Description');
-    await userEvent.type(descriptionInput, 'Test expense');
+    await user.type(descriptionInput, 'Test expense');
 
-    // Submit the form directly (bypass UI interaction issues)
+    // Submit the form
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockCreateTransaction).toHaveBeenCalledWith(
@@ -370,17 +415,17 @@ describe('CreateTransactionModal', () => {
     const randomUUIDSpy = vi.spyOn(crypto, 'randomUUID');
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
     // Fill required fields: account + amount
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
 
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(randomUUIDSpy).toHaveBeenCalled();
@@ -390,17 +435,17 @@ describe('CreateTransactionModal', () => {
   it('should close modal and show success notification on successful creation', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
     // Fill required fields
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
 
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockCreateTransaction).toHaveBeenCalled();
@@ -414,17 +459,17 @@ describe('CreateTransactionModal', () => {
       error: 'Validation failed',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
     // Fill required fields
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
 
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     // VALIDATION_ERROR is now mapped to the localized 'validationError' key
     await waitFor(() => {
@@ -439,17 +484,17 @@ describe('CreateTransactionModal', () => {
       error: 'Insufficient funds',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
     // Fill required fields
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
 
     const submitButton = screen.getByText('Create');
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     // When code is INSUFFICIENT_FUNDS, the component uses get(dictionary, 'insufficientFunds')
     // which resolves to 'Insufficient funds'
@@ -465,13 +510,13 @@ describe('CreateTransactionModal', () => {
       error: 'Currency mismatch',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'Currency mismatch');
@@ -485,13 +530,13 @@ describe('CreateTransactionModal', () => {
       error: 'Inactive account',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'Inactive account');
@@ -505,13 +550,13 @@ describe('CreateTransactionModal', () => {
       error: 'Account with ID x not found',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'Account not found');
@@ -525,13 +570,13 @@ describe('CreateTransactionModal', () => {
       error: 'Too many attempts',
     });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockAddNotification).toHaveBeenCalledWith('error', 'Rate limited');
@@ -545,14 +590,14 @@ describe('CreateTransactionModal', () => {
       error: 'Insufficient funds',
     });
 
+    const user = userEvent.setup();
     const { container } = renderModal();
     const dialog = container.querySelector('dialog');
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     // The localized server error must be visible INSIDE the dialog (the toast
     // below the <dialog> top layer would be invisible while the modal is open).
@@ -572,14 +617,14 @@ describe('CreateTransactionModal', () => {
       error: 'Currency mismatch',
     });
 
+    const user = userEvent.setup();
     const { container } = renderModal();
     const dialog = container.querySelector('dialog');
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       const alert = within(dialog as HTMLElement).getByRole('alert');
@@ -596,15 +641,15 @@ describe('CreateTransactionModal', () => {
       error: 'Insufficient funds',
     });
 
+    const user = userEvent.setup();
     const { container, rerender } = renderModal();
     const dialog = container.querySelector('dialog');
 
     // 1. Open modal → fail a submit → inline alert appears
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '5000' } });
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(within(dialog as HTMLElement).getByRole('alert')).toHaveTextContent(
@@ -653,18 +698,18 @@ describe('CreateTransactionModal', () => {
   it('should include categoryId in the createTransaction payload', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '25000' } });
 
     // Select the "Groceries" category chip
-    await userEvent.click(screen.getByLabelText('Groceries'));
+    await user.click(screen.getByLabelText('Groceries'));
 
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockCreateTransaction).toHaveBeenCalledWith(
@@ -676,15 +721,15 @@ describe('CreateTransactionModal', () => {
   it('should submit without categoryId when no category selected', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '25000' } });
 
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockCreateTransaction).toHaveBeenCalledWith(
@@ -707,11 +752,12 @@ describe('CreateTransactionModal', () => {
     expect(submitButton).toBeDisabled();
   });
 
-  it('should mark the account select as required', () => {
+  it('should render the account field as an accessible combobox', () => {
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    expect(accountSelect).toHaveAttribute('required');
+    const accountCombobox = screen.getByRole('combobox', { name: 'Account' });
+    expect(accountCombobox).toHaveAttribute('aria-haspopup', 'listbox');
+    expect(accountCombobox).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('should reset form when modal opens', () => {
@@ -731,6 +777,28 @@ describe('CreateTransactionModal', () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveAttribute('aria-labelledby', 'create-transaction-title');
     expect(dialog).toHaveClass('bg-transparent');
+  });
+
+  it('should show availableToSpend for EXPENSE in create mode once an account is selected', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    // Default type is EXPENSE
+    expect(screen.queryByText(/Available to spend/)).not.toBeInTheDocument();
+
+    await selectAccount(user, 'Main Account');
+
+    expect(screen.getByText(/Available to spend/)).toBeInTheDocument();
+  });
+
+  it('should NOT show availableToSpend for INCOME in create mode', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByLabelText('Income'));
+    await selectAccount(user, 'Main Account');
+
+    expect(screen.queryByText(/Available to spend/)).not.toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
@@ -761,8 +829,8 @@ describe('CreateTransactionModal', () => {
     const expenseRadio = screen.getByLabelText('Expense');
     expect(expenseRadio).toBeChecked();
 
-    const accountSelect = screen.getByLabelText('Account');
-    expect(accountSelect).toHaveValue('acc-1');
+    const accountCombobox = screen.getByRole('combobox', { name: 'Account' });
+    expect(within(accountCombobox).getByText('Main Account')).toBeInTheDocument();
 
     // Category prefilled
     expect(screen.getByLabelText('Groceries')).toBeChecked();
@@ -783,7 +851,7 @@ describe('CreateTransactionModal', () => {
 
     expect(screen.getByLabelText('Expense')).toBeDisabled();
     expect(screen.getByLabelText('Income')).toBeDisabled();
-    expect(screen.getByLabelText('Account')).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Account' })).toBeDisabled();
   });
 
   it('should call updateTransaction with the correct fields on edit submit', async () => {
@@ -851,14 +919,14 @@ describe('CreateTransactionModal', () => {
   it('should keep calling createTransaction when no editing transaction is set', async () => {
     mockCreateTransaction.mockResolvedValue({ success: true });
 
+    const user = userEvent.setup();
     renderModal();
 
-    const accountSelect = screen.getByLabelText('Account');
-    await userEvent.selectOptions(accountSelect, 'acc-1');
+    await selectAccount(user, 'Main Account');
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '25000' } });
 
-    await userEvent.click(screen.getByText('Create'));
+    await user.click(screen.getByText('Create'));
 
     await waitFor(() => {
       expect(mockCreateTransaction).toHaveBeenCalled();

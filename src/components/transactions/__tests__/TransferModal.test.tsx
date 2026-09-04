@@ -1,6 +1,7 @@
 /**
  * TransferModal Component Tests
- * Tests modal open/close, source/destination selects, validation, submission
+ * Tests modal open/close, source/destination selects (custom AccountSelect
+ * dropdown), pocket-aware destination filtering, validation, submission
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -45,6 +46,10 @@ vi.mock('@/lib/i18n', () => ({
       rateLimited: 'Rate limited',
       validationError: 'Please check the form data',
       createError: 'Error creating transaction',
+      accountsGroup: 'Accounts',
+      pocketsGroup: 'Pockets',
+      availableToTransfer: 'Available to transfer',
+      pocketTransferNotAllowed: 'Transfer not allowed',
     };
     return labels[key] ?? key;
   }),
@@ -121,6 +126,30 @@ const mockAccounts = [
     parentAccountId: null,
     balanceCents: 500000,
   },
+  {
+    id: 'pocket-1',
+    name: 'Travel Pocket',
+    currency: 'USD',
+    type: 'POCKET',
+    parentAccountId: 'acc-1',
+    balanceCents: 100000,
+  },
+  {
+    id: 'pocket-2',
+    name: 'Savings Pocket',
+    currency: 'USD',
+    type: 'POCKET',
+    parentAccountId: 'acc-1',
+    balanceCents: 200000,
+  },
+  {
+    id: 'pocket-3',
+    name: 'Vacation Pocket',
+    currency: 'USD',
+    type: 'POCKET',
+    parentAccountId: 'acc-2',
+    balanceCents: 30000,
+  },
 ];
 
 const dictionary = {
@@ -144,6 +173,10 @@ const dictionary = {
   rateLimited: 'Rate limited',
   validationError: 'Please check the form data',
   createError: 'Error creating transaction',
+  accountsGroup: 'Accounts',
+  pocketsGroup: 'Pockets',
+  availableToTransfer: 'Available to transfer',
+  pocketTransferNotAllowed: 'Transfer not allowed',
 };
 
 const mockOnClose = vi.fn();
@@ -172,6 +205,20 @@ async function renderAndOpen(overrides: Record<string, unknown> = {}) {
   return result;
 }
 
+/**
+ * Select an option inside an AccountSelect by clicking the combobox trigger
+ * and then the option whose accessible name contains `accountName`.
+ */
+async function selectAccount(
+  user: ReturnType<typeof userEvent.setup>,
+  comboboxLabel: string,
+  accountName: string
+) {
+  const trigger = screen.getByRole('combobox', { name: comboboxLabel });
+  await user.click(trigger);
+  await user.click(screen.getByRole('option', { name: new RegExp(accountName) }));
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -190,23 +237,37 @@ describe('TransferModal', () => {
     expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
   });
 
-  it('should render source select with all accounts and disable destination until source is picked', async () => {
+  it('should render source dropdown with all accounts and disable destination until source is picked', async () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    const fromSelect = screen.getByLabelText('From account');
-    const toSelect = screen.getByLabelText('To account');
+    const fromCombobox = screen.getByRole('combobox', { name: 'From account' });
+    const toCombobox = screen.getByRole('combobox', { name: 'To account' });
 
     // Destination is disabled until a source account is selected
-    expect(toSelect).toBeDisabled();
+    expect(toCombobox).toBeDisabled();
 
-    await user.selectOptions(fromSelect, 'acc-1');
+    // The source dropdown lists every account (including pockets) as sources
+    await user.click(fromCombobox);
+    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /COP Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
 
-    expect(toSelect).toBeEnabled();
-    // Source account is excluded from the destination options
-    expect(within(toSelect).getByText('Savings Account (USD)')).toBeInTheDocument();
-    expect(within(toSelect).getByText('COP Account (COP)')).toBeInTheDocument();
-    expect(within(toSelect).queryByText('Main Account (USD)')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Main Account/ }));
+
+    expect(screen.getByRole('combobox', { name: 'To account' })).toBeEnabled();
+
+    // Destination options follow the pocket contract: own pockets + other
+    // non-pocket accounts; the source itself and other accounts' pockets are excluded.
+    await user.click(screen.getByRole('combobox', { name: 'To account' }));
+    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /COP Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Main Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Vacation Pocket/ })).not.toBeInTheDocument();
   });
 
   it('should show the currency of the selected source account in the amount label', async () => {
@@ -216,23 +277,48 @@ describe('TransferModal', () => {
     // No source selected yet → no currency suffix
     expect(screen.getByLabelText('Amount')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-3');
+    await selectAccount(user, 'From account', 'COP Account');
 
     expect(screen.getByLabelText('Amount (COP)')).toBeInTheDocument();
+  });
+
+  it('should show "Available to transfer" with the source balance once a source is selected', async () => {
+    const user = userEvent.setup();
+    await renderAndOpen();
+
+    expect(screen.queryByText(/Available to transfer/)).not.toBeInTheDocument();
+
+    await selectAccount(user, 'From account', 'Main Account');
+
+    expect(screen.getByText(/Available to transfer/)).toBeInTheDocument();
+  });
+
+  it('should include only parent + sibling pockets when the source is a pocket', async () => {
+    const user = userEvent.setup();
+    await renderAndOpen();
+
+    await selectAccount(user, 'From account', 'Travel Pocket');
+
+    await user.click(screen.getByRole('combobox', { name: 'To account' }));
+    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Savings Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /COP Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Vacation Pocket/ })).not.toBeInTheDocument();
   });
 
   it('should reset the destination when the source changes to the selected destination', async () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
 
     // Change the source to the current destination → destination is cleared
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Savings Account');
 
-    const toSelect = screen.getByLabelText('To account');
-    expect(toSelect).toHaveValue('');
+    const toCombobox = screen.getByRole('combobox', { name: 'To account' });
+    expect(within(toCombobox).getByText('Select the destination account')).toBeInTheDocument();
   });
 
   it('should show validation errors when submitting an empty form', async () => {
@@ -252,8 +338,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
 
     // Amount stays at 0 → positive() fails on submit
     await user.click(screen.getByText('Transfer'));
@@ -283,8 +369,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
 
     const amountInput = screen.getByTestId('formatted-numeric-input');
     fireEvent.change(amountInput, { target: { value: '25000' } });
@@ -312,8 +398,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-3');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-1');
+    await selectAccount(user, 'From account', 'COP Account');
+    await selectAccount(user, 'To account', 'Main Account');
 
     fireEvent.change(screen.getByTestId('formatted-numeric-input'), {
       target: { value: '10000' },
@@ -333,8 +419,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
     fireEvent.change(screen.getByTestId('formatted-numeric-input'), {
       target: { value: '5000' },
     });
@@ -355,8 +441,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     const { container } = await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
     fireEvent.change(screen.getByTestId('formatted-numeric-input'), {
       target: { value: '5000' },
     });
@@ -380,8 +466,8 @@ describe('TransferModal', () => {
     const user = userEvent.setup();
     await renderAndOpen();
 
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
     fireEvent.change(screen.getByTestId('formatted-numeric-input'), {
       target: { value: '5000' },
     });
@@ -419,8 +505,8 @@ describe('TransferModal', () => {
     const { container, rerender } = await renderAndOpen();
 
     // 1. Fail a submit → inline alert appears
-    await user.selectOptions(screen.getByLabelText('From account'), 'acc-1');
-    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2');
+    await selectAccount(user, 'From account', 'Main Account');
+    await selectAccount(user, 'To account', 'Savings Account');
     fireEvent.change(screen.getByTestId('formatted-numeric-input'), {
       target: { value: '5000' },
     });

@@ -80,6 +80,35 @@ export async function getAccountBalancesByEmail(email: string): Promise<Record<s
 }
 
 /**
+ * Returns a map of ACTIVE parent-account names → TOTAL balanceCents (external
+ * balance + the sum of its pockets) for the given user email.
+ *
+ * Why: the accounts page parent card renders `totalBalanceCents` (external +
+ * pockets) visually. The pockets scenarios in transfers.feature must assert
+ * that an internal transfer (parent ⇄ pocket or pocket ⇄ sibling pocket) does
+ * NOT change that displayed total. This helper computes exactly what the card
+ * shows before the transfer so the assertion can compare equality.
+ */
+export async function getAccountTotalBalancesByEmail(
+  email: string
+): Promise<Record<string, number>> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) return {};
+
+  const accounts = await db.account.findMany({
+    where: { userId: user.id, isActive: true },
+  });
+  const balances: Record<string, number> = {};
+  for (const acc of accounts) {
+    if (acc.type === 'POCKET' && acc.parentAccountId) continue; // included in its parent
+    const pockets = accounts.filter((p) => p.type === 'POCKET' && p.parentAccountId === acc.id);
+    balances[acc.name] = pockets.reduce((sum, p) => sum + p.balanceCents, acc.balanceCents);
+  }
+  return balances;
+}
+
+/**
  * Creates a bank transaction DIRECTLY in the isolated e2e schema (bypasses the
  * UI/server action). Used by the accounts movements-detail scenario to seed a
  * deterministic movements dataset for the detail overlay.

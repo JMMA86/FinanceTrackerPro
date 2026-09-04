@@ -98,5 +98,10 @@
   "education": "Educación",
   "shopping": "Compras",
   "dining": "Restaurantes",
-  "other": "Otros"
+  "other": "Otros",
+  "pocketTransferNotAllowed": "Transferencia no permitida: solo puedes mover dinero entre una cuenta y sus bolsillos, o entre cuentas.",
+  "accountsGroup": "Cuentas",
+  "pocketsGroup": "Bolsillos",
+  "availableToTransfer": "Disponible para transferir",
+  "availableToSpend": "Disponible para gastar"
 }

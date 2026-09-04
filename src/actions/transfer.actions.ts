@@ -39,6 +39,7 @@ import {
   CurrencyMismatchError,
   InactiveAccountError,
   RateLimitError,
+  PocketTransferError,
 } from '@/lib/errors/api-errors';
 import type {
   TransferResult,
@@ -47,6 +48,39 @@ import type {
   PairedTransferTransactions,
   ReverseTransferInput,
 } from '@/types/transfer';
+
+/**
+ * Validate pocket hierarchy rules for a transfer pair.
+ * Pockets can only move money within their parent account:
+ *  - POCKET source -> its parent account OR a sibling pocket
+ *  - Non-POCKET source -> its own pocket OR another non-pocket account
+ * Any other combination is rejected with a typed PocketTransferError.
+ */
+function assertValidTransferPair(
+  from: { id: string; type: string; parentAccountId: string | null },
+  to: { id: string; type: string; parentAccountId: string | null }
+): void {
+  if (from.id === to.id) return; // ya lo rechaza el schema
+  const fromIsPocket = from.type === 'POCKET';
+  const toIsPocket = to.type === 'POCKET';
+
+  if (fromIsPocket) {
+    const toIsParent = to.id === from.parentAccountId;
+    const toIsSiblingPocket =
+      toIsPocket && to.parentAccountId !== null && to.parentAccountId === from.parentAccountId;
+    if (!toIsParent && !toIsSiblingPocket) {
+      throw new PocketTransferError();
+    }
+    return;
+  }
+
+  // Origen no-bolsillo
+  const toIsOwnPocket = toIsPocket && to.parentAccountId === from.id;
+  const toIsExternal = !toIsPocket;
+  if (!toIsOwnPocket && !toIsExternal) {
+    throw new PocketTransferError();
+  }
+}
 
 /**
  * Execute atomic transfer between accounts (INTERNAL - NO ERROR HANDLING)
@@ -129,6 +163,8 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
               balanceCents: true,
               currency: true,
               isActive: true,
+              type: true,
+              parentAccountId: true,
             },
           }),
           tx.account.findUnique({
@@ -139,6 +175,8 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
               balanceCents: true,
               currency: true,
               isActive: true,
+              type: true,
+              parentAccountId: true,
             },
           }),
         ]);
@@ -176,6 +214,9 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
       if (toAccount.currency !== validated.currency) {
         throw new CurrencyMismatchError(validated.currency, toAccount.currency);
       }
+
+      // Verify pocket hierarchy rules (pockets stay within their parent account)
+      assertValidTransferPair(fromAccount, toAccount);
 
       // 4.2. VERIFY SUFFICIENT BALANCE (Rule 13 - Source of Truth)
       const trueBalance: number = await getTrueBalance(validated.fromAccountId, transactionRepo);

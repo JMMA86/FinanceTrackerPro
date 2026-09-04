@@ -16,7 +16,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
-import { addCents } from '@/lib/money';
+import { addCents, subtractCents } from '@/lib/money';
 import { Decimal } from 'decimal.js';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
@@ -31,6 +31,9 @@ import {
   UnauthorizedError,
   InsufficientFundsError,
   RateLimitError,
+  CurrencyMismatchError,
+  GoalCompletedError,
+  GoalHasContributionsError,
 } from '@/lib/errors/api-errors';
 import type { ApiAction } from '@prisma/client';
 import {
@@ -216,7 +219,7 @@ async function deleteSavingsGoalInternal(input: unknown) {
   }
 
   if (existing._count.contributions > 0) {
-    throw new Error('Cannot delete a goal that has contributions. Deactivate it instead.');
+    throw new GoalHasContributionsError();
   }
 
   await prisma.savingsGoal.update({
@@ -277,6 +280,7 @@ async function contributeToGoalInternal(input: unknown) {
       where: { id: validated.goalId },
       select: {
         id: true,
+        name: true,
         userId: true,
         currentAmountCents: true,
         targetAmountCents: true,
@@ -293,37 +297,63 @@ async function contributeToGoalInternal(input: unknown) {
       throw new UnauthorizedError('Goal does not belong to user');
     }
     if (goal.status === 'COMPLETED') {
-      throw new Error('Cannot contribute to a completed goal');
+      throw new GoalCompletedError();
     }
 
-    // Optional: verify source account has sufficient funds
-    if (validated.sourceAccountId) {
-      const account = await tx.account.findUnique({
-        where: { id: validated.sourceAccountId },
-        select: {
-          id: true,
-          userId: true,
-          balanceCents: true,
-          isActive: true,
-          currency: true,
-        },
-      });
-
-      if (!account?.isActive) {
-        throw new NotFoundError('Account', validated.sourceAccountId);
-      }
-      if (account.userId !== session.userId) {
-        throw new UnauthorizedError('Account does not belong to user');
-      }
-
-      // Use true balance for safety (Rule 13)
-      const transactionRepo = getTransactionRepository();
-      const trueBalance = await getTrueBalance(validated.sourceAccountId, transactionRepo);
-
-      if (trueBalance < validated.amountCents) {
-        throw new InsufficientFundsError(validated.amountCents, trueBalance);
-      }
+    // Verify goal currency matches contribution currency
+    if (validated.currency !== goal.currency) {
+      throw new CurrencyMismatchError(goal.currency, validated.currency);
     }
+
+    // Verify source account has sufficient funds (Rule 13)
+    const account = await tx.account.findUnique({
+      where: { id: validated.sourceAccountId },
+      select: {
+        id: true,
+        userId: true,
+        balanceCents: true,
+        isActive: true,
+        currency: true,
+      },
+    });
+
+    if (!account?.isActive) {
+      throw new NotFoundError('Account', validated.sourceAccountId);
+    }
+    if (account.userId !== session.userId) {
+      throw new UnauthorizedError('Account does not belong to user');
+    }
+
+    // Verify account currency matches contribution currency
+    if (validated.currency !== account.currency) {
+      throw new CurrencyMismatchError(account.currency, validated.currency);
+    }
+
+    // Use true balance for safety (Rule 13)
+    const transactionRepo = getTransactionRepository();
+    const trueBalance = await getTrueBalance(validated.sourceAccountId, transactionRepo);
+
+    if (trueBalance < validated.amountCents) {
+      throw new InsufficientFundsError(validated.amountCents, trueBalance);
+    }
+
+    // Create linked EXPENSE transaction (Rule 3 - atomic with contribution)
+    const transaction = await tx.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: session.userId,
+        accountId: validated.sourceAccountId,
+        type: 'EXPENSE',
+        amountCents: -validated.amountCents,
+        currency: validated.currency,
+        description: `Contribución a ${goal.name}`,
+        date: new Date(),
+        ipAddress,
+        userAgent,
+        createdBy: session.userId,
+        lastModifiedBy: session.userId,
+      },
+    });
 
     // Create contribution record
     const contribution = await tx.savingsContribution.create({
@@ -331,7 +361,8 @@ async function contributeToGoalInternal(input: unknown) {
         goalId: validated.goalId,
         amountCents: validated.amountCents,
         currency: validated.currency,
-        sourceAccountId: validated.sourceAccountId ?? null,
+        sourceAccountId: validated.sourceAccountId,
+        transactionId: transaction.id,
         notes: validated.notes ?? null,
         idempotencyKey: validated.idempotencyKey,
         ipAddress,
@@ -350,6 +381,16 @@ async function contributeToGoalInternal(input: unknown) {
       data: {
         currentAmountCents: newBalance,
         ...(shouldComplete ? { status: 'COMPLETED' } : {}),
+        lastModifiedBy: session.userId,
+      },
+    });
+
+    // Reduce cached source account balance (Rule 13 - maintain cache)
+    const newAccountBalance = subtractCents(account.balanceCents, validated.amountCents);
+    await tx.account.update({
+      where: { id: validated.sourceAccountId },
+      data: {
+        balanceCents: newAccountBalance,
         lastModifiedBy: session.userId,
       },
     });

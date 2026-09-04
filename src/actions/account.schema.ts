@@ -14,21 +14,48 @@ const AccountName = z
   .trim()
   .regex(/^[\w\s\-áéíóúÁÉÍÓÚñÑüÜ]+$/, 'Name contains invalid characters');
 
-export const CreateAccountSchema = z.object({
-  idempotencyKey: UUIDv4,
-  name: AccountName,
-  type: BankAccountTypeSchema,
-  currency: CurrencySchema,
-  initialBalanceCents: z
-    .number()
-    .int('Balance must be an integer')
-    .min(0, 'Initial balance cannot be negative')
-    .max(9_999_999_999_999, 'Balance too high'),
-  interestRateEA: z.number().min(0).max(100).optional(),
-  parentAccountId: CUID.optional(),
-  cardColor: z.string().max(50).optional(),
-  cardNetwork: CardNetworkSchema.optional(),
-});
+export const CreateAccountSchema = z
+  .object({
+    idempotencyKey: UUIDv4,
+    name: AccountName,
+    type: BankAccountTypeSchema,
+    currency: CurrencySchema,
+    initialBalanceCents: z
+      .number()
+      .int('Balance must be an integer')
+      .min(0, 'Initial balance cannot be negative')
+      .max(9_999_999_999_999, 'Balance too high'),
+    interestRateEA: z.number().min(0).max(100).optional(),
+    parentAccountId: CUID.optional(),
+    cardColor: z.string().max(50).optional(),
+    cardNetwork: CardNetworkSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === 'POCKET') {
+      if (!data.parentAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['parentAccountId'],
+          message: 'A pocket must have a parent account',
+        });
+      }
+      if (data.initialBalanceCents !== 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['initialBalanceCents'],
+          message: 'A pocket must start with zero balance',
+        });
+      }
+    } else {
+      if (data.parentAccountId !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['parentAccountId'],
+          message: 'parentAccountId is only valid for pockets',
+        });
+      }
+    }
+  });
 
 export const UpdateAccountSchema = z.object({
   accountId: CUID,

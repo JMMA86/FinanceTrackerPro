@@ -31,7 +31,7 @@
   "contribute": "Contribute",
   "contributionAmount": "Contribution amount",
   "contributionNotes": "Notes (optional)",
-  "sourceAccount": "Source account (optional)",
+  "sourceAccount": "Source account",
   "confirmContribute": "Confirm Contribution",
   "progress": "Progress",
   "target": "Target",
@@ -56,6 +56,7 @@
   "savingsCommitments": "Savings Commitments",
   "variableExpenses": "Variable Expenses",
   "cancel": "Cancel",
+  "close": "Close",
   "save": "Save",
   "delete": "Delete",
   "loading": "Loading...",
@@ -77,6 +78,7 @@
     "updateFailed": "Could not update goal",
     "deleteFailed": "Could not delete goal",
     "contributeFailed": "Could not process contribution",
-    "sessionInvalid": "Your session expired. Please sign in again."
+    "sessionInvalid": "Your session expired. Please sign in again.",
+    "sourceAccountRequired": "Select a source account"
   }
 }

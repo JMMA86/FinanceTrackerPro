@@ -115,6 +115,8 @@ interface AccountCardProps {
   dictionary: Record<string, unknown>;
   locale?: string;
   onSelect: (accountId: string, rect: DOMRect) => void;
+  /** Optional combined balance (external + pockets). Falls back to balanceCents. */
+  totalBalanceCents?: number;
 }
 
 export function getCardBackground(account: AccountCardData): React.CSSProperties {
@@ -133,11 +135,23 @@ export function AccountCard({
   dictionary,
   locale = 'es-CO',
   onSelect,
+  totalBalanceCents,
 }: Readonly<AccountCardProps>) {
   const cardRef = useRef<HTMLDivElement>(null);
   const rateNumber = account.interestRateEA == null ? null : Number(account.interestRateEA);
   const showRate = rateNumber !== null && rateNumber > 0;
   const network = (account.cardNetwork ?? 'NONE') as CardNetwork;
+
+  // Display balance: the parent card shows the external balance plus its
+  // pockets (visual only — the stored balance is never modified).
+  const displayBalance = totalBalanceCents ?? account.balanceCents;
+  // Resolve the type badge from the i18n dictionary first (which may provide
+  // shorter "card" labels), falling back to the legacy TYPE_LABELS map.
+  const typeLabel = get(dictionary, `cardTypeLabels.${account.type}`);
+  const badgeLabel =
+    typeLabel !== `cardTypeLabels.${account.type}`
+      ? typeLabel
+      : (TYPE_LABELS[account.type] ?? account.type);
 
   function handleClick() {
     if (!cardRef.current) return;
@@ -198,7 +212,7 @@ export function AccountCard({
               <span
                 className={`text-[10px] font-semibold uppercase tracking-wider ${badgeBg} px-2 py-0.5 rounded-md`}
               >
-                {TYPE_LABELS[account.type] ?? account.type}
+                {badgeLabel}
               </span>
             </div>
 
@@ -206,7 +220,7 @@ export function AccountCard({
               <div className="min-w-0">
                 <p className="text-sm font-semibold opacity-90 truncate">{account.name}</p>
                 <p className="text-xl font-bold tracking-tight leading-none">
-                  {formatMoney(account.balanceCents, account.currency, locale)}
+                  {formatMoney(displayBalance, account.currency, locale)}
                 </p>
                 {showRate && (
                   <p className="text-[11px] font-medium opacity-70 pt-0.5">

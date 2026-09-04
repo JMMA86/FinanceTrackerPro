@@ -14,6 +14,8 @@ import {
   NotFoundError,
   UnauthorizedError,
   AccountHasBalanceError,
+  ValidationError,
+  CurrencyMismatchError,
 } from '@/lib/errors/api-errors';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
@@ -100,6 +102,28 @@ async function createBankAccountInternal(input: unknown) {
   let account;
   try {
     account = await prisma.$transaction(async (tx) => {
+      // Pocket hierarchy validation: parent must exist, be active, belong to
+      // the user, not be another pocket, and match the pocket currency
+      if (validated.type === 'POCKET' && validated.parentAccountId !== undefined) {
+        const parent = await tx.account.findUnique({
+          where: { id: validated.parentAccountId },
+          select: { id: true, userId: true, type: true, currency: true, isActive: true },
+        });
+
+        if (!parent?.isActive) {
+          throw new NotFoundError('Account', validated.parentAccountId);
+        }
+        if (parent.userId !== session.userId) {
+          throw new UnauthorizedError('Parent account does not belong to user');
+        }
+        if (parent.type === 'POCKET') {
+          throw new ValidationError('Pockets cannot contain other pockets');
+        }
+        if (parent.currency !== validated.currency) {
+          throw new CurrencyMismatchError(parent.currency, validated.currency);
+        }
+      }
+
       const newAccount = await tx.account.create({
         data: {
           userId: session.userId,

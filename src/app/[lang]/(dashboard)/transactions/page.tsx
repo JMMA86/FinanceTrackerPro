@@ -117,6 +117,7 @@ export default async function TransactionsPage({
           hasAccounts={!hasNoAccounts}
           lang={lang}
           userId={session?.userId ?? ''}
+          locale={locale}
         />
       </div>
 

@@ -165,3 +165,42 @@ export class InternalServerError extends AppError {
     super(message, 500, 'INTERNAL_SERVER_ERROR');
   }
 }
+
+/**
+ * 400 - Pocket Transfer Not Allowed
+ * Thrown when a transfer violates pocket hierarchy rules
+ * (pocket -> external account, account -> other account's pocket, etc.)
+ */
+export class PocketTransferError extends AppError {
+  constructor() {
+    super(
+      'Transfer not allowed: pockets can only move money within their parent account',
+      400,
+      'POCKET_TRANSFER_NOT_ALLOWED'
+    );
+  }
+}
+
+/**
+ * 400 - Goal Completed
+ * Thrown when attempting to contribute to a savings goal already completed
+ */
+export class GoalCompletedError extends AppError {
+  constructor() {
+    super('Cannot contribute to a completed goal', 400, 'GOAL_COMPLETED');
+  }
+}
+
+/**
+ * 400 - Goal Has Contributions
+ * Thrown when attempting to delete a savings goal that still has contributions
+ */
+export class GoalHasContributionsError extends AppError {
+  constructor() {
+    super(
+      'Cannot delete a goal that has contributions. Deactivate it instead.',
+      400,
+      'GOAL_HAS_CONTRIBUTIONS'
+    );
+  }
+}

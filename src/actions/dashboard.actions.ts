@@ -93,6 +93,35 @@ interface TransactionData {
   currency: Currency;
   type: string;
   date: Date;
+  accountId: string;
+  transferToAccountId: string | null;
+  transferFromAccountId: string | null;
+}
+
+interface AccountHierarchyEntry {
+  id: string;
+  type: string;
+  parentAccountId: string | null;
+}
+
+function isInternalTransfer(
+  fromAccountId: string,
+  toAccountId: string | null,
+  hierarchy: Record<string, AccountHierarchyEntry>
+): boolean {
+  if (!toAccountId) return false;
+  const from = hierarchy[fromAccountId];
+  const to = hierarchy[toAccountId];
+  if (!from || !to) return false;
+  if (from.type === 'POCKET') {
+    return (
+      to.id === from.parentAccountId ||
+      (to.type === 'POCKET' &&
+        to.parentAccountId === from.parentAccountId &&
+        from.parentAccountId !== null)
+    );
+  }
+  return to.type === 'POCKET' && to.parentAccountId === from.id;
 }
 
 interface FixedExpenseData {
@@ -274,7 +303,8 @@ function calculateTransactionMetrics(
   transactions: TransactionData[],
   startOfCurrentMonth: Date,
   startOfLastMonth: Date,
-  endOfLastMonth: Date
+  endOfLastMonth: Date,
+  hierarchy: Record<string, AccountHierarchyEntry>
 ): { monthlyIncome: number; monthlyExpenses: number; lastMonthExpenses: number } {
   let monthlyIncome = 0;
   let monthlyExpenses = 0;
@@ -283,8 +313,16 @@ function calculateTransactionMetrics(
   for (const tx of transactions) {
     const isCurrentMonth = tx.date >= startOfCurrentMonth;
     const isLastMonth = tx.date >= startOfLastMonth && tx.date <= endOfLastMonth;
-    const isIncome = tx.amountCents > 0 && (tx.type === 'INCOME' || tx.type === 'TRANSFER_IN');
-    const isExpense = tx.amountCents < 0 && (tx.type === 'EXPENSE' || tx.type === 'TRANSFER_OUT');
+    const isInternal =
+      (tx.type === 'TRANSFER_OUT' &&
+        isInternalTransfer(tx.accountId, tx.transferToAccountId, hierarchy)) ||
+      (tx.type === 'TRANSFER_IN' &&
+        isInternalTransfer(tx.accountId, tx.transferFromAccountId, hierarchy));
+
+    const isIncome =
+      !isInternal && tx.amountCents > 0 && (tx.type === 'INCOME' || tx.type === 'TRANSFER_IN');
+    const isExpense =
+      !isInternal && tx.amountCents < 0 && (tx.type === 'EXPENSE' || tx.type === 'TRANSFER_OUT');
 
     if (isCurrentMonth && isIncome) {
       monthlyIncome = addCents(monthlyIncome, tx.amountCents);
@@ -564,6 +602,7 @@ export async function getDashboardMetricsByUser(
       type: true,
       creditLimitCents: true,
       interestRateEA: true,
+      parentAccountId: true,
     },
   });
 
@@ -591,8 +630,21 @@ export async function getDashboardMetricsByUser(
       currency: true,
       type: true,
       date: true,
+      accountId: true,
+      transferToAccountId: true,
+      transferFromAccountId: true,
     },
   });
+
+  // Build account hierarchy map for internal-transfer detection
+  const hierarchy: Record<string, AccountHierarchyEntry> = {};
+  for (const account of accounts) {
+    hierarchy[account.id] = {
+      id: account.id,
+      type: account.type,
+      parentAccountId: account.parentAccountId,
+    };
+  }
 
   // Early return for empty state
   if (accounts.length === 0 && allTransactions.length === 0) {
@@ -634,7 +686,8 @@ export async function getDashboardMetricsByUser(
     allTransactions,
     startOfCurrentMonth,
     startOfLastMonth,
-    endOfLastMonth
+    endOfLastMonth,
+    hierarchy
   );
   const pendingFixedExpensesTotal = calculatePendingFixedExpenses(pendingFixedExpenses);
 

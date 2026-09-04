@@ -7,6 +7,7 @@ import { NewTransactionButton } from '@/components/transactions/NewTransactionBu
 import { CreateTransactionModal } from '@/components/transactions/CreateTransactionModal';
 import { CategoryManagerModal } from '@/components/transactions/CategoryManagerModal';
 import { TransferModal } from '@/components/transactions/TransferModal';
+import { hasAnyValidPair } from '@/components/transactions/transferRules';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import type { AccountBrief, CategoryBrief } from '@/components/transactions/types';
@@ -18,6 +19,7 @@ interface TransactionHeaderActionsProps {
   hasAccounts: boolean;
   lang: Locale;
   userId: string;
+  locale?: string;
 }
 
 /**
@@ -35,6 +37,7 @@ export function TransactionHeaderActions({
   hasAccounts,
   lang,
   userId,
+  locale = 'es-CO',
 }: Readonly<TransactionHeaderActionsProps>) {
   const router = useRouter();
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
@@ -49,8 +52,9 @@ export function TransactionHeaderActions({
   const openTransfer = useCallback(() => setIsTransferOpen(true), []);
   const closeTransfer = useCallback(() => setIsTransferOpen(false), []);
 
-  // A transfer requires at least two active accounts.
-  const canTransfer = accounts.length >= 2;
+  // A transfer requires at least one valid pair per the pocket contract (the
+  // server is the source of truth; this hides the button when no pair exists).
+  const canTransfer = hasAnyValidPair(accounts);
 
   return (
     <>
@@ -81,6 +85,7 @@ export function TransactionHeaderActions({
         categories={categories}
         dictionary={dictionary}
         lang={lang}
+        locale={locale}
         onOpenCategoryManager={openCategoryManager}
       />
 
@@ -89,6 +94,7 @@ export function TransactionHeaderActions({
         accounts={accounts}
         userId={userId}
         dictionary={dictionary}
+        locale={locale}
         onClose={closeTransfer}
       />
 

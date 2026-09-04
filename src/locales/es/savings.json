@@ -31,7 +31,7 @@
   "contribute": "Contribuir",
   "contributionAmount": "Monto a contribuir",
   "contributionNotes": "Notas (opcional)",
-  "sourceAccount": "Cuenta de origen (opcional)",
+  "sourceAccount": "Cuenta de origen",
   "confirmContribute": "Confirmar Contribución",
   "progress": "Progreso",
   "target": "Meta",
@@ -56,6 +56,7 @@
   "savingsCommitments": "Compromisos de Ahorro",
   "variableExpenses": "Gastos Variables",
   "cancel": "Cancelar",
+  "close": "Cerrar",
   "save": "Guardar",
   "delete": "Eliminar",
   "loading": "Cargando...",
@@ -77,6 +78,7 @@
     "updateFailed": "No se pudo actualizar la meta",
     "deleteFailed": "No se pudo eliminar la meta",
     "contributeFailed": "No se pudo registrar la contribución",
-    "sessionInvalid": "Tu sesión expiró. Inicia sesión de nuevo."
+    "sessionInvalid": "Tu sesión expiró. Inicia sesión de nuevo.",
+    "sourceAccountRequired": "Selecciona una cuenta de origen"
   }
 }

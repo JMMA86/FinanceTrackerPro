@@ -5,10 +5,18 @@
     "investments": "Investment Accounts",
     "creditCards": "Credit Cards"
   },
+  "creditCardsComingSoon": "Coming soon",
+  "creditCardsInDevelopment": "In development",
   "addAccount": "Add Account",
   "noAccounts": "No bank accounts yet",
   "noAccountsDesc": "Add your checking accounts, savings, cash, and pockets.",
   "balance": "Balance",
+  "cardTypeLabels": {
+    "SAVINGS": "Savings",
+    "CHECKING": "Checking",
+    "CASH": "Cash",
+    "POCKET": "Pocket"
+  },
   "createSuccess": "Account created",
   "updateSuccess": "Account updated",
   "deleteSuccess": "Account deleted",
@@ -23,6 +31,7 @@
   "pocketHasBalance": "Empty this account's pockets first",
   "accountHasHoldings": "Sell your assets before deleting this account",
   "cancel": "Cancel",
+  "close": "Close",
   "delete": "Delete",
   "create": "Create Account",
   "createPocket": "Create Pocket",

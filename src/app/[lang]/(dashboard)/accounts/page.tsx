@@ -40,10 +40,12 @@ export default async function AccountsPage({ params }: Readonly<AccountsPageProp
           <p className="text-sm font-semibold text-white">
             {get(dictionary, 'sections.creditCards')}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">Próximamente</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {get(dictionary, 'creditCardsComingSoon')}
+          </p>
         </div>
         <span className="text-xs font-medium text-slate-500 bg-white/5 px-2.5 py-1 rounded-full">
-          En desarrollo
+          {get(dictionary, 'creditCardsInDevelopment')}
         </span>
       </section>
     </div>

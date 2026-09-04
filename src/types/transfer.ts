@@ -33,6 +33,8 @@ export interface TransferAccountRecord {
   balanceCents: number;
   currency: Currency;
   isActive: boolean;
+  type: string;
+  parentAccountId: string | null;
 }
 
 /**

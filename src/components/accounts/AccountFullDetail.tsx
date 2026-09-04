@@ -13,7 +13,7 @@ import {
   Activity,
   Plus,
 } from 'lucide-react';
-import { formatMoney, multiplyCents, divideCents } from '@/lib/money';
+import { formatMoney, multiplyCents, divideCents, addCents } from '@/lib/money';
 import { get } from '@/lib/i18n';
 import { getAccountTransactions } from '@/actions/account-transactions.actions';
 import { NetworkLogo, TYPE_GRADIENTS } from './AccountCard';
@@ -538,6 +538,12 @@ export function AccountFullDetail({
   if (!isOpen || !account || !cardRect) return null;
 
   const safeAcc = safeAccount(account);
+  // Display balance: external balance + the sum of this account's pockets
+  // (visual only — the stored balance is never modified).
+  const totalBalanceCents = pockets.reduce(
+    (sum, p) => addCents(sum, p.balanceCents),
+    safeAcc.balanceCents
+  );
   const light =
     (liveCardColor ?? safeAcc.cardColor) != null &&
     LIGHT_PRESET_KEYS.has(liveCardColor ?? safeAcc.cardColor ?? '');
@@ -665,7 +671,7 @@ export function AccountFullDetail({
                 {[
                   {
                     label: get(dictionary, 'detail.currentBalance'),
-                    value: formatMoney(safeAcc.balanceCents, safeAcc.currency, locale),
+                    value: formatMoney(totalBalanceCents, safeAcc.currency, locale),
                   },
                   {
                     label: get(dictionary, 'detail.rateEA'),

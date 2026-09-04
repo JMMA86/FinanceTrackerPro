@@ -5,10 +5,18 @@
     "investments": "Cuentas de Inversión",
     "creditCards": "Tarjetas de Crédito"
   },
+  "creditCardsComingSoon": "Próximamente",
+  "creditCardsInDevelopment": "En desarrollo",
   "addAccount": "Nueva Cuenta",
   "noAccounts": "Sin cuentas bancarias",
   "noAccountsDesc": "Agrega tus cuentas corrientes, ahorros, efectivo y bolsillos.",
   "balance": "Saldo",
+  "cardTypeLabels": {
+    "SAVINGS": "Ahorros",
+    "CHECKING": "Corriente",
+    "CASH": "Efectivo",
+    "POCKET": "Bolsillo"
+  },
   "createSuccess": "Cuenta creada",
   "updateSuccess": "Cuenta actualizada",
   "deleteSuccess": "Cuenta eliminada",
@@ -23,6 +31,7 @@
   "pocketHasBalance": "Primero vacía los bolsillos de esta cuenta",
   "accountHasHoldings": "Vende tus activos antes de eliminar la cuenta",
   "cancel": "Cancelar",
+  "close": "Cerrar",
   "delete": "Eliminar",
   "create": "Crear Cuenta",
   "createPocket": "Crear Bolsillo",

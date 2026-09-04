@@ -98,5 +98,10 @@
   "education": "Education",
   "shopping": "Shopping",
   "dining": "Dining",
-  "other": "Other"
+  "other": "Other",
+  "pocketTransferNotAllowed": "Transfer not allowed: you can only move money between an account and its pockets, or between accounts.",
+  "accountsGroup": "Accounts",
+  "pocketsGroup": "Pockets",
+  "availableToTransfer": "Available to transfer",
+  "availableToSpend": "Available to spend"
 }

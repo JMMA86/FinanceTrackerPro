@@ -12,6 +12,9 @@ import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import { toLocalDateTimeInput } from '@/lib/utils/date-utils';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
+import { AccountSelect } from '@/components/transactions/AccountSelect';
+import { isPocket } from '@/components/transactions/transferRules';
+import { formatMoney } from '@/lib/money';
 import { getTransactionError } from '@/components/transactions/getTransactionError';
 import type { AccountBrief, CategoryBrief, TransactionRow } from '@/components/transactions/types';
 
@@ -44,6 +47,7 @@ interface CreateTransactionModalProps {
   categories: CategoryBrief[];
   dictionary: Record<string, unknown>;
   lang: Locale;
+  locale?: string;
   onOpenCategoryManager?: () => void;
 }
 
@@ -53,8 +57,6 @@ interface CreateTransactionModalProps {
 
 const inputCls =
   'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-transparent transition-all';
-const selectCls =
-  'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-transparent transition-all appearance-none';
 const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 const errorCls = 'mt-1 text-xs text-red-400';
 
@@ -67,6 +69,7 @@ export function CreateTransactionModal({
   categories,
   dictionary,
   lang,
+  locale = 'es-CO',
   onOpenCategoryManager,
 }: Readonly<CreateTransactionModalProps>) {
   const activeModal = useUIStore((s) => s.activeModal);
@@ -87,6 +90,9 @@ export function CreateTransactionModal({
   const [isVisible, setIsVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [amountCents, setAmountCents] = useState(0);
+  // Incremented every time the modal opens so inner components that need to
+  // reset their local state (e.g. AccountSelect) are remounted per session.
+  const [modalSession, setModalSession] = useState(0);
   // Holds a server-side error (e.g. INSUFFICIENT_FUNDS) rendered inline inside
   // the modal. NOTE: the global ToastViewport is a fixed z-[100] element that
   // sits BELOW the <dialog> top layer, so toasts are invisible while the modal
@@ -119,6 +125,11 @@ export function CreateTransactionModal({
 
   // Find selected account currency for display
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+
+  // Split accounts into non-pocket accounts and pockets for the custom selector
+  const accountOptions = accounts.filter((a) => !isPocket(a));
+  const pocketOptions = accounts.filter(isPocket);
+  const isExpense = selectedType === 'EXPENSE';
 
   // -----------------------------------------------------------------------
   // Modal open/close with animation
@@ -166,10 +177,27 @@ export function CreateTransactionModal({
     const id = requestAnimationFrame(() => {
       setServerError(''); // Clear any stale server error when (re)opening the modal
       setAmountCents(editingTransaction ? Math.abs(editingTransaction.amountCents) : 0);
+      setModalSession((s) => s + 1); // Remount AccountSelect on every open
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
   }, [isOpen, accounts, reset, editingTransaction]);
+
+  // Clamp the typed amount when switching to an account whose balance is lower
+  // than the currently typed amount. Only applies in create mode + EXPENSE; for
+  // updates the server validates the true limit (allows up to balance + original
+  // amount), so editing is intentionally left untouched.
+  useEffect(() => {
+    if (isEditing) return;
+    if (selectedType !== 'EXPENSE') return;
+    const acc = accounts.find((a) => a.id === selectedAccountId);
+    if (acc && amountCents > acc.balanceCents) {
+      queueMicrotask(() => {
+        setAmountCents(0);
+        setValue('amountCents', 0);
+      });
+    }
+  }, [selectedAccountId, selectedType, amountCents, accounts, isEditing, setValue]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
@@ -411,24 +439,22 @@ export function CreateTransactionModal({
             <label htmlFor="tx-account" className={labelCls}>
               {get(dictionary, 'account')}
             </label>
-            <select
+            <AccountSelect
+              key={`account-${modalSession}`}
               id="tx-account"
-              {...register('accountId')}
-              required
+              value={selectedAccountId ?? ''}
+              onChange={(accountId) => setValue('accountId', accountId)}
+              placeholder={get(dictionary, 'selectAccount')}
+              accountsGroupLabel={get(dictionary, 'accountsGroup')}
+              pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
+              accounts={accountOptions}
+              pockets={pocketOptions}
+              showBalance
               disabled={isEditing}
-              aria-invalid={!!errors.accountId}
-              aria-describedby={errors.accountId ? 'tx-account-error' : undefined}
-              className={selectCls}
-            >
-              <option value="" className="bg-slate-800">
-                {get(dictionary, 'selectAccount')}
-              </option>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id} className="bg-slate-800">
-                  {acc.name} ({acc.currency})
-                </option>
-              ))}
-            </select>
+              locale={locale}
+              hasError={!!errors.accountId}
+              ariaDescribedBy={errors.accountId ? 'tx-account-error' : undefined}
+            />
             {errors.accountId && (
               <p id="tx-account-error" className={errorCls} role="alert">
                 {errors.accountId.message}
@@ -446,6 +472,14 @@ export function CreateTransactionModal({
                 </span>
               )}
             </label>
+            {!isEditing && isExpense && selectedAccount && (
+              <p className="mt-1 mb-3 text-xs text-slate-400">
+                {get(dictionary, 'availableToSpend')}:{' '}
+                <span className="font-semibold text-emerald-400 tabular-nums">
+                  {formatMoney(selectedAccount.balanceCents, selectedAccount.currency, locale)}
+                </span>
+              </p>
+            )}
             <FormattedNumericInput
               id="tx-amount"
               value={amountCents}
@@ -453,6 +487,11 @@ export function CreateTransactionModal({
                 setAmountCents(v);
                 setValue('amountCents', v);
               }}
+              maxValue={
+                !isEditing && isExpense
+                  ? (selectedAccount?.balanceCents ?? 9_999_999_999_999)
+                  : 9_999_999_999_999
+              }
               aria-invalid={!!errors.amountCents}
               aria-describedby={errors.amountCents ? 'tx-amount-error' : undefined}
               className={`${inputCls} font-mono tabular-nums text-lg`}

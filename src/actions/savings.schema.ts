@@ -104,7 +104,7 @@ export const ContributeToGoalSchema = z.object({
     .min(1, 'Amount must be positive')
     .max(MAX_SAFE_CENTS, 'Amount exceeds maximum safe value'),
   currency: CurrencySchema,
-  sourceAccountId: CUID.optional(),
+  sourceAccountId: CUID,
   notes: z.string().max(500).optional(),
   idempotencyKey: UUIDv4,
 });

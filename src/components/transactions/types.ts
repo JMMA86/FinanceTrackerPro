@@ -17,6 +17,9 @@ export interface AccountBrief {
   id: string;
   name: string;
   currency: string;
+  type: string;
+  parentAccountId: string | null;
+  balanceCents: number;
 }
 
 /**

@@ -1,7 +1,7 @@
 ---
 description: Tech Lead orquestador de FinanceTrackerPro. Único agente primario. Analiza cada tarea, decide qué subagentes invocar y en qué orden, y valida que los quality gates se cumplan antes de cerrar cualquier ciclo.
 mode: primary
-model: opencode-go/qwen3.6-plus
+model: opencode-go/deepseek-v4-flash
 tools:
   write: true
   edit: true

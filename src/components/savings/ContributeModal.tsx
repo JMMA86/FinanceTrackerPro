@@ -178,7 +178,7 @@ export function ContributeModal({
     >
       <button
         type="button"
-        aria-label="Close"
+        aria-label={get(dictionary, 'close')}
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -202,7 +202,7 @@ export function ContributeModal({
           <button
             type="button"
             onClick={handleClose}
-            aria-label="Close"
+            aria-label={get(dictionary, 'close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -278,13 +278,20 @@ export function ContributeModal({
             )}
           </div>
 
-          {/* Source account */}
+          {/* Source account (required — the backend validates it) */}
           <div>
             <label htmlFor="contribute-account" className={labelCls}>
               {get(dictionary, 'sourceAccount')}
             </label>
-            <select id="contribute-account" className={selectCls} {...register('sourceAccountId')}>
-              <option value="" className="bg-slate-800">
+            <select
+              id="contribute-account"
+              className={selectCls}
+              required
+              {...register('sourceAccountId')}
+              aria-invalid={!!errors.sourceAccountId}
+              aria-describedby={errors.sourceAccountId ? 'contribute-account-error' : undefined}
+            >
+              <option value="" className="bg-slate-800" disabled>
                 —
               </option>
               {accounts.map((a) => (
@@ -293,6 +300,11 @@ export function ContributeModal({
                 </option>
               ))}
             </select>
+            {errors.sourceAccountId && (
+              <p id="contribute-account-error" role="alert" className={errorCls}>
+                {errors.sourceAccountId.message}
+              </p>
+            )}
           </div>
 
           {/* Notes */}

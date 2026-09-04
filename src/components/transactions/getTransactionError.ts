@@ -34,6 +34,8 @@ export function getTransactionError(
       return get(dictionary, 'transferUnauthorized');
     case 'BALANCE_NEGATIVE':
       return get(dictionary, 'balanceNegative');
+    case 'POCKET_TRANSFER_NOT_ALLOWED':
+      return get(dictionary, 'pocketTransferNotAllowed');
     default:
       return result.error || get(dictionary, 'createError');
   }

@@ -5,6 +5,7 @@ import { Plus, Landmark } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/store/ui.store';
 import { get } from '@/lib/i18n';
+import { addCents } from '@/lib/money';
 import { AccountCard } from './AccountCard';
 import { AccountFullDetail } from './AccountFullDetail';
 import { EditPocketModal } from './EditPocketModal';
@@ -149,16 +150,24 @@ export function BankAccountsSection({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {parentAccounts.map((account) => (
-              <AccountCard
-                key={account.id}
-                account={account}
-                isAnySelected={isDetailOpen}
-                dictionary={dictionary}
-                locale={locale}
-                onSelect={handleSelect}
-              />
-            ))}
+            {parentAccounts.map((account) => {
+              const pocketsOf = accounts.filter((a) => a.parentAccountId === account.id);
+              const total = pocketsOf.reduce(
+                (sum, p) => addCents(sum, p.balanceCents),
+                account.balanceCents
+              );
+              return (
+                <AccountCard
+                  key={account.id}
+                  account={account}
+                  totalBalanceCents={total}
+                  isAnySelected={isDetailOpen}
+                  dictionary={dictionary}
+                  locale={locale}
+                  onSelect={handleSelect}
+                />
+              );
+            })}
           </div>
         )}
       </section>

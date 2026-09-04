@@ -193,7 +193,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
     >
       <button
         type="button"
-        aria-label="Close"
+        aria-label={get(dictionary, 'close')}
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -216,7 +216,7 @@ export function CreateAccountModal({ accounts, dictionary }: Readonly<CreateAcco
           <button
             type="button"
             onClick={handleClose}
-            aria-label="Close"
+            aria-label={get(dictionary, 'close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
           >
             <X className="w-4 h-4" />

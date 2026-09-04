@@ -126,8 +126,22 @@ HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
 // ---------------------------------------------------------------------------
 
 const mockAccounts = [
-  { id: 'acc-1', name: 'Main Account', currency: 'USD' },
-  { id: 'acc-2', name: 'Savings Account', currency: 'USD' },
+  {
+    id: 'acc-1',
+    name: 'Main Account',
+    currency: 'USD',
+    type: 'CHECKING',
+    parentAccountId: null,
+    balanceCents: 500000,
+  },
+  {
+    id: 'acc-2',
+    name: 'Savings Account',
+    currency: 'USD',
+    type: 'SAVINGS',
+    parentAccountId: null,
+    balanceCents: 500000,
+  },
 ];
 
 const mockCategories = [

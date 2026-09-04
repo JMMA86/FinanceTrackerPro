@@ -97,6 +97,9 @@ export function AccountSelect({
     }
   };
 
+  // Custom combobox following the WAI-ARIA APG pattern: the listbox/option roles
+  // below are intentional (see sonar-project.properties S6819 exclusion) — a
+  // native <option>/<select> cannot render our grouped dark UI.
   function renderOption(opt: AccountBrief, isPocket: boolean) {
     const isSelected = opt.id === value;
     const isHighlighted = opt.id === allOptions[highlight]?.id;

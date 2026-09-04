@@ -34,26 +34,24 @@ export const CreateAccountSchema = z
     if (data.type === 'POCKET') {
       if (!data.parentAccountId) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['parentAccountId'],
           message: 'A pocket must have a parent account',
         });
       }
       if (data.initialBalanceCents !== 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['initialBalanceCents'],
           message: 'A pocket must start with zero balance',
         });
       }
-    } else {
-      if (data.parentAccountId !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['parentAccountId'],
-          message: 'parentAccountId is only valid for pockets',
-        });
-      }
+    } else if (data.parentAccountId !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['parentAccountId'],
+        message: 'parentAccountId is only valid for pockets',
+      });
     }
   });
 

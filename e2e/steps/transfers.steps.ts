@@ -97,7 +97,9 @@ async function selectTransferAccount(page: Page, selectName: string, accountName
   const listbox = controlsId ? dialog.locator(`#${controlsId}`) : dialog.getByRole('listbox');
   await expect(listbox).toBeVisible({ timeout: 5000 });
 
-  const option = listbox.getByRole('option', { name: new RegExp(accountName, 'i') });
+  // Anchored at the start: pocket options include their parent as a sub-label,
+  // so a parent name could otherwise match multiple options.
+  const option = listbox.getByRole('option', { name: new RegExp('^' + accountName, 'i') });
   await option.click();
   await expect(listbox).not.toBeVisible({ timeout: 5000 });
   await page.waitForTimeout(150);

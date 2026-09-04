@@ -8,8 +8,10 @@
  *   - panel `role="listbox"` only present in the DOM while the dropdown is open
  *     (click on the trigger opens it)
  *   - options `role="option"` (buttons); their accessible name includes the
- *     account name + currency + (when showBalance) the formatted balance, so a
- *     partial match by account name works.
+ *     account name + currency + (when showBalance) the formatted balance, and
+ *     for pockets the parent account name as a sub-label. We anchor the match
+ *     to the START so a parent name also appearing as a pocket sub-label does
+ *     not match multiple options.
  */
 
 import { type Page, expect } from '@playwright/test';
@@ -19,7 +21,7 @@ import { type Page, expect } from '@playwright/test';
  *
  * @param page        The active page.
  * @param comboName   Accessible name of the combobox (label text), e.g. "Cuenta origen".
- * @param accountName Partial text of the account name (case-insensitive match).
+ * @param accountName Account name prefix (case-insensitive match, anchored at start).
  */
 export async function selectAccount(
   page: Page,
@@ -35,7 +37,7 @@ export async function selectAccount(
   const listbox = controlsId ? page.locator(`#${controlsId}`) : page.getByRole('listbox');
   await expect(listbox).toBeVisible({ timeout: 5000 });
 
-  const option = listbox.getByRole('option', { name: new RegExp(accountName, 'i') });
+  const option = listbox.getByRole('option', { name: new RegExp('^' + accountName, 'i') });
   await option.click();
 
   // Wait for the dropdown to close and the selection state to settle.

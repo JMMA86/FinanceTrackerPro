@@ -240,7 +240,9 @@ async function selectAccount(user: ReturnType<typeof userEvent.setup>, accountNa
   });
   const trigger = screen.getByRole('combobox', { name: 'Account' });
   await user.click(trigger);
-  await user.click(screen.getByRole('option', { name: new RegExp(accountName) }));
+  // Anchor to the start: pocket options include their parent account as a
+  // sub-label, so an unanchored name match can hit multiple options.
+  await user.click(screen.getByRole('option', { name: new RegExp('^' + accountName) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -292,9 +294,9 @@ describe('CreateTransactionModal', () => {
 
     await user.click(accountCombobox);
 
-    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Travel Pocket/ })).toBeInTheDocument();
     // Group headers render inside the listbox
     expect(screen.getByText('Accounts')).toBeInTheDocument();
     expect(screen.getByText('Pockets')).toBeInTheDocument();

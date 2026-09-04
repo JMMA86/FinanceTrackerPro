@@ -216,7 +216,9 @@ async function selectAccount(
 ) {
   const trigger = screen.getByRole('combobox', { name: comboboxLabel });
   await user.click(trigger);
-  await user.click(screen.getByRole('option', { name: new RegExp(accountName) }));
+  // Anchor to the start: pocket options include their parent account as a
+  // sub-label, so an unanchored name match can hit multiple options.
+  await user.click(screen.getByRole('option', { name: new RegExp('^' + accountName) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -249,25 +251,25 @@ describe('TransferModal', () => {
 
     // The source dropdown lists every account (including pockets) as sources
     await user.click(fromCombobox);
-    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /COP Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^COP Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Travel Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Pocket/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('option', { name: /Main Account/ }));
+    await user.click(screen.getByRole('option', { name: /^Main Account/ }));
 
     expect(screen.getByRole('combobox', { name: 'To account' })).toBeEnabled();
 
     // Destination options follow the pocket contract: own pockets + other
     // non-pocket accounts; the source itself and other accounts' pockets are excluded.
     await user.click(screen.getByRole('combobox', { name: 'To account' }));
-    expect(screen.getByRole('option', { name: /Savings Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /COP Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Travel Pocket/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Main Account/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Vacation Pocket/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^COP Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Travel Pocket/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Pocket/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^Main Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^Vacation Pocket/ })).not.toBeInTheDocument();
   });
 
   it('should show the currency of the selected source account in the amount label', async () => {
@@ -300,11 +302,11 @@ describe('TransferModal', () => {
     await selectAccount(user, 'From account', 'Travel Pocket');
 
     await user.click(screen.getByRole('combobox', { name: 'To account' }));
-    expect(screen.getByRole('option', { name: /Main Account/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Savings Pocket/ })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Savings Account/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /COP Account/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Vacation Pocket/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Main Account/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^Savings Pocket/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^Savings Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^COP Account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^Vacation Pocket/ })).not.toBeInTheDocument();
   });
 
   it('should reset the destination when the source changes to the selected destination', async () => {

@@ -224,7 +224,18 @@ describe('PayCreditCardModal', () => {
   it('splits source accounts into bank accounts and pockets for AccountSelect', async () => {
     renderModal([makeCard({ debtCents: 100000 })]);
 
-    const select = await screen.findByLabelText('source-account-select');
+    // Wait until the async loadAccounts has populated the selector (CI-safe).
+    // findByLabelText alone resolves as soon as the mock AccountSelect renders,
+    // which happens BEFORE `await getBankAccounts` → setAccounts(filtered), so
+    // asserting the data attributes immediately is a race on slow CI runners.
+    await waitFor(
+      () => {
+        expect(screen.getByRole('option', { name: 'Checking' })).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+
+    const select = screen.getByLabelText('source-account-select');
     expect(select).toHaveAttribute('data-accounts', JSON.stringify(['Checking']));
     expect(select).toHaveAttribute('data-pockets', JSON.stringify(['Viaje']));
   });

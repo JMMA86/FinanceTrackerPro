@@ -11,18 +11,12 @@ import { UpdateAccountSchema, type UpdateAccountInput } from '@/actions/account.
 import { get } from '@/lib/i18n';
 import { log } from '@/lib/logger';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
+import { NetworkPicker } from '@/components/ui/NetworkPicker';
 import { CardDesignPicker } from './CardDesignPicker';
-import { NetworkLogo } from './AccountCard';
 import type { AccountCardData, CardNetwork } from './AccountCard';
 
 const RATE_TYPES = new Set(['SAVINGS', 'POCKET']);
 const MAX_RATE = 10_000;
-const NETWORKS: { value: CardNetwork; labelKey: string }[] = [
-  { value: 'NONE', labelKey: 'networks.NONE' },
-  { value: 'VISA', labelKey: 'visa' },
-  { value: 'MASTERCARD', labelKey: 'mastercard' },
-  { value: 'AMEX', labelKey: 'amex' },
-];
 
 function toRateHundredths(rate: number | null | undefined): number {
   return rate == null ? 0 : Math.round(Number(rate) * 100);
@@ -233,33 +227,7 @@ export function EditAccountModal({ accounts, dictionary }: Readonly<EditAccountM
 
           <div>
             <p className={labelCls}>{get(dictionary, 'paymentNetwork')}</p>
-            <div className="grid grid-cols-4 gap-2">
-              {NETWORKS.map(({ value, labelKey }) => {
-                const isSelected = cardNetwork === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setCardNetwork(value)}
-                    aria-pressed={isSelected}
-                    className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                      isSelected
-                        ? 'border-blue-500/60 bg-blue-500/15 text-white'
-                        : 'border-white/10 bg-white/4 text-slate-400 hover:border-white/20'
-                    }`}
-                  >
-                    {value === 'NONE' ? (
-                      <span className="text-base">—</span>
-                    ) : (
-                      <span className="h-4 flex items-center">
-                        <NetworkLogo network={value} size="sm" />
-                      </span>
-                    )}
-                    <span className="text-[10px]">{get(dictionary, labelKey)}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <NetworkPicker value={cardNetwork} onChange={setCardNetwork} dictionary={dictionary} />
           </div>
 
           <CardDesignPicker

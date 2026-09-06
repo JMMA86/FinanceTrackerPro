@@ -25,13 +25,21 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-vi.mock('@/services/reconciliation.service', () => ({
-  getTrueBalance: vi.fn((accountId: string) => {
-    if (accountId === VALID_FROM_ACCOUNT) return Promise.resolve(100000);
-    if (accountId === VALID_TO_ACCOUNT) return Promise.resolve(50000);
-    return Promise.resolve(0);
-  }),
-}));
+vi.mock('@/services/reconciliation.service', async () => {
+  const actual = await vi.importActual<typeof import('@/services/reconciliation.service')>(
+    '@/services/reconciliation.service'
+  );
+  return {
+    ...actual,
+    // getTrueBalanceFromTx stays real so it reads the mockTx.transaction.findMany
+    // results; getTrueBalance is mocked to a high value for legacy callers.
+    getTrueBalance: vi.fn((accountId: string) => {
+      if (accountId === VALID_FROM_ACCOUNT) return Promise.resolve(100000);
+      if (accountId === VALID_TO_ACCOUNT) return Promise.resolve(50000);
+      return Promise.resolve(0);
+    }),
+  };
+});
 
 vi.mock('@/services/idempotency.service', () => ({
   checkAndLockIdempotency: vi.fn(() => Promise.resolve(null)),

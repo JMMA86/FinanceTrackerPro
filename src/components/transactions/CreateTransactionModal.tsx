@@ -61,6 +61,25 @@ const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tr
 const errorCls = 'mt-1 text-xs text-red-400';
 const MAX_SAFE = 9_999_999_999_999;
 
+/** Amount shown as "Disponible para gastar": available credit for cards, balance otherwise. */
+function getAvailableToSpend(account: AccountBrief): number {
+  return account.type === 'CREDIT_CARD'
+    ? (account.availableCreditCents ?? 0)
+    : account.balanceCents;
+}
+
+/** Max amount the input accepts: available credit for cards, balance for banks, unlimited when editing. */
+function getAmountMaxValue(
+  account: AccountBrief | null | undefined,
+  isEditing: boolean,
+  isExpense: boolean
+): number {
+  if (isEditing || !isExpense || !account) return MAX_SAFE;
+  return account.type === 'CREDIT_CARD'
+    ? (account.availableCreditCents ?? MAX_SAFE)
+    : account.balanceCents;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -222,7 +241,7 @@ export function CreateTransactionModal({
   useEffect(() => {
     if (selectedType !== 'INCOME') return;
     const acc = accounts.find((a) => a.id === selectedAccountId);
-    if (acc && acc.type === 'CREDIT_CARD') {
+    if (acc?.type === 'CREDIT_CARD') {
       setValue('accountId', '');
     }
   }, [selectedType, selectedAccountId, accounts, setValue]);
@@ -508,9 +527,7 @@ export function CreateTransactionModal({
                 {get(dictionary, 'availableToSpend')}:{' '}
                 <span className="font-semibold text-emerald-400 tabular-nums">
                   {formatMoney(
-                    selectedAccount.type === 'CREDIT_CARD'
-                      ? (selectedAccount.availableCreditCents ?? 0)
-                      : selectedAccount.balanceCents,
+                    getAvailableToSpend(selectedAccount),
                     selectedAccount.currency,
                     locale
                   )}
@@ -524,15 +541,7 @@ export function CreateTransactionModal({
                 setAmountCents(v);
                 setValue('amountCents', v);
               }}
-              maxValue={
-                !isEditing && isExpense
-                  ? selectedAccount
-                    ? selectedAccount.type === 'CREDIT_CARD'
-                      ? (selectedAccount.availableCreditCents ?? MAX_SAFE)
-                      : selectedAccount.balanceCents
-                    : MAX_SAFE
-                  : MAX_SAFE
-              }
+              maxValue={getAmountMaxValue(selectedAccount, isEditing, isExpense)}
               aria-invalid={!!errors.amountCents}
               aria-describedby={errors.amountCents ? 'tx-amount-error' : undefined}
               className={`${inputCls} font-mono tabular-nums text-lg`}

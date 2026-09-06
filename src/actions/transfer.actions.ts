@@ -20,6 +20,7 @@ import type { Prisma, Transaction, ApiAction } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
 import { log } from '@/lib/logger';
+import { getTrueBalanceFromTx } from '@/services/reconciliation.service';
 import { checkAndLockIdempotency } from '@/services/idempotency.service';
 import {
   checkApiRateLimit,
@@ -253,14 +254,7 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
       // Compute the true balance from the transactional snapshot (Rule 13).
       // Using tx.transaction (not the global prisma client) guarantees the funds
       // check sees every transfer committed before we acquired the lock.
-      const sourceTransactions = await tx.transaction.findMany({
-        where: { accountId: validated.fromAccountId, isActive: true },
-        select: { amountCents: true },
-      });
-      let sourceTrueBalance = 0;
-      for (const sourceTx of sourceTransactions) {
-        sourceTrueBalance = addCents(sourceTrueBalance, Number(sourceTx.amountCents));
-      }
+      const sourceTrueBalance = await getTrueBalanceFromTx(tx, validated.fromAccountId);
 
       if (sourceTrueBalance < validated.amountCents) {
         throw new InsufficientFundsError(validated.amountCents, sourceTrueBalance);

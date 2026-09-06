@@ -39,6 +39,16 @@ function displayValue(opt: AccountBrief): number {
   return opt.balanceCents;
 }
 
+/** Icon + color per option group: pockets (amber), cards (orange), accounts (blue). */
+function getOptionIcon(
+  isPocket: boolean,
+  isCard: boolean
+): { className: string; Icon: typeof Wallet } {
+  if (isPocket) return { className: 'text-amber-400', Icon: Wallet };
+  if (isCard) return { className: 'text-orange-400', Icon: CreditCard };
+  return { className: 'text-blue-400', Icon: Landmark };
+}
+
 export function AccountSelect({
   id,
   value,
@@ -128,8 +138,7 @@ export function AccountSelect({
     const isHighlighted = opt.id === allOptions[highlight]?.id;
     const isCard = opt.type === 'CREDIT_CARD';
     const parentName = isPocket ? parentNameById?.[opt.parentAccountId ?? ''] : undefined;
-    const iconClass = isPocket ? 'text-amber-400' : isCard ? 'text-orange-400' : 'text-blue-400';
-    const Icon = isPocket ? Wallet : isCard ? CreditCard : Landmark;
+    const { className: iconClass, Icon } = getOptionIcon(isPocket, isCard);
     return (
       <button
         key={opt.id}

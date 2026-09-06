@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/store/ui.store';
 import { payCreditCard } from '@/actions/credit-card.actions';
@@ -12,6 +12,7 @@ import { getBankAccounts } from '@/actions/account.actions';
 import { get } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
+import { ModalDialog } from '@/components/ui/ModalDialog';
 import { AccountSelect } from '@/components/transactions/AccountSelect';
 import { isPocket } from '@/components/transactions/transferRules';
 import type { AccountBrief } from '@/components/transactions/types';
@@ -21,7 +22,7 @@ const MAX_SAFE = 9_999_999_999_999;
 
 // Client-side validation schema (no date field — the server defaults to today)
 const PayFormSchema = z.object({
-  idempotencyKey: z.string().uuid(),
+  idempotencyKey: z.uuid(),
   accountId: z.string().min(1),
   sourceAccountId: z.string().min(1, 'Select a source account'),
   amountCents: z.number().int('Amount must be an integer').min(1, 'Amount must be positive'),
@@ -31,9 +32,54 @@ const PayFormSchema = z.object({
 
 type PayFormData = z.infer<typeof PayFormSchema>;
 
+type PayActionError = { code?: string; error?: string };
+
+/** Maps payment action error codes to localized messages. */
+function getPayErrorMessage(result: PayActionError, dictionary: Record<string, unknown>): string {
+  switch (result.code) {
+    case 'SESSION_INVALID':
+      return get(dictionary, 'errors.sessionInvalid');
+    case 'INSUFFICIENT_FUNDS':
+      return get(dictionary, 'pay.insufficientFunds');
+    case 'CARD_NO_DEBT':
+      return get(dictionary, 'pay.noDebt');
+    case 'CARD_OVERPAYMENT':
+      return get(dictionary, 'pay.overpayment');
+    default:
+      return get(dictionary, 'errors.payFailed');
+  }
+}
+
+/** Card preselected when the modal opens: the requested card, else the first payable one. */
+function resolveInitialCard(
+  cards: CreditCard[],
+  initialCardId: string | undefined,
+  payableCards: CreditCard[]
+): CreditCard | null {
+  if (initialCardId) {
+    const target = cards.find((c) => c.id === initialCardId);
+    if (target) return target;
+  }
+  return payableCards[0] ?? cards[0] ?? null;
+}
+
+/** Selector options: payable cards + the requested card when it has no debt (so its state is visible). */
+function buildSelectorCards(
+  cards: CreditCard[],
+  payableCards: CreditCard[],
+  initialCardId: string | undefined
+): CreditCard[] {
+  const base = [...payableCards];
+  if (initialCardId && !base.some((c) => c.id === initialCardId)) {
+    const initial = cards.find((c) => c.id === initialCardId);
+    if (initial) base.push(initial);
+  }
+  return base;
+}
+
 interface PayCreditCardModalProps {
   open: boolean;
-  /** All credit cards the user can pay. A card selector is shown when > 1. */
+  /** All credit cards the user can pay. A card selector is shown when > 1 payable. */
   cards: CreditCard[];
   /** Card preselected when the modal opens (e.g. from the card detail). */
   initialCardId?: string;
@@ -53,8 +99,6 @@ export function PayCreditCardModal({
   const addNotification = useUIStore((s) => s.addNotification);
   const router = useRouter();
 
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
   const [amountCents, setAmountCents] = useState(0);
   // Source accounts (bank accounts + pockets) matching the selected card currency.
   const [accounts, setAccounts] = useState<AccountBrief[]>([]);
@@ -81,18 +125,10 @@ export function PayCreditCardModal({
 
   // Only cards with an outstanding debt are actually payable.
   const payableCards = useMemo(() => cards.filter((c) => c.debtCents > 0), [cards]);
-  // Selector options: payable cards + (when opened from the card detail) the
-  // initially requested card even if it has no debt, so its "sin deuda" state
-  // is visible and the user can switch to a payable card.
-  const selectorCards = useMemo(() => {
-    const base = [...payableCards];
-    if (initialCardId && !base.some((c) => c.id === initialCardId)) {
-      const initial = cards.find((c) => c.id === initialCardId);
-      if (initial) base.push(initial);
-    }
-    return base;
-  }, [cards, payableCards, initialCardId]);
-
+  const selectorCards = useMemo(
+    () => buildSelectorCards(cards, payableCards, initialCardId),
+    [cards, payableCards, initialCardId]
+  );
   const hasDebt = selectedCard != null && selectedCard.debtCents > 0;
 
   const selectedSourceId = useWatch({ control, name: 'sourceAccountId' });
@@ -122,81 +158,42 @@ export function PayCreditCardModal({
     }
   }, []);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open) {
-      dialog.showModal();
-    } else if (dialog.open) {
-      setIsVisible(false);
-      setTimeout(() => {
-        if (dialog.open) dialog.close();
-      }, 240);
-    }
-  }, [open]);
+  /** Reset the form for a given card (no React state — used from effects and handlers). */
+  const resetFormForCard = useCallback(
+    (card: CreditCard | null) => {
+      reset({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: card?.id ?? '',
+        amountCents: 0,
+        currency: card?.currency ?? 'COP',
+        sourceAccountId: undefined,
+        description: undefined,
+      });
+      loadAccounts(card);
+    },
+    [reset, loadAccounts]
+  );
 
-  // Select the initial card (or the first payable) and reset the form on open.
+  // Select the initial card and reset the form on every open.
   useEffect(() => {
     if (!open) return;
-    const initial = (() => {
-      if (initialCardId) {
-        const target = cards.find((c) => c.id === initialCardId);
-        if (target) return target;
-      }
-      return payableCards[0] ?? cards[0] ?? null;
-    })();
-    const cardId = initial?.id ?? '';
-    reset({
-      idempotencyKey: crypto.randomUUID(),
-      accountId: cardId,
-      amountCents: 0,
-      currency: initial?.currency ?? 'COP',
-      sourceAccountId: undefined,
-      description: undefined,
-    });
+    const initial = resolveInitialCard(cards, initialCardId, payableCards);
     const id = requestAnimationFrame(() => {
+      resetFormForCard(initial);
       setAmountCents(0);
       setServerError('');
       setModalSession((s) => s + 1); // Remount AccountSelect on every open
-      setIsVisible(true);
     });
-    const timer = setTimeout(() => {
-      loadAccounts(initial);
-    }, 0);
-    return () => {
-      cancelAnimationFrame(id);
-      clearTimeout(timer);
-    };
-  }, [open, cards, initialCardId, payableCards, reset, loadAccounts]);
+    return () => cancelAnimationFrame(id);
+  }, [open, cards, initialCardId, payableCards, resetFormForCard]);
 
   // When the user changes the selected card, sync the form and reload sources.
   function handleCardChange(cardId: string) {
     const next = cards.find((c) => c.id === cardId) ?? null;
-    reset({
-      idempotencyKey: crypto.randomUUID(),
-      accountId: cardId,
-      amountCents: 0,
-      currency: next?.currency ?? 'COP',
-      sourceAccountId: undefined,
-      description: undefined,
-    });
+    resetFormForCard(next);
     setAmountCents(0);
     setServerError('');
-    loadAccounts(next);
   }
-
-  const handleClose = () => {
-    const dialog = dialogRef.current;
-    if (!dialog?.open) return;
-    setIsVisible(false);
-    setTimeout(() => {
-      if (dialog.open) dialog.close();
-    }, 240);
-  };
-
-  const handleDialogClose = () => {
-    onClose();
-  };
 
   async function onSubmit(data: PayFormData) {
     if (!selectedCard) return;
@@ -207,16 +204,7 @@ export function PayCreditCardModal({
       onClose();
       router.refresh();
     } else {
-      const msg =
-        result.code === 'SESSION_INVALID'
-          ? get(dictionary, 'errors.sessionInvalid')
-          : result.code === 'INSUFFICIENT_FUNDS'
-            ? get(dictionary, 'pay.insufficientFunds')
-            : result.code === 'CARD_NO_DEBT'
-              ? get(dictionary, 'pay.noDebt')
-              : result.code === 'CARD_OVERPAYMENT'
-                ? get(dictionary, 'pay.overpayment')
-                : get(dictionary, 'errors.payFailed');
+      const msg = getPayErrorMessage(result, dictionary);
       setServerError(msg);
       addNotification('error', msg);
     }
@@ -229,220 +217,188 @@ export function PayCreditCardModal({
   const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={handleDialogClose}
-      aria-labelledby="pay-credit-card-title"
-      className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
+    <ModalDialog
+      open={open}
+      titleId="pay-credit-card-title"
+      title={
+        <>
+          {get(dictionary, 'pay.payCard')}
+          {selectedCard && <span className="text-slate-400 ml-1">— {selectedCard.name}</span>}
+        </>
+      }
+      dictionary={dictionary}
+      onClose={onClose}
     >
-      <button
-        type="button"
-        aria-label={get(dictionary, 'close')}
-        onClick={handleClose}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-        style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
-      />
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <input type="hidden" {...register('idempotencyKey')} />
+        <input type="hidden" {...register('accountId')} />
+        <input type="hidden" {...register('currency')} />
 
-      <div
-        className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
-        style={{
-          transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.93) translateY(12px)',
-          opacity: isVisible ? 1 : 0,
-          transition: isVisible
-            ? 'transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms cubic-bezier(0.4, 0, 0.2, 1)'
-            : 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1), opacity 180ms cubic-bezier(0.4, 0, 0.2, 1)',
-        }}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 sticky top-0 bg-slate-900 z-10">
-          <h2 id="pay-credit-card-title" className="text-base font-semibold text-white">
-            {get(dictionary, 'pay.payCard')}
-            {selectedCard && <span className="text-slate-400 ml-1">— {selectedCard.name}</span>}
-          </h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label={get(dictionary, 'close')}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
+        {/* Error alert */}
+        {serverError && (
+          <div
+            role="alert"
+            className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
           >
-            <X className="w-4 h-4" />
-          </button>
+            {serverError}
+          </div>
+        )}
+
+        {/* Card selector (shown when more than one payable card is available) */}
+        {selectorCards.length > 1 && (
+          <div>
+            <label htmlFor="pay-card" className={labelCls}>
+              {get(dictionary, 'pay.selectCard')}
+            </label>
+            <select
+              id="pay-card"
+              value={selectedCardId}
+              onChange={(e) => handleCardChange(e.target.value)}
+              className={selectCls}
+            >
+              {selectorCards.map((c) => (
+                <option key={c.id} value={c.id} className="bg-slate-800">
+                  {c.name} ({c.currency})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* No-debt state (the selected card has nothing to pay) */}
+        {selectedCard && !hasDebt && (
+          <output
+            htmlFor="pay-amount"
+            className="block bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-300"
+          >
+            {get(dictionary, 'pay.noDebt')}
+          </output>
+        )}
+
+        {/* Current debt info */}
+        {selectedCard && (
+          <div className="bg-white/5 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">{get(dictionary, 'pay.currentDebt')}</span>
+              <span className="font-semibold text-rose-400 tabular-nums">
+                {formatMoney(selectedCard.debtCents, selectedCard.currency, locale)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">{get(dictionary, 'pay.available')}</span>
+              <span className="font-semibold text-emerald-400 tabular-nums">
+                {selectedCard.availableCreditCents != null
+                  ? formatMoney(selectedCard.availableCreditCents, selectedCard.currency, locale)
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Amount */}
+        <div>
+          <label htmlFor="pay-amount" className={labelCls}>
+            {get(dictionary, 'pay.amount')}
+          </label>
+          <FormattedNumericInput
+            id="pay-amount"
+            value={amountCents}
+            maxValue={selectedCard ? selectedCard.debtCents : MAX_SAFE}
+            onChange={(v) => {
+              setAmountCents(v);
+              setValue('amountCents', v);
+            }}
+            aria-invalid={!!errors.amountCents}
+            aria-describedby={errors.amountCents ? 'pay-amount-error' : undefined}
+            className={`${inputCls} font-mono tabular-nums`}
+          />
+          {errors.amountCents && (
+            <p id="pay-amount-error" role="alert" className="mt-1 text-xs text-red-400">
+              {errors.amountCents.message}
+            </p>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4" noValidate>
-          <input type="hidden" {...register('idempotencyKey')} />
-          <input type="hidden" {...register('accountId')} />
-          <input type="hidden" {...register('currency')} />
-
-          {/* Error alert */}
-          {serverError && (
-            <div
-              role="alert"
-              className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
-            >
-              {serverError}
-            </div>
+        {/* Source account */}
+        <div>
+          <label htmlFor="pay-account" className={labelCls}>
+            {get(dictionary, 'pay.sourceAccount')}
+          </label>
+          <AccountSelect
+            key={`pay-account-${modalSession}`}
+            id="pay-account"
+            value={selectedSourceId ?? ''}
+            onChange={(accountId) => setValue('sourceAccountId', accountId)}
+            placeholder={get(dictionary, 'pay.accountNamePlaceholder')}
+            accountsGroupLabel={get(dictionary, 'pay.sourceAccountsGroup')}
+            pocketsGroupLabel={get(dictionary, 'pay.pocketsGroup')}
+            parentNameById={parentNameById}
+            accounts={bankAccounts}
+            pockets={pockets}
+            showBalance
+            locale={locale}
+            hasError={!!errors.sourceAccountId}
+            ariaDescribedBy={errors.sourceAccountId ? 'pay-account-error' : undefined}
+          />
+          {errors.sourceAccountId && (
+            <p id="pay-account-error" role="alert" className="mt-1 text-xs text-red-400">
+              {errors.sourceAccountId.message}
+            </p>
           )}
-
-          {/* Card selector (shown when more than one payable card is available) */}
-          {selectorCards.length > 1 && (
-            <div>
-              <label htmlFor="pay-card" className={labelCls}>
-                {get(dictionary, 'pay.selectCard')}
-              </label>
-              <select
-                id="pay-card"
-                value={selectedCardId}
-                onChange={(e) => handleCardChange(e.target.value)}
-                className={selectCls}
-              >
-                {selectorCards.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-slate-800">
-                    {c.name} ({c.currency})
-                  </option>
-                ))}
-              </select>
-            </div>
+          {accounts.length === 0 && (
+            <p className="mt-1.5 text-xs text-slate-400">
+              {get(dictionary, 'pay.noSourceAccounts')}
+            </p>
           )}
-
-          {/* No-debt state (the selected card has nothing to pay) */}
-          {selectedCard && !hasDebt && (
-            <div
-              role="status"
-              className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-300"
-            >
-              {get(dictionary, 'pay.noDebt')}
-            </div>
+          {selectedInsufficient && (
+            <p role="alert" className="mt-1.5 text-xs text-amber-400">
+              {get(dictionary, 'pay.insufficientFunds')}
+            </p>
           )}
+        </div>
 
-          {/* Current debt info */}
-          {selectedCard && (
-            <div className="bg-white/5 rounded-xl p-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">{get(dictionary, 'pay.currentDebt')}</span>
-                <span className="font-semibold text-rose-400 tabular-nums">
-                  {formatMoney(selectedCard.debtCents, selectedCard.currency, locale)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">{get(dictionary, 'pay.available')}</span>
-                <span className="font-semibold text-emerald-400 tabular-nums">
-                  {selectedCard.availableCreditCents != null
-                    ? formatMoney(selectedCard.availableCreditCents, selectedCard.currency, locale)
-                    : '—'}
-                </span>
-              </div>
-            </div>
-          )}
+        {/* Description */}
+        <div>
+          <label htmlFor="pay-description" className={labelCls}>
+            {get(dictionary, 'pay.description')}
+          </label>
+          <input
+            id="pay-description"
+            type="text"
+            autoComplete="off"
+            placeholder={get(dictionary, 'pay.descriptionPlaceholder')}
+            className={inputCls}
+            {...register('description')}
+          />
+        </div>
 
-          {/* Amount */}
-          <div>
-            <label htmlFor="pay-amount" className={labelCls}>
-              {get(dictionary, 'pay.amount')}
-            </label>
-            <FormattedNumericInput
-              id="pay-amount"
-              value={amountCents}
-              maxValue={selectedCard ? selectedCard.debtCents : MAX_SAFE}
-              onChange={(v) => {
-                setAmountCents(v);
-                setValue('amountCents', v);
-              }}
-              aria-invalid={!!errors.amountCents}
-              aria-describedby={errors.amountCents ? 'pay-amount-error' : undefined}
-              className={`${inputCls} font-mono tabular-nums`}
-            />
-            {errors.amountCents && (
-              <p id="pay-amount-error" role="alert" className="mt-1 text-xs text-red-400">
-                {errors.amountCents.message}
-              </p>
+        {/* Actions */}
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
+          >
+            {get(dictionary, 'cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={
+              isSubmitting || amountCents <= 0 || selectedInsufficient || !selectedCard || !hasDebt
+            }
+            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <Check className="w-4 h-4" aria-hidden="true" />
+                {get(dictionary, 'pay.confirmPay')}
+              </>
             )}
-          </div>
-
-          {/* Source account */}
-          <div>
-            <label htmlFor="pay-account" className={labelCls}>
-              {get(dictionary, 'pay.sourceAccount')}
-            </label>
-            <AccountSelect
-              key={`pay-account-${modalSession}`}
-              id="pay-account"
-              value={selectedSourceId ?? ''}
-              onChange={(accountId) => setValue('sourceAccountId', accountId)}
-              placeholder={get(dictionary, 'pay.accountNamePlaceholder')}
-              accountsGroupLabel={get(dictionary, 'pay.sourceAccountsGroup')}
-              pocketsGroupLabel={get(dictionary, 'pay.pocketsGroup')}
-              parentNameById={parentNameById}
-              accounts={bankAccounts}
-              pockets={pockets}
-              showBalance
-              locale={locale}
-              hasError={!!errors.sourceAccountId}
-              ariaDescribedBy={errors.sourceAccountId ? 'pay-account-error' : undefined}
-            />
-            {errors.sourceAccountId && (
-              <p id="pay-account-error" role="alert" className="mt-1 text-xs text-red-400">
-                {errors.sourceAccountId.message}
-              </p>
-            )}
-            {accounts.length === 0 && (
-              <p className="mt-1.5 text-xs text-slate-400">
-                {get(dictionary, 'pay.noSourceAccounts')}
-              </p>
-            )}
-            {selectedInsufficient && (
-              <p role="alert" className="mt-1.5 text-xs text-amber-400">
-                {get(dictionary, 'pay.insufficientFunds')}
-              </p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label htmlFor="pay-description" className={labelCls}>
-              {get(dictionary, 'pay.description')}
-            </label>
-            <input
-              id="pay-description"
-              type="text"
-              autoComplete="off"
-              placeholder={get(dictionary, 'pay.descriptionPlaceholder')}
-              className={inputCls}
-              {...register('description')}
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
-            >
-              {get(dictionary, 'cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={
-                isSubmitting ||
-                amountCents <= 0 ||
-                selectedInsufficient ||
-                !selectedCard ||
-                !hasDebt
-              }
-              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Check className="w-4 h-4" aria-hidden="true" />
-                  {get(dictionary, 'pay.confirmPay')}
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
+          </button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }

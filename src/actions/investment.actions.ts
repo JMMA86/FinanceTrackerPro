@@ -24,6 +24,7 @@ import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
 import { addCents, subtractCents, divideCents, decimalToCents } from '@/lib/money';
+import { serializeTransaction } from '@/lib/serialize';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { getClientInfo } from '@/lib/utils/client-info';
@@ -53,20 +54,6 @@ import {
 import type { ApiAction } from '@prisma/client';
 
 const BANK_ACCOUNT_TYPES = ['CHECKING', 'CASH', 'SAVINGS'] as const;
-
-/**
- * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
- * safe to serialize back to the client (JSON.stringify throws on bigint).
- */
-function serializeTransaction<
-  T extends { amountCents: bigint; originalAmountCents: bigint | null },
->(tx: T) {
-  return {
-    ...tx,
-    amountCents: Number(tx.amountCents),
-    originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
-  };
-}
 
 // ============================================================================
 // a) getInvestmentAccounts — List user's investment accounts with holdings

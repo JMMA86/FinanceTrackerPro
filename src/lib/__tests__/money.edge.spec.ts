@@ -12,7 +12,6 @@ import {
   divideCents,
   convertCurrency,
   bigintToNumber,
-  numberToBigInt,
 } from '../money';
 
 describe('money.ts edge cases', () => {
@@ -32,15 +31,9 @@ describe('money.ts edge cases', () => {
     });
   });
 
-  describe('numberToBigInt', () => {
-    it('converts a JS number to a BigInt before writing to the DB', () => {
-      expect(numberToBigInt(12345)).toBe(BigInt(12345));
-      expect(numberToBigInt(-5000)).toBe(BigInt(-5000));
-      expect(numberToBigInt(0)).toBe(BigInt(0));
-    });
-
-    it('round-trips through the storage layer', () => {
-      const stored = numberToBigInt(2_100_000_000);
+  describe('BigInt storage round-trip', () => {
+    it('round-trips through the storage layer using BigInt directly', () => {
+      const stored = BigInt(2_100_000_000);
       expect(bigintToNumber(stored)).toBe(2_100_000_000);
     });
   });

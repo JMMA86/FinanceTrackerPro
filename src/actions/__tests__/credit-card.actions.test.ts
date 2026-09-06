@@ -57,9 +57,18 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-vi.mock('@/services/reconciliation.service', () => ({
-  getTrueBalance: vi.fn(),
-}));
+vi.mock('@/services/reconciliation.service', async () => {
+  const actual = await vi.importActual<typeof import('@/services/reconciliation.service')>(
+    '@/services/reconciliation.service'
+  );
+  return {
+    ...actual,
+    // getTrueBalanceFromTx stays real so it reads the mockTx.transaction.findMany
+    // results (card debt / source funds); getTrueBalance is mocked for callers
+    // that still use the global-client version.
+    getTrueBalance: vi.fn(),
+  };
+});
 
 vi.mock('@/services/rate-limit.service', () => ({
   checkApiRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
@@ -500,7 +509,7 @@ describe('credit-card.actions.ts (unit)', () => {
       expect(data.newBalanceCents).toBe(-130000);
       // availableCredit = 5000000 - |min(newBalance,0)| = 5000000 - 130000
       expect(data.availableCreditCents).toBe(4870000);
-      expect((data.transactions as unknown[]).length).toBe(2);
+      expect(data.transactions as unknown[]).toHaveLength(2);
     });
 
     it('handles the day-31 cutoff in a short month (February rollover)', async () => {

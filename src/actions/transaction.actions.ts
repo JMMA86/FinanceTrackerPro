@@ -8,6 +8,7 @@ import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
 import { addCents, subtractCents } from '@/lib/money';
+import { serializeTransaction } from '@/lib/serialize';
 import { getTrueBalance } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { getClientInfo } from '@/lib/utils/client-info';
@@ -37,17 +38,34 @@ import {
 import type { Prisma, ApiAction, TransactionType } from '@prisma/client';
 
 /**
- * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
- * safe to serialize back to the client (JSON.stringify throws on bigint).
+ * Verify funds (Rule 13) for a transaction with a negative amount. CREDIT_CARD
+ * accounts are exempt from the negative-balance rule (debt is allowed) but must
+ * respect their credit limit; other accounts cannot go negative.
  */
-function serializeTransaction<
-  T extends { amountCents: bigint; originalAmountCents: bigint | null },
->(tx: T) {
-  return {
-    ...tx,
-    amountCents: Number(tx.amountCents),
-    originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
-  };
+async function validateExpenseFundsForCreate(
+  amountCents: number,
+  account: { id: string; type: string; creditLimitCents: bigint | null }
+): Promise<void> {
+  // Only negative amounts reduce the balance / increase card debt.
+  if (amountCents >= 0) return;
+
+  const transactionRepo = getTransactionRepository();
+  const trueBalance = await getTrueBalance(account.id, transactionRepo);
+
+  if (account.type === 'CREDIT_CARD') {
+    if (account.creditLimitCents != null) {
+      const projectedDebt = Math.abs(addCents(trueBalance, amountCents));
+      if (projectedDebt > account.creditLimitCents) {
+        throw new CreditLimitExceededError(account.id, Number(account.creditLimitCents));
+      }
+    }
+    return;
+  }
+
+  const projectedBalance = addCents(trueBalance, amountCents);
+  if (projectedBalance < 0) {
+    throw new InsufficientFundsError(Math.abs(amountCents), trueBalance);
+  }
 }
 
 // ============================================================================
@@ -174,44 +192,8 @@ async function createTransactionInternal(input: unknown) {
       throw new ValidationError('Income cannot be registered on a credit card');
     }
 
-    // Validate category if provided (must be system or own, and active)
-    if (validated.categoryId) {
-      const category = await tx.category.findUnique({
-        where: { id: validated.categoryId },
-        select: { id: true, isActive: true, userId: true },
-      });
-      if (!category?.isActive) throw new NotFoundError('Category', validated.categoryId);
-      if (category.userId !== null && category.userId !== session.userId) {
-        throw new UnauthorizedError('Category does not belong to user');
-      }
-    }
-
-    // Fund verification (Rule 13). Any transaction with a negative amount reduces
-    // the account balance. CREDIT_CARD accounts are exempt from the negative-balance
-    // rule (debt is allowed) but must respect their credit limit.
-    if (validated.amountCents < 0) {
-      const transactionRepo = getTransactionRepository();
-      const trueBalance = await getTrueBalance(validated.accountId, transactionRepo);
-
-      if (account.type === 'CREDIT_CARD') {
-        // Negative amount = increases debt. Only enforce the credit limit
-        // when one is configured.
-        if (account.creditLimitCents != null) {
-          const projectedDebt = Math.abs(addCents(trueBalance, validated.amountCents));
-          if (projectedDebt > account.creditLimitCents) {
-            throw new CreditLimitExceededError(
-              validated.accountId,
-              Number(account.creditLimitCents)
-            );
-          }
-        }
-      } else {
-        const projectedBalance = addCents(trueBalance, validated.amountCents);
-        if (projectedBalance < 0) {
-          throw new InsufficientFundsError(Math.abs(validated.amountCents), trueBalance);
-        }
-      }
-    }
+    await validateCategoryForUpdate(tx, validated.categoryId, session.userId);
+    await validateExpenseFundsForCreate(validated.amountCents, account);
 
     // Create transaction record (Rule 2: integer cents)
     const transaction = await tx.transaction.create({

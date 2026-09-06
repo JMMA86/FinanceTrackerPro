@@ -97,12 +97,72 @@ function formatDateShort(d: Date | string, locale: string) {
   });
 }
 
-function formatPeriod(d: Date | string, locale: string) {
-  return new Date(d).toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+interface StatementSummaryProps {
+  statement: CreditCardStatement | null;
+  statementLoading: boolean;
+  dictionary: Record<string, unknown>;
+  locale: string;
+}
+
+/** Period statement summary: loading skeleton, metric grid, or empty state. */
+function StatementSummary({
+  statement,
+  statementLoading,
+  dictionary,
+  locale,
+}: Readonly<StatementSummaryProps>) {
+  if (statementLoading) {
+    return (
+      <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/[0.02] p-5">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className="h-8 bg-white/5 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!statement) {
+    return <p className="text-xs text-white/30 py-1">{get(dictionary, 'detail.noMovements')}</p>;
+  }
+
+  const items = [
+    {
+      label: get(dictionary, 'detail.previousBalance'),
+      value: formatMoney(statement.previousBalanceCents, statement.currency, locale),
+    },
+    {
+      label: get(dictionary, 'detail.charges'),
+      value: formatMoney(statement.chargesTotalCents, statement.currency, locale),
+    },
+    {
+      label: get(dictionary, 'detail.payments'),
+      value: formatMoney(statement.paymentsTotalCents, statement.currency, locale),
+    },
+    {
+      label: get(dictionary, 'detail.interest'),
+      value: formatMoney(statement.interestTotalCents, statement.currency, locale),
+    },
+    {
+      label: get(dictionary, 'detail.newBalance'),
+      value: formatMoney(statement.newBalanceCents, statement.currency, locale),
+      cls: 'text-rose-400',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      {items.map(({ label, value, cls }) => (
+        <div key={label} className="app-shell rounded-2xl p-4">
+          <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
+            {label}
+          </p>
+          <p className={`text-base font-bold text-white leading-tight ${cls ?? ''}`}>{value}</p>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function CreditCardDetail({
@@ -418,17 +478,13 @@ export function CreditCardDetail({
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
                 {get(dictionary, 'detail.cutoffDay')}
               </p>
-              <p className="text-lg font-bold text-white">
-                {safe.cutoffDay != null ? safe.cutoffDay : '—'}
-              </p>
+              <p className="text-lg font-bold text-white">{safe.cutoffDay ?? '—'}</p>
             </div>
             <div className="app-shell rounded-2xl p-4">
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
                 {get(dictionary, 'detail.dueDay')}
               </p>
-              <p className="text-lg font-bold text-white">
-                {safe.paymentDueDay != null ? safe.paymentDueDay : '—'}
-              </p>
+              <p className="text-lg font-bold text-white">{safe.paymentDueDay ?? '—'}</p>
             </div>
             <div className="app-shell rounded-2xl p-4">
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
@@ -507,58 +563,18 @@ export function CreditCardDetail({
               </h2>
               {statement && (
                 <span className="text-[11px] text-white/30">
-                  {formatPeriod(statement.periodStart, locale)} —{' '}
-                  {formatPeriod(statement.periodEnd, locale)}
+                  {formatDateShort(statement.periodStart, locale)} —{' '}
+                  {formatDateShort(statement.periodEnd, locale)}
                 </span>
               )}
             </div>
 
-            {statementLoading ? (
-              <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/[0.02] p-5">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <div key={i} className="h-8 bg-white/5 rounded animate-pulse" />
-                  ))}
-                </div>
-              </div>
-            ) : statement ? (
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                {[
-                  {
-                    label: get(dictionary, 'detail.previousBalance'),
-                    value: formatMoney(statement.previousBalanceCents, statement.currency, locale),
-                  },
-                  {
-                    label: get(dictionary, 'detail.charges'),
-                    value: formatMoney(statement.chargesTotalCents, statement.currency, locale),
-                  },
-                  {
-                    label: get(dictionary, 'detail.payments'),
-                    value: formatMoney(statement.paymentsTotalCents, statement.currency, locale),
-                  },
-                  {
-                    label: get(dictionary, 'detail.interest'),
-                    value: formatMoney(statement.interestTotalCents, statement.currency, locale),
-                  },
-                  {
-                    label: get(dictionary, 'detail.newBalance'),
-                    value: formatMoney(statement.newBalanceCents, statement.currency, locale),
-                    cls: 'text-rose-400',
-                  },
-                ].map(({ label, value, cls }) => (
-                  <div key={label} className="app-shell rounded-2xl p-4">
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-medium mb-1">
-                      {label}
-                    </p>
-                    <p className={`text-base font-bold text-white leading-tight ${cls ?? ''}`}>
-                      {value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-white/30 py-1">{get(dictionary, 'detail.noMovements')}</p>
-            )}
+            <StatementSummary
+              statement={statement}
+              statementLoading={statementLoading}
+              dictionary={dictionary}
+              locale={locale}
+            />
           </section>
         </div>
       </div>

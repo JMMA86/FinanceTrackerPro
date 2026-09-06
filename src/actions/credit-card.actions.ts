@@ -25,7 +25,8 @@ import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
 import { log } from '@/lib/logger';
 import { addCents, subtractCents } from '@/lib/money';
-import { getTrueBalance } from '@/services/reconciliation.service';
+import { serializeTransaction } from '@/lib/serialize';
+import { getTrueBalance, getTrueBalanceFromTx } from '@/services/reconciliation.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { getClientInfo } from '@/lib/utils/client-info';
 import {
@@ -82,14 +83,22 @@ const CARD_PAYMENT_SOURCE_TYPES: ReadonlySet<string> = new Set([
  * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
  * safe to serialize back to the client (JSON.stringify throws on bigint).
  */
-function serializeTransaction<
-  T extends { amountCents: bigint; originalAmountCents: bigint | null },
->(tx: T) {
-  return {
-    ...tx,
-    amountCents: Number(tx.amountCents),
-    originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
-  };
+/**
+ * Validate that a card has outstanding debt to pay and that the payment amount
+ * does not exceed it. Throws CardNoDebtError / CardOverpaymentError.
+ */
+function assertPayableCardDebt(
+  accountId: string,
+  cardTrueBalance: number,
+  amountCents: number
+): void {
+  const cardDebtCents = cardTrueBalance < 0 ? Math.abs(cardTrueBalance) : 0;
+  if (cardDebtCents === 0) {
+    throw new CardNoDebtError(accountId);
+  }
+  if (amountCents > cardDebtCents) {
+    throw new CardOverpaymentError(amountCents, cardDebtCents);
+  }
 }
 
 /**
@@ -588,22 +597,8 @@ async function payCreditCardInternal(input: unknown) {
       //     validate there is outstanding debt to pay. Prevents paying a card
       //     with no debt (creating unintended credit in favor) and overpaying
       //     beyond the outstanding debt.
-      const cardTransactions = await tx.transaction.findMany({
-        where: { accountId: validated.accountId, isActive: true },
-        select: { amountCents: true },
-      });
-      let cardTrueBalance = 0;
-      for (const cTx of cardTransactions) {
-        cardTrueBalance = addCents(cardTrueBalance, Number(cTx.amountCents));
-      }
-
-      const cardDebtCents = cardTrueBalance < 0 ? Math.abs(cardTrueBalance) : 0;
-      if (cardDebtCents === 0) {
-        throw new CardNoDebtError(validated.accountId);
-      }
-      if (validated.amountCents > cardDebtCents) {
-        throw new CardOverpaymentError(validated.amountCents, cardDebtCents);
-      }
+      const cardTrueBalance = await getTrueBalanceFromTx(tx, validated.accountId);
+      assertPayableCardDebt(validated.accountId, cardTrueBalance, validated.amountCents);
 
       // 2. Validate the source (funding) account
       const sourceAccount = await tx.account.findUnique({
@@ -654,14 +649,7 @@ async function payCreditCardInternal(input: unknown) {
       // 5. Compute the true balance from the transactional snapshot (Rule 13).
       //    Using tx.transaction (not the global prisma client) guarantees the funds
       //    check sees every payment committed before we acquired the lock.
-      const sourceTransactions = await tx.transaction.findMany({
-        where: { accountId: validated.sourceAccountId, isActive: true },
-        select: { amountCents: true },
-      });
-      let sourceTrueBalance = 0;
-      for (const sourceTx of sourceTransactions) {
-        sourceTrueBalance = addCents(sourceTrueBalance, Number(sourceTx.amountCents));
-      }
+      const sourceTrueBalance = await getTrueBalanceFromTx(tx, validated.sourceAccountId);
       if (sourceTrueBalance < validated.amountCents) {
         throw new InsufficientFundsError(validated.amountCents, sourceTrueBalance);
       }

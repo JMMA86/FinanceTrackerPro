@@ -62,9 +62,17 @@ vi.mock('@/services/idempotency.service', () => ({
   checkAndLockIdempotency: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/services/reconciliation.service', () => ({
-  getTrueBalance: vi.fn().mockResolvedValue(100000),
-}));
+vi.mock('@/services/reconciliation.service', async () => {
+  const actual = await vi.importActual<typeof import('@/services/reconciliation.service')>(
+    '@/services/reconciliation.service'
+  );
+  return {
+    ...actual,
+    // getTrueBalanceFromTx stays real so it reads the real transactional DB
+    // (Rule 13); getTrueBalance is mocked for any legacy global-client caller.
+    getTrueBalance: vi.fn().mockResolvedValue(100000),
+  };
+});
 
 vi.mock('@/lib/repositories', () => ({
   getTransactionRepository: vi.fn(() => ({

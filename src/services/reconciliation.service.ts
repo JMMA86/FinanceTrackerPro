@@ -12,8 +12,33 @@
 import 'server-only';
 import { addCents, subtractCents } from '@/lib/money';
 import { log } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
 import type { IAccountRepository } from '@/lib/repositories/interfaces/IAccountRepository';
 import type { ITransactionRepository } from '@/lib/repositories/interfaces/ITransactionRepository';
+
+/**
+ * Compute the TRUE balance of an account from the transactional snapshot.
+ * Must be called with the transaction client (tx), not the global prisma
+ * client, so concurrent committed operations are visible (used inside
+ * $transaction for TOCTOU-safe funds checks).
+ * @param tx Prisma transaction client
+ * @param accountId Account to compute balance for
+ * @returns True balance in cents
+ */
+export async function getTrueBalanceFromTx(
+  tx: Prisma.TransactionClient,
+  accountId: string
+): Promise<number> {
+  const transactions = await tx.transaction.findMany({
+    where: { accountId, isActive: true },
+    select: { amountCents: true },
+  });
+  let balance = 0;
+  for (const t of transactions) {
+    balance = addCents(balance, Number(t.amountCents));
+  }
+  return balance;
+}
 
 /**
  * Compute true balance from transaction history (SOURCE OF TRUTH)

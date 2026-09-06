@@ -26,13 +26,6 @@ export function bigintToNumber(v: bigint | null | undefined): number {
 }
 
 /**
- * Convert a JS number to a Prisma BIGINT monetary value before writing.
- */
-export function numberToBigInt(v: number): bigint {
-  return BigInt(v);
-}
-
-/**
  * Add two amounts in cents
  * @param a Amount A in cents
  * @param b Amount B in cents

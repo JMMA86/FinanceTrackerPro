@@ -39,7 +39,10 @@
     "playwright": {
       "type": "local",
       "enabled": true,
-      "command": ["npx", "@playwright/mcp@latest"],
+      "command": ["npx", "@playwright/mcp@latest", "--browser", "firefox"],
+      "environment": {
+        "PLAYWRIGHT_MCP_BROWSER": "firefox",
+      },
       "timeout": 30000,
     },
     "postgres": {

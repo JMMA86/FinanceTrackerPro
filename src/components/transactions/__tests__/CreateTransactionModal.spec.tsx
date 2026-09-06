@@ -92,12 +92,14 @@ vi.mock('@/components/ui/FormattedNumericInput', () => ({
     onChange,
     id,
     className,
+    maxValue,
     ...props
   }: {
     value: number;
     onChange: (v: number) => void;
     id?: string;
     className?: string;
+    maxValue?: number;
     'aria-invalid'?: boolean | 'true' | 'false';
     'aria-describedby'?: string;
   }) => (
@@ -106,6 +108,7 @@ vi.mock('@/components/ui/FormattedNumericInput', () => ({
       type="text"
       data-testid="formatted-numeric-input"
       value={value}
+      max={maxValue}
       onChange={(e) => onChange(Number(e.target.value))}
       className={className}
       {...props}
@@ -801,6 +804,81 @@ describe('CreateTransactionModal', () => {
     await selectAccount(user, 'Main Account');
 
     expect(screen.queryByText(/Available to spend/)).not.toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Credit card account handling (EXPENSE only, available-credit hint/clamp)
+  // -------------------------------------------------------------------------
+
+  const mockCreditCard = {
+    id: 'card-1',
+    name: 'Visa Oro',
+    currency: 'USD',
+    type: 'CREDIT_CARD',
+    parentAccountId: null,
+    balanceCents: -150000,
+    creditLimitCents: 1000000,
+    availableCreditCents: 850000,
+  };
+
+  it('should offer a credit card as an EXPENSE account option', async () => {
+    const user = userEvent.setup();
+    renderModal({ accounts: [...mockAccounts, mockCreditCard] });
+    // Let the mount rAF remount the AccountSelect before interacting
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+
+    await user.click(screen.getByRole('combobox', { name: 'Account' }));
+
+    expect(screen.getByRole('option', { name: /^Visa Oro/ })).toBeInTheDocument();
+  });
+
+  it('should NOT offer a credit card as an option when the type is INCOME', async () => {
+    const user = userEvent.setup();
+    renderModal({ accounts: [...mockAccounts, mockCreditCard] });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+
+    await user.click(screen.getByLabelText('Income'));
+    await user.click(screen.getByRole('combobox', { name: 'Account' }));
+
+    expect(screen.queryByRole('option', { name: /^Visa Oro/ })).not.toBeInTheDocument();
+  });
+
+  it('should show the available-to-spend hint using the card available credit', async () => {
+    const user = userEvent.setup();
+    renderModal({ accounts: [...mockAccounts, mockCreditCard] });
+
+    expect(screen.queryByText(/Available to spend/)).not.toBeInTheDocument();
+    await selectAccount(user, 'Visa Oro');
+
+    expect(screen.getByText(/Available to spend/)).toBeInTheDocument();
+  });
+
+  it('should clamp the amount input to the selected card available credit', async () => {
+    const user = userEvent.setup();
+    renderModal({ accounts: [...mockAccounts, mockCreditCard] });
+
+    await selectAccount(user, 'Visa Oro');
+
+    const amountInput = screen.getByTestId('formatted-numeric-input');
+    await waitFor(() => {
+      expect(amountInput.getAttribute('max')).toBe('850000');
+    });
+  });
+
+  it('should clear a selected credit card when switching the type to INCOME', async () => {
+    const user = userEvent.setup();
+    renderModal({ accounts: [...mockAccounts, mockCreditCard] });
+
+    await selectAccount(user, 'Visa Oro');
+    await user.click(screen.getByLabelText('Income'));
+
+    // The selected card is cleared; switching back to EXPENSE shows no card selected.
+    const accountCombobox = screen.getByRole('combobox', { name: 'Account' });
+    expect(accountCombobox).toHaveTextContent('Select an account');
   });
 
   // -------------------------------------------------------------------------

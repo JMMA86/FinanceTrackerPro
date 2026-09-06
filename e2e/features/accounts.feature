@@ -25,11 +25,11 @@ Feature: Gestión de Cuentas Bancarias
     And debe ver el mensaje descriptivo en el empty state
 
   @accounts @visual
-  Scenario: Sección placeholder de Tarjetas de Crédito es visible
+  Scenario: Sección de Tarjetas de Crédito muestra el empty state sin tarjetas
     Given que el usuario de cuentas ha iniciado sesión
     And que no existen cuentas bancarias
     When navega a la página de cuentas
-    Then debe ver la sección "Tarjetas de Crédito" con label "En desarrollo"
+    Then debe ver la sección "Tarjetas de Crédito" con label "Sin tarjetas de crédito"
 
   @accounts @visual @navigation
   Scenario: Sidebar marca Cuentas como activo

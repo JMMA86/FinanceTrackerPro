@@ -22,6 +22,12 @@ export const UNIQUE_POCKET_NAME_KEY = '__e2eUniquePocketName';
 /** localStorage key where the unique EDITED account name is stored (post-edit scenario). */
 export const UNIQUE_EDITED_NAME_KEY = '__e2eUniqueEditedName';
 
+/** localStorage key where the unique credit-card name is stored for the current scenario. */
+export const UNIQUE_CARD_NAME_KEY = '__e2eUniqueCardName';
+
+/** localStorage key where the unique EDITED card name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_CARD_NAME_KEY = '__e2eUniqueEditedCardName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -76,5 +82,33 @@ export async function storeUniqueEditedAccountName(page: Page, prefix: string): 
 export async function getStoredEditedAccountName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_EDITED_NAME_KEY);
   if (!name) throw new Error('No unique edited account name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped credit-card name, stores it and returns it. */
+export async function storeUniqueCardName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_CARD_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique credit-card name stored by the create-card step. */
+export async function getStoredCardName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_CARD_NAME_KEY);
+  if (!name) throw new Error('No unique credit-card name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED credit-card name, stores it and returns it. */
+export async function storeUniqueEditedCardName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_CARD_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED credit-card name stored by the edit-card step. */
+export async function getStoredEditedCardName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_CARD_NAME_KEY);
+  if (!name) throw new Error('No unique edited credit-card name stored on the page');
   return name;
 }

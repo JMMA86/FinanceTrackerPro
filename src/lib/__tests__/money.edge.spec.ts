@@ -5,9 +5,45 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { addCents, subtractCents, multiplyCents, divideCents, convertCurrency } from '../money';
+import {
+  addCents,
+  subtractCents,
+  multiplyCents,
+  divideCents,
+  convertCurrency,
+  bigintToNumber,
+  numberToBigInt,
+} from '../money';
 
 describe('money.ts edge cases', () => {
+  describe('bigintToNumber', () => {
+    it('converts a BigInt monetary field to a JS number', () => {
+      expect(bigintToNumber(BigInt(12345))).toBe(12345);
+      expect(bigintToNumber(BigInt(-9999999999999))).toBe(-9999999999999);
+    });
+
+    it('returns 0 for null or undefined', () => {
+      expect(bigintToNumber(null)).toBe(0);
+      expect(bigintToNumber(undefined)).toBe(0);
+    });
+
+    it('handles zero', () => {
+      expect(bigintToNumber(BigInt(0))).toBe(0);
+    });
+  });
+
+  describe('numberToBigInt', () => {
+    it('converts a JS number to a BigInt before writing to the DB', () => {
+      expect(numberToBigInt(12345)).toBe(BigInt(12345));
+      expect(numberToBigInt(-5000)).toBe(BigInt(-5000));
+      expect(numberToBigInt(0)).toBe(BigInt(0));
+    });
+
+    it('round-trips through the storage layer', () => {
+      const stored = numberToBigInt(2_100_000_000);
+      expect(bigintToNumber(stored)).toBe(2_100_000_000);
+    });
+  });
   describe('addCents', () => {
     it('should handle large numbers without floating point imprecision', () => {
       // 0.1 + 0.2 = 0.3 in decimal, but 0.30000000000000004 in IEEE 754

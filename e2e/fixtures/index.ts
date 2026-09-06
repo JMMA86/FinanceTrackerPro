@@ -37,6 +37,19 @@ export const SAVINGS_TEST_USER = {
   name: 'Savings E2E User',
 };
 
+/**
+ * Isolated user for credit-cards.feature — seeded with two bank accounts (funding
+ * source + transfer pair) and two deterministic credit cards ("Visa E2E" with
+ * debt, "Mastercard E2E" without debt). Consumption/payment/delete scenarios
+ * create their own cards via the UI with unique names, so the seed cards remain
+ * untouched for the whole run.
+ */
+export const CREDIT_CARDS_TEST_USER = {
+  email: process.env.E2E_CARDS_USER ?? 'cards@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Credit Cards E2E User',
+};
+
 export const INVALID_CREDENTIALS = {
   email: 'nonexistent@test.com',
   password: 'WrongPass123',

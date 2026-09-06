@@ -527,6 +527,156 @@ async function main() {
   console.log('✓ Pockets user seeded with parent account, 2 pockets, and external account');
 
   // ============================================================================
+  // Credit cards E2E user (credit-cards.feature)
+  // Isolated so consumption/payment scenarios never collide with other features.
+  //
+  // Bank accounts (funding source for card payments + transfer pair):
+  //   - "Cuenta Corriente" (CHECKING, COP) balanceCents = 200.000.000 ($2.000.000)
+  //   - "Cuenta de Ahorros" (SAVINGS, COP) balanceCents = 100.000.000 ($1.000.000)
+  // Credit cards (deterministic debt / available credit = limit - debt):
+  //   - "Visa E2E"       (VISA,       COP) debt = 150.000   limit = 1.000.000  cutoff 5  due 20
+  //   - "Mastercard E2E" (MASTERCARD, COP) debt = 0         limit =   800.000  cutoff 10 due 25
+  //
+  // IMPORTANT: scenarios in credit-cards.feature NEVER mutate these seed cards —
+  // consumption/payment/delete scenarios create their own cards through the UI
+  // with unique timestamp names, so the seed assertions stay deterministic for
+  // the whole run.
+  // ============================================================================
+  const cardsUserEmail = process.env.E2E_CARDS_USER || 'cards@e2e.financetrackerpro.com';
+  const cardsUser = await upsertUserAndGet(cardsUserEmail, 'Credit Cards E2E User');
+
+  const cardsCorriente = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-cards-corriente-account' },
+    create: {
+      idempotencyKey: 'e2e-cards-corriente-account',
+      userId: cardsUser.id,
+      name: 'Cuenta Corriente',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 200000000,
+      createdBy: cardsUser.id,
+      lastModifiedBy: cardsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const cardsAhorros = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-cards-ahorros-account' },
+    create: {
+      idempotencyKey: 'e2e-cards-ahorros-account',
+      userId: cardsUser.id,
+      name: 'Cuenta de Ahorros',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 100000000,
+      createdBy: cardsUser.id,
+      lastModifiedBy: cardsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const visaCard = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-cards-visa-account' },
+    create: {
+      idempotencyKey: 'e2e-cards-visa-account',
+      userId: cardsUser.id,
+      name: 'Visa E2E',
+      type: 'CREDIT_CARD',
+      currency: 'COP',
+      balanceCents: -150000,
+      creditLimitCents: 1000000,
+      cutoffDay: 5,
+      paymentDueDay: 20,
+      cardNetwork: 'VISA',
+      createdBy: cardsUser.id,
+      lastModifiedBy: cardsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-cards-mastercard-account' },
+    create: {
+      idempotencyKey: 'e2e-cards-mastercard-account',
+      userId: cardsUser.id,
+      name: 'Mastercard E2E',
+      type: 'CREDIT_CARD',
+      currency: 'COP',
+      balanceCents: 0,
+      creditLimitCents: 800000,
+      cutoffDay: 10,
+      paymentDueDay: 25,
+      cardNetwork: 'MASTERCARD',
+      createdBy: cardsUser.id,
+      lastModifiedBy: cardsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Transactions that fund/reconcile the seeded balances (Rule 13). Idempotency-
+  // guarded so re-seeding is a no-op.
+  const cardsTxs: Array<{
+    idempotencyKey: string;
+    accountId: string;
+    type: 'INCOME' | 'EXPENSE';
+    amountCents: number;
+    description: string;
+  }> = [
+    {
+      idempotencyKey: 'e2e-cards-corriente-opening',
+      accountId: cardsCorriente.id,
+      type: 'INCOME',
+      amountCents: 200000000,
+      description: 'Saldo inicial Cuenta Corriente',
+    },
+    {
+      idempotencyKey: 'e2e-cards-ahorros-opening',
+      accountId: cardsAhorros.id,
+      type: 'INCOME',
+      amountCents: 100000000,
+      description: 'Saldo inicial Cuenta de Ahorros',
+    },
+    {
+      idempotencyKey: 'e2e-cards-visa-initial',
+      accountId: visaCard.id,
+      type: 'EXPENSE',
+      amountCents: -150000,
+      description: 'Consumo inicial Visa E2E',
+    },
+  ];
+
+  for (const tx of cardsTxs) {
+    const exists = await prisma.transaction.findFirst({
+      where: { idempotencyKey: tx.idempotencyKey },
+    });
+    if (!exists) {
+      await prisma.transaction.create({
+        data: {
+          idempotencyKey: tx.idempotencyKey,
+          userId: cardsUser.id,
+          accountId: tx.accountId,
+          type: tx.type,
+          amountCents: tx.amountCents,
+          currency: 'COP',
+          description: tx.description,
+          date: new Date('2026-01-15'),
+          createdBy: cardsUser.id,
+          lastModifiedBy: cardsUser.id,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  console.log(
+    '✓ Credit cards user seeded with 2 bank accounts, Visa E2E (debt), and Mastercard E2E (no debt)'
+  );
+
+  // ============================================================================
   // System categories (shared, userId: null)
   // ============================================================================
   const systemCategories = [

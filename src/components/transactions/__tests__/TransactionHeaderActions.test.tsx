@@ -17,6 +17,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
+const { mockAddNotification } = vi.hoisted(() => ({ mockAddNotification: vi.fn() }));
+
 vi.mock('@/store/ui.store', () => ({
   useUIStore: vi.fn((selector) => {
     const state = {
@@ -24,7 +26,7 @@ vi.mock('@/store/ui.store', () => ({
       modalData: null,
       openModal: vi.fn(),
       closeModal: vi.fn(),
-      addNotification: vi.fn(),
+      addNotification: mockAddNotification,
     };
     return selector(state);
   }),
@@ -36,6 +38,8 @@ vi.mock('@/lib/i18n', () => ({
       transferButton: 'Transferir',
       manageCategories: 'Gestionar categorías',
       newTransaction: 'Nueva transacción',
+      payCardButton: 'Pagar tarjeta',
+      noDebtsToPay: 'No hay deudas para pagar',
     };
     return labels[key] ?? key;
   }),
@@ -98,6 +102,32 @@ const mockAccounts = [
     balanceCents: 500000,
   },
 ];
+
+const mockCardWithDebt = {
+  id: 'card-1',
+  name: 'Visa Oro',
+  currency: 'USD',
+  balanceCents: -50000,
+  creditLimitCents: 500000,
+  cutoffDay: 10,
+  paymentDueDay: 25,
+  cardColor: 'blue',
+  cardNetwork: 'VISA',
+  createdAt: new Date('2026-01-01'),
+  transactions: [],
+  debtCents: 50000,
+  availableCreditCents: 450000,
+  paymentStatus: 'ON_TRACK',
+};
+
+const mockCardWithoutDebt = {
+  ...mockCardWithDebt,
+  id: 'card-2',
+  name: 'Visa Pagada',
+  balanceCents: 0,
+  debtCents: 0,
+  availableCreditCents: 500000,
+};
 
 const dictionary = {};
 
@@ -180,5 +210,44 @@ describe('TransactionHeaderActions', () => {
     expect(mockTransferModal).toHaveBeenCalledWith(
       expect.objectContaining({ open: true, userId: 'user-1', locale: 'es-CO' })
     );
+  });
+
+  describe('pay-card guard (noDebtsToPay)', () => {
+    it('should render the Pay Card button when cards and accounts exist', () => {
+      renderHeader({ creditCards: [mockCardWithDebt] });
+      expect(screen.getByRole('button', { name: 'Pagar tarjeta' })).toBeInTheDocument();
+    });
+
+    it('should NOT render the Pay Card button without accounts', () => {
+      renderHeader({ creditCards: [mockCardWithDebt], hasAccounts: false });
+      expect(screen.queryByRole('button', { name: 'Pagar tarjeta' })).not.toBeInTheDocument();
+    });
+
+    it('should NOT render the Pay Card button without credit cards', () => {
+      renderHeader({ creditCards: [] });
+      expect(screen.queryByRole('button', { name: 'Pagar tarjeta' })).not.toBeInTheDocument();
+    });
+
+    it('should notify and NOT open the modal when every card has no debt', async () => {
+      const user = userEvent.setup();
+      renderHeader({ creditCards: [mockCardWithoutDebt] });
+
+      await user.click(screen.getByRole('button', { name: 'Pagar tarjeta' }));
+
+      expect(mockAddNotification).toHaveBeenCalledWith('info', 'No hay deudas para pagar');
+      const payModal = screen.getByTestId('pay-card-modal');
+      expect(payModal).toHaveAttribute('data-open', 'false');
+    });
+
+    it('should open the pay modal when at least one card has debt', async () => {
+      const user = userEvent.setup();
+      renderHeader({ creditCards: [mockCardWithoutDebt, mockCardWithDebt] });
+
+      await user.click(screen.getByRole('button', { name: 'Pagar tarjeta' }));
+
+      expect(mockAddNotification).not.toHaveBeenCalled();
+      const payModal = screen.getByTestId('pay-card-modal');
+      expect(payModal).toHaveAttribute('data-open', 'true');
+    });
   });
 });

@@ -387,11 +387,11 @@ describe('Transaction Actions Integration', () => {
       });
 
       expect(tx.type).toBe('INCOME');
-      expect(tx.amountCents).toBe(10000);
+      expect(Number(tx.amountCents)).toBe(10000);
       expect(tx.isActive).toBe(true);
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(updatedAccount?.balanceCents).toBe(60000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(60000);
     });
 
     it('should create an EXPENSE transaction and decrease the account balance', async () => {
@@ -421,17 +421,17 @@ describe('Transaction Actions Integration', () => {
       });
 
       expect(tx.type).toBe('EXPENSE');
-      expect(tx.amountCents).toBe(-30000);
+      expect(Number(tx.amountCents)).toBe(-30000);
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(updatedAccount?.balanceCents).toBe(20000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(20000);
     });
 
     it('should reject EXPENSE with insufficient funds via transaction rollback', async () => {
       const account = await createTestAccount(TEST_USER_ID, { balanceCents: 1000 });
 
       // Verify initial balance
-      expect(account.balanceCents).toBe(1000);
+      expect(Number(account.balanceCents)).toBe(1000);
 
       await expect(
         prisma.$transaction(async (tx) => {
@@ -475,7 +475,7 @@ describe('Transaction Actions Integration', () => {
       expect(txCount).toBe(0);
 
       const unchangedAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(unchangedAccount?.balanceCents).toBe(1000);
+      expect(Number(unchangedAccount?.balanceCents)).toBe(1000);
     });
 
     it('should be idempotent (same idempotencyKey returns same result)', async () => {
@@ -664,7 +664,7 @@ describe('Transaction Actions Integration', () => {
         },
       });
 
-      expect(tx.originalAmountCents).toBe(200000000);
+      expect(Number(tx.originalAmountCents)).toBe(200000000);
       expect(tx.originalCurrency).toBe('COP');
       expect(tx.exchangeRate).not.toBeNull();
       expect(Number(tx.exchangeRate)).toBeCloseTo(0.00025, 5);
@@ -745,7 +745,7 @@ describe('Transaction Actions Integration', () => {
 
       // Verify balance decreased
       let currentAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(currentAccount?.balanceCents).toBe(30000);
+      expect(Number(currentAccount?.balanceCents)).toBe(30000);
 
       // Reverse: soft delete + revert balance
       await prisma.transaction.update({
@@ -759,7 +759,7 @@ describe('Transaction Actions Integration', () => {
       });
 
       currentAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(currentAccount?.balanceCents).toBe(50000); // Back to original
+      expect(Number(currentAccount?.balanceCents)).toBe(50000); // Back to original
     });
 
     it('should reject deleting a non-existent transaction', async () => {
@@ -876,7 +876,7 @@ describe('Transaction Actions Integration', () => {
       expect(found).not.toBeNull();
       expect(found?.id).toBe(tx.id);
       expect(found?.description).toBe('Specific transaction');
-      expect(found?.amountCents).toBe(50000);
+      expect(Number(found?.amountCents)).toBe(50000);
       expect(found?.type).toBe('INCOME');
     });
 

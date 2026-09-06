@@ -248,7 +248,7 @@ describe('Transaction Delete Integrity Integration', () => {
       const unchangedAccount = await prisma.account.findUnique({
         where: { id: account.id },
       });
-      expect(unchangedAccount?.balanceCents).toBe(100000);
+      expect(Number(unchangedAccount?.balanceCents)).toBe(100000);
     });
 
     it('should allow deleting opening INCOME when balance remains non-negative', async () => {
@@ -283,7 +283,7 @@ describe('Transaction Delete Integrity Integration', () => {
       const updatedAccount = await prisma.account.findUnique({
         where: { id: account.id },
       });
-      expect(updatedAccount?.balanceCents).toBe(0);
+      expect(Number(updatedAccount?.balanceCents)).toBe(0);
     });
 
     it('should allow deleting transaction that leaves CREDIT_CARD balance negative', async () => {
@@ -326,7 +326,7 @@ describe('Transaction Delete Integrity Integration', () => {
         where: { id: account.id },
       });
       // original balance -50000, reversing +100000 (removing the INCOME) → -150000
-      expect(updatedAccount?.balanceCents).toBe(-150000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(-150000);
     });
   });
 

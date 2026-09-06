@@ -668,7 +668,7 @@ describe('Savings Actions Integration', () => {
       expect(result.data!.contribution.amountCents).toBe(25000);
 
       const updatedGoal = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
-      expect(updatedGoal!.currentAmountCents).toBe(25000);
+      expect(Number(updatedGoal!.currentAmountCents)).toBe(25000);
     });
 
     it('should be idempotent (same idempotencyKey returns wasIdempotent: true)', async () => {
@@ -726,7 +726,7 @@ describe('Savings Actions Integration', () => {
 
       const updatedGoal = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
       expect(updatedGoal!.status).toBe('COMPLETED');
-      expect(updatedGoal!.currentAmountCents).toBe(50000);
+      expect(Number(updatedGoal!.currentAmountCents)).toBe(50000);
     });
 
     it('should reject contribution to a completed goal with GOAL_COMPLETED', async () => {
@@ -839,12 +839,12 @@ describe('Savings Actions Integration', () => {
       expect(tx).toBeDefined();
       expect(tx!.accountId).toBe(bankAccount.id);
       expect(tx!.type).toBe('EXPENSE');
-      expect(tx!.amountCents).toBe(-25000);
+      expect(Number(tx!.amountCents)).toBe(-25000);
       expect(tx!.currency).toBe('COP');
 
       // The source account cached balance must be reduced
       const updatedAccount = await prisma.account.findUnique({ where: { id: bankAccount.id } });
-      expect(updatedAccount!.balanceCents).toBe(500000 - 25000);
+      expect(Number(updatedAccount!.balanceCents)).toBe(500000 - 25000);
     });
 
     it('should reject when the source account currency differs from the contribution', async () => {
@@ -956,7 +956,7 @@ describe('Savings Actions Integration', () => {
       });
 
       const updatedGoal = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
-      expect(updatedGoal!.currentAmountCents).toBe(50000);
+      expect(Number(updatedGoal!.currentAmountCents)).toBe(50000);
     });
   });
 

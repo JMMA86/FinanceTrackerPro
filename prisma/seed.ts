@@ -288,18 +288,71 @@ async function main() {
     })
   );
 
-  // Credit payment
+  // Credit payment (DOUBLE-ENTRY: EXPENSE negative on the bank account +
+  // CREDIT_PAYMENT positive on the card — reduces debt)
+  const payment1Id = crypto.randomUUID();
   transactions.push(
     await prisma.transaction.create({
       data: {
         idempotencyKey: crypto.randomUUID(),
         userId: user.id,
         accountId: bancolombia.id,
-        type: 'CREDIT_PAYMENT',
+        type: 'EXPENSE',
         amountCents: -5000000, // -$50,000 COP
         currency: 'COP',
         description: 'Pago tarjeta NuBank',
         date: new Date('2026-01-26'),
+        transferId: payment1Id,
+        transferToAccountId: nubank.id,
+        createdBy: user.id,
+      },
+    })
+  );
+  transactions.push(
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: nubank.id,
+        type: 'CREDIT_PAYMENT',
+        amountCents: 5000000, // +$50,000 COP (positive: reduces debt)
+        currency: 'COP',
+        description: 'Pago tarjeta NuBank',
+        date: new Date('2026-01-26'),
+        transferId: payment1Id,
+        transferFromAccountId: bancolombia.id,
+        createdBy: user.id,
+      },
+    })
+  );
+
+  // Additional credit card consumptions (Feb)
+  transactions.push(
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: nubank.id,
+        type: 'EXPENSE',
+        amountCents: -2000000, // -$20,000 COP
+        currency: 'COP',
+        description: 'Compra online (Amazon)',
+        date: new Date('2026-02-05'),
+        createdBy: user.id,
+      },
+    })
+  );
+  transactions.push(
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: nubank.id,
+        type: 'EXPENSE',
+        amountCents: -1500000, // -$15,000 COP
+        currency: 'COP',
+        description: 'Supermercado Éxito',
+        date: new Date('2026-02-08'),
         createdBy: user.id,
       },
     })
@@ -334,7 +387,7 @@ async function main() {
         data: {
           idempotencyKey: crypto.randomUUID(),
           userId: user.id,
-          accountId: Math.random() > 0.5 ? efectivo.id : nubank.id,
+          accountId: Math.random() > 0.5 ? efectivo.id : bancolombia.id,
           type: 'EXPENSE',
           amountCents: randomAmount,
           currency: 'COP',
@@ -362,7 +415,9 @@ async function main() {
   });
   await prisma.account.update({
     where: { id: nubank.id },
-    data: { balanceCents: -15000000, lastReconciled: new Date() },
+    // Deterministic sum of card transactions: Netflix/Spotify (-45k) + Restaurante
+    // (-68k) + Amazon (-20k) + Éxito (-15k) + Pago tarjeta (+50k) = -98k COP
+    data: { balanceCents: -9800000, lastReconciled: new Date() },
   });
   await prisma.account.update({
     where: { id: binance.id },

@@ -26,6 +26,10 @@ type ModalId =
   | 'deposit-investment'
   | 'buy-asset'
   | 'sell-asset'
+  | 'create-credit-card'
+  | 'edit-credit-card'
+  | 'delete-credit-card'
+  | 'pay-credit-card'
   | null;
 
 interface UIState {

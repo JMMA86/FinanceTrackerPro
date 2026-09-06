@@ -20,7 +20,6 @@ import type { Prisma, Transaction, ApiAction } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
 import { log } from '@/lib/logger';
-import { getTrueBalance } from '@/services/reconciliation.service';
 import { checkAndLockIdempotency } from '@/services/idempotency.service';
 import {
   checkApiRateLimit,
@@ -40,6 +39,7 @@ import {
   InactiveAccountError,
   RateLimitError,
   PocketTransferError,
+  ValidationError,
 } from '@/lib/errors/api-errors';
 import type {
   TransferResult,
@@ -55,11 +55,19 @@ import type {
  *  - POCKET source -> its parent account OR a sibling pocket
  *  - Non-POCKET source -> its own pocket OR another non-pocket account
  * Any other combination is rejected with a typed PocketTransferError.
+ *
+ * Credit cards are NEVER valid transfer participants: a transfer to a card
+ * would bypass the CARD_NO_DEBT/CARD_OVERPAYMENT payment rules, and a transfer
+ * from a card with a positive balance would move credit around. Card payments
+ * go through payCreditCard, not transfers.
  */
 function assertValidTransferPair(
   from: { id: string; type: string; parentAccountId: string | null },
   to: { id: string; type: string; parentAccountId: string | null }
 ): void {
+  if (from.type === 'CREDIT_CARD' || to.type === 'CREDIT_CARD') {
+    throw new ValidationError('Transfers involving credit cards are not allowed');
+  }
   if (from.id === to.id) return; // ya lo rechaza el schema
   const fromIsPocket = from.type === 'POCKET';
   const toIsPocket = to.type === 'POCKET';
@@ -153,33 +161,39 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
   const result: TransferTransactionResult = await prisma.$transaction<TransferTransactionResult>(
     async (tx: Prisma.TransactionClient): Promise<TransferTransactionResult> => {
       // 4.1. Verify both accounts exist and belong to user
-      const [fromAccount, toAccount]: [TransferAccountRecord | null, TransferAccountRecord | null] =
-        await Promise.all([
-          tx.account.findUnique({
-            where: { id: validated.fromAccountId },
-            select: {
-              id: true,
-              userId: true,
-              balanceCents: true,
-              currency: true,
-              isActive: true,
-              type: true,
-              parentAccountId: true,
-            },
-          }),
-          tx.account.findUnique({
-            where: { id: validated.toAccountId },
-            select: {
-              id: true,
-              userId: true,
-              balanceCents: true,
-              currency: true,
-              isActive: true,
-              type: true,
-              parentAccountId: true,
-            },
-          }),
-        ]);
+      const [rawFrom, rawTo] = await Promise.all([
+        tx.account.findUnique({
+          where: { id: validated.fromAccountId },
+          select: {
+            id: true,
+            userId: true,
+            balanceCents: true,
+            currency: true,
+            isActive: true,
+            type: true,
+            parentAccountId: true,
+          },
+        }),
+        tx.account.findUnique({
+          where: { id: validated.toAccountId },
+          select: {
+            id: true,
+            userId: true,
+            balanceCents: true,
+            currency: true,
+            isActive: true,
+            type: true,
+            parentAccountId: true,
+          },
+        }),
+      ]);
+
+      const fromAccount: TransferAccountRecord | null = rawFrom
+        ? { ...rawFrom, balanceCents: Number(rawFrom.balanceCents) }
+        : null;
+      const toAccount: TransferAccountRecord | null = rawTo
+        ? { ...rawTo, balanceCents: Number(rawTo.balanceCents) }
+        : null;
 
       if (!fromAccount) {
         throw new NotFoundError('Account', validated.fromAccountId);
@@ -218,11 +232,38 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
       // Verify pocket hierarchy rules (pockets stay within their parent account)
       assertValidTransferPair(fromAccount, toAccount);
 
-      // 4.2. VERIFY SUFFICIENT BALANCE (Rule 13 - Source of Truth)
-      const trueBalance: number = await getTrueBalance(validated.fromAccountId, transactionRepo);
+      // 4.2. Lock the source account row (SELECT ... FOR UPDATE) so concurrent
+      //      transfers from the same account serialize at this point. Closes the
+      //      TOCTOU race where two transfers both pass the funds check and overdraw.
+      const lockedRows = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "Account" WHERE id = ${validated.fromAccountId} FOR UPDATE
+      `;
+      if (lockedRows.length === 0) {
+        throw new NotFoundError('Account', validated.fromAccountId);
+      }
 
-      if (trueBalance < validated.amountCents) {
-        throw new InsufficientFundsError(validated.amountCents, trueBalance);
+      // Re-read the cached balance under the lock so the cache update below never
+      // overwrites a concurrent transfer's committed change.
+      const lockedFrom = await tx.account.findUnique({
+        where: { id: validated.fromAccountId },
+        select: { id: true, balanceCents: true },
+      });
+      if (!lockedFrom) throw new NotFoundError('Account', validated.fromAccountId);
+
+      // Compute the true balance from the transactional snapshot (Rule 13).
+      // Using tx.transaction (not the global prisma client) guarantees the funds
+      // check sees every transfer committed before we acquired the lock.
+      const sourceTransactions = await tx.transaction.findMany({
+        where: { accountId: validated.fromAccountId, isActive: true },
+        select: { amountCents: true },
+      });
+      let sourceTrueBalance = 0;
+      for (const sourceTx of sourceTransactions) {
+        sourceTrueBalance = addCents(sourceTrueBalance, Number(sourceTx.amountCents));
+      }
+
+      if (sourceTrueBalance < validated.amountCents) {
+        throw new InsufficientFundsError(validated.amountCents, sourceTrueBalance);
       }
 
       // 4.3. Generate transfer ID (links both transactions)
@@ -268,7 +309,10 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
       });
 
       // 4.6. UPDATE CACHED BALANCES (Rule 13 - maintain cache)
-      const newFromBalance: number = subtractCents(fromAccount.balanceCents, validated.amountCents);
+      const newFromBalance: number = subtractCents(
+        Number(lockedFrom.balanceCents),
+        validated.amountCents
+      );
       const newToBalance: number = addCents(toAccount.balanceCents, validated.amountCents);
 
       await Promise.all([
@@ -292,11 +336,11 @@ async function transferBetweenAccountsInternal(input: unknown): Promise<Transfer
         transferId,
         debitTransaction: {
           id: debitTransaction.id,
-          amountCents: debitTransaction.amountCents,
+          amountCents: Number(debitTransaction.amountCents),
         },
         creditTransaction: {
           id: creditTransaction.id,
-          amountCents: creditTransaction.amountCents,
+          amountCents: Number(creditTransaction.amountCents),
         },
       };
     }
@@ -358,7 +402,7 @@ async function getTransferDetailsInternal(transferId: string): Promise<PairedTra
   const [debitTransaction, creditTransaction] = transactions;
 
   // Verify double-entry integrity
-  if (debitTransaction.amountCents + creditTransaction.amountCents !== 0) {
+  if (Number(debitTransaction.amountCents) + Number(creditTransaction.amountCents) !== 0) {
     log.error(
       {
         transferId,
@@ -430,7 +474,7 @@ async function reverseTransferInternal(input: ReverseTransferInput): Promise<Tra
     idempotencyKey: crypto.randomUUID(),
     fromAccountId: creditTransaction.accountId, // Swap
     toAccountId: debitTransaction.accountId, // Swap
-    amountCents: Math.abs(creditTransaction.amountCents),
+    amountCents: Math.abs(Number(creditTransaction.amountCents)),
     currency: creditTransaction.currency,
     description: `REVERSAL: ${reason} (Original: ${transferId})`,
     userId,

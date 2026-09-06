@@ -324,17 +324,17 @@ describe('Investment Actions (real actions)', () => {
 
     const invAfter = await prisma.account.findUniqueOrThrow({ where: { id: inv.id } });
     const bankAfter = await prisma.account.findUniqueOrThrow({ where: { id: bank.id } });
-    expect(invAfter.balanceCents).toBe(200);
-    expect(bankAfter.balanceCents).toBe(200000);
+    expect(Number(invAfter.balanceCents)).toBe(200);
+    expect(Number(bankAfter.balanceCents)).toBe(200000);
 
     const txs = await prisma.transaction.findMany({ where: { userId: TEST_USER_ID } });
     const transferTxs = txs.filter((t) => t.type !== 'INCOME');
     expect(transferTxs).toHaveLength(2);
     const debit = transferTxs.find((t) => t.type === 'TRANSFER_OUT');
     const credit = transferTxs.find((t) => t.type === 'INVESTMENT');
-    expect(debit?.amountCents).toBe(-800000);
+    expect(Number(debit?.amountCents)).toBe(-800000);
     expect(debit?.currency).toBe('COP');
-    expect(credit?.amountCents).toBe(200);
+    expect(Number(credit?.amountCents)).toBe(200);
     expect(credit?.currency).toBe('USD');
     expect(debit?.transferId).toBe(credit?.transferId);
     expect(credit?.exchangeRate?.toString()).toBe('4000');
@@ -392,13 +392,13 @@ describe('Investment Actions (real actions)', () => {
     expect(result.data!.transaction.amountCents).toBe(-7500); // negative = outflow
 
     const invAfter = await prisma.account.findUniqueOrThrow({ where: { id: inv.id } });
-    expect(invAfter.balanceCents).toBe(12500); // 20000 - 5*1500
+    expect(Number(invAfter.balanceCents)).toBe(12500); // 20000 - 5*1500
 
     const holding = await prisma.investmentAssetHolding.findFirstOrThrow({
       where: { accountId: inv.id },
     });
     expect(holding.quantity.toString()).toBe('5');
-    expect(holding.avgCostCents).toBe(1500);
+    expect(Number(holding.avgCostCents)).toBe(1500);
   });
 
   it('rejects buying with insufficient balance', async () => {
@@ -447,7 +447,7 @@ describe('Investment Actions (real actions)', () => {
     });
     expect(holdingAfter.quantity.toString()).toBe('3');
     const invAfter = await prisma.account.findUniqueOrThrow({ where: { id: inv.id } });
-    expect(invAfter.balanceCents).toBe(12500 + 3200); // +2*1600
+    expect(Number(invAfter.balanceCents)).toBe(12500 + 3200); // +2*1600
   });
 
   // ==========================================================================

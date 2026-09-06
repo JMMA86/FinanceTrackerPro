@@ -59,6 +59,11 @@ async function getBankAccountsInternal(_input: Record<string, never>) {
 
   return accounts.map((a) => ({
     ...a,
+    balanceCents: Number(a.balanceCents),
+    transactions: a.transactions.map((t) => ({
+      ...t,
+      amountCents: Number(t.amountCents),
+    })),
     interestRateEA: a.interestRateEA == null ? null : Number(a.interestRateEA),
   }));
 }
@@ -92,7 +97,10 @@ async function createBankAccountInternal(input: unknown) {
   });
   if (existing) {
     log.info({ action: 'account.create.idempotent', accountId: existing.id }, 'Duplicate request');
-    return { account: existing, wasIdempotent: true };
+    return {
+      account: { ...existing, balanceCents: Number(existing.balanceCents) },
+      wasIdempotent: true,
+    };
   }
 
   const headersList = await headers();
@@ -130,7 +138,7 @@ async function createBankAccountInternal(input: unknown) {
           name: validated.name,
           type: validated.type,
           currency: validated.currency,
-          balanceCents: validated.initialBalanceCents,
+          balanceCents: BigInt(validated.initialBalanceCents),
           interestRateEA: validated.interestRateEA,
           parentAccountId: validated.parentAccountId,
           cardColor: validated.cardColor,
@@ -191,6 +199,7 @@ async function createBankAccountInternal(input: unknown) {
   return {
     account: {
       ...account,
+      balanceCents: Number(account.balanceCents),
       interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
     },
     wasIdempotent: false,
@@ -228,6 +237,7 @@ async function updateBankAccountInternal(input: unknown) {
   return {
     account: {
       ...updated,
+      balanceCents: Number(updated.balanceCents),
       interestRateEA: updated.interestRateEA == null ? null : Number(updated.interestRateEA),
     },
   };

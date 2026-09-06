@@ -200,7 +200,7 @@ describe('Transaction Actions (real actions)', () => {
     expect(result.data!.transaction.currency).toBe('COP');
 
     const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-    expect(account.balanceCents).toBe(1250000); // 1000000 + 250000
+    expect(Number(account.balanceCents)).toBe(1250000); // 1000000 + 250000
   });
 
   it('creates an EXPENSE transaction with a negative amount', async () => {
@@ -215,7 +215,7 @@ describe('Transaction Actions (real actions)', () => {
 
     expect(result.data!.transaction.amountCents).toBe(-50000);
     const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-    expect(account.balanceCents).toBe(950000);
+    expect(Number(account.balanceCents)).toBe(950000);
   });
 
   it('is idempotent for repeated idempotency keys', async () => {
@@ -238,7 +238,7 @@ describe('Transaction Actions (real actions)', () => {
 
     expect(second.data!.wasIdempotent).toBe(true);
     const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-    expect(account.balanceCents).toBe(1001000); // only applied once
+    expect(Number(account.balanceCents)).toBe(1001000); // only applied once
   });
 
   it('rejects wrong amount sign for the type', async () => {
@@ -381,7 +381,7 @@ describe('Transaction Actions (real actions)', () => {
     expect(stored.deletedAt).not.toBeNull();
 
     const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-    expect(account.balanceCents).toBe(1000000); // reversed
+    expect(Number(account.balanceCents)).toBe(1000000); // reversed
   });
 
   it("throws when deleting another user's transaction", async () => {

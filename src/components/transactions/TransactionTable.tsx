@@ -40,6 +40,7 @@ function getTypeIcon(type: string) {
     case 'INVESTMENT':
       return TrendingUp;
     case 'LOAN_PAYMENT':
+    case 'CREDIT_PAYMENT':
       return CreditCard;
     default:
       return Landmark;
@@ -80,8 +81,13 @@ function getTypeLabel(type: string, dictionary: Record<string, unknown>): string
   return get(dictionary, keyMap[type] ?? type);
 }
 
-function isIncomeOrTransferIn(type: string): boolean {
-  return type === 'INCOME' || type === 'TRANSFER_IN';
+/**
+ * Transaction types displayed with a positive (+) amount and green color.
+ * INCOME and TRANSFER_IN are stored positive; CREDIT_PAYMENT is stored
+ * positive on the card (a payment reduces debt) so it must render as +$X.
+ */
+function isPositiveAmountType(type: string): boolean {
+  return type === 'INCOME' || type === 'TRANSFER_IN' || type === 'CREDIT_PAYMENT';
 }
 
 function formatDate(date: string | Date, locale: string): string {
@@ -128,7 +134,7 @@ const TransactionRowItem = memo(function TransactionRowItem({
   onDelete?: (transactionId: string) => void;
   onEdit?: (transaction: TransactionRow) => void;
 }) {
-  const isPositive = isIncomeOrTransferIn(transaction.type);
+  const isPositive = isPositiveAmountType(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
 
   // The server include (transaction.account.name) wins over the account
@@ -260,7 +266,7 @@ const TransactionCard = memo(function TransactionCard({
   onDelete?: (transactionId: string) => void;
   onEdit?: (transaction: TransactionRow) => void;
 }) {
-  const isPositive = isIncomeOrTransferIn(transaction.type);
+  const isPositive = isPositiveAmountType(transaction.type);
   const TypeIcon = getTypeIcon(transaction.type);
 
   // Server include wins over the account lookup map (see TransactionRowItem).

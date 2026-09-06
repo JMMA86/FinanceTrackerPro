@@ -39,7 +39,7 @@ export class PrismaAccountRepository implements IAccountRepository {
     return this.prisma.account.update({
       where: { id },
       data: {
-        balanceCents,
+        balanceCents: BigInt(balanceCents),
         lastModifiedBy,
         updatedAt: new Date(),
       },
@@ -75,9 +75,9 @@ export class PrismaAccountRepository implements IAccountRepository {
         name: data.name,
         type: data.type,
         currency: data.currency,
-        balanceCents: data.balanceCents ?? 0,
+        balanceCents: BigInt(data.balanceCents ?? 0),
         interestRateEA: data.interestRateEA,
-        creditLimitCents: data.creditLimitCents,
+        creditLimitCents: data.creditLimitCents != null ? BigInt(data.creditLimitCents) : null,
         cutoffDay: data.cutoffDay,
         paymentDueDay: data.paymentDueDay,
         parentAccountId: data.parentAccountId,

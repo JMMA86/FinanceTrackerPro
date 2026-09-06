@@ -519,25 +519,37 @@ export async function getDashboardMetricsByUser(
   const locale = getLocale(lang);
 
   // Fetch accounts
-  const accounts = await prisma.account.findMany({
-    where: { userId, isActive: true },
-    select: {
-      id: true,
-      name: true,
-      balanceCents: true,
-      currency: true,
-      type: true,
-      creditLimitCents: true,
-      interestRateEA: true,
-      parentAccountId: true,
-    },
-  });
+  const accounts = (
+    await prisma.account.findMany({
+      where: { userId, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        balanceCents: true,
+        currency: true,
+        type: true,
+        creditLimitCents: true,
+        interestRateEA: true,
+        parentAccountId: true,
+      },
+    })
+  ).map((a) => ({
+    ...a,
+    balanceCents: Number(a.balanceCents),
+    creditLimitCents: a.creditLimitCents == null ? null : Number(a.creditLimitCents),
+    interestRateEA: a.interestRateEA == null ? null : Number(a.interestRateEA),
+  }));
 
   // Fetch loans
-  const loans = await prisma.loan.findMany({
-    where: { userId, isActive: true },
-    select: { id: true, name: true, balanceCents: true },
-  });
+  const loans = (
+    await prisma.loan.findMany({
+      where: { userId, isActive: true },
+      select: { id: true, name: true, balanceCents: true },
+    })
+  ).map((l) => ({
+    ...l,
+    balanceCents: Number(l.balanceCents),
+  }));
 
   // Calculate date ranges
   const now = new Date();
@@ -546,22 +558,27 @@ export async function getDashboardMetricsByUser(
   const endOfLastMonth = endOfMonth(subMonths(now, 1));
 
   // Fetch transactions
-  const allTransactions = await prisma.transaction.findMany({
-    where: { userId, isActive: true },
-    orderBy: { date: 'desc' },
-    take: 100,
-    select: {
-      id: true,
-      description: true,
-      amountCents: true,
-      currency: true,
-      type: true,
-      date: true,
-      accountId: true,
-      transferToAccountId: true,
-      transferFromAccountId: true,
-    },
-  });
+  const allTransactions = (
+    await prisma.transaction.findMany({
+      where: { userId, isActive: true },
+      orderBy: { date: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        description: true,
+        amountCents: true,
+        currency: true,
+        type: true,
+        date: true,
+        accountId: true,
+        transferToAccountId: true,
+        transferFromAccountId: true,
+      },
+    })
+  ).map((t) => ({
+    ...t,
+    amountCents: Number(t.amountCents),
+  }));
 
   // Build account hierarchy map for internal-transfer detection
   const hierarchy: Record<string, AccountHierarchyEntry> = {};
@@ -579,14 +596,19 @@ export async function getDashboardMetricsByUser(
   }
 
   // Fetch pending fixed expenses
-  const pendingFixedExpenses = await prisma.fixedExpensePayment.findMany({
-    where: {
-      fixedExpense: { userId, isActive: true },
-      paidDate: null,
-      dueDate: { lte: now },
-    },
-    select: { expectedAmountCents: true, currency: true },
-  });
+  const pendingFixedExpenses = (
+    await prisma.fixedExpensePayment.findMany({
+      where: {
+        fixedExpense: { userId, isActive: true },
+        paidDate: null,
+        dueDate: { lte: now },
+      },
+      select: { expectedAmountCents: true, currency: true },
+    })
+  ).map((p) => ({
+    ...p,
+    expectedAmountCents: Number(p.expectedAmountCents),
+  }));
 
   // Fetch latest exchange rate for dollarRate metric
   const latestInvestmentTx = await prisma.transaction.findFirst({

@@ -54,6 +54,20 @@ import type { ApiAction } from '@prisma/client';
 
 const BANK_ACCOUNT_TYPES = ['CHECKING', 'CASH', 'SAVINGS'] as const;
 
+/**
+ * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
+ * safe to serialize back to the client (JSON.stringify throws on bigint).
+ */
+function serializeTransaction<
+  T extends { amountCents: bigint; originalAmountCents: bigint | null },
+>(tx: T) {
+  return {
+    ...tx,
+    amountCents: Number(tx.amountCents),
+    originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
+  };
+}
+
 // ============================================================================
 // a) getInvestmentAccounts — List user's investment accounts with holdings
 // ============================================================================
@@ -75,10 +89,16 @@ async function getInvestmentAccountsInternal(_input: Record<string, never>) {
 
   return accounts.map((account) => ({
     ...account,
+    balanceCents: Number(account.balanceCents),
+    creditLimitCents: account.creditLimitCents == null ? null : Number(account.creditLimitCents),
     interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
     assetHoldings: account.assetHoldings.map((holding) => ({
       ...holding,
       quantity: Number(holding.quantity),
+      avgCostCents: Number(holding.avgCostCents),
+      currentPriceCents: Number(holding.currentPriceCents),
+      originalCostCents:
+        holding.originalCostCents == null ? null : Number(holding.originalCostCents),
       exchangeRate: holding.exchangeRate == null ? null : Number(holding.exchangeRate),
     })),
   }));
@@ -121,7 +141,15 @@ async function createInvestmentAccountInternal(input: unknown) {
       { action: 'investment.create.idempotent', accountId: existing.id },
       'Duplicate investment account creation request'
     );
-    return { account: existing, wasIdempotent: true };
+    return {
+      account: {
+        ...existing,
+        balanceCents: Number(existing.balanceCents),
+        creditLimitCents:
+          existing.creditLimitCents == null ? null : Number(existing.creditLimitCents),
+      },
+      wasIdempotent: true,
+    };
   }
 
   const { ipAddress, userAgent } = await getClientInfo();
@@ -181,6 +209,8 @@ async function createInvestmentAccountInternal(input: unknown) {
   return {
     account: {
       ...account,
+      balanceCents: Number(account.balanceCents),
+      creditLimitCents: account.creditLimitCents == null ? null : Number(account.creditLimitCents),
       interestRateEA: account.interestRateEA == null ? null : Number(account.interestRateEA),
     },
     wasIdempotent: false,
@@ -211,7 +241,7 @@ async function depositToInvestmentInternal(input: unknown) {
       },
       'Duplicate deposit request'
     );
-    return { transaction: existingTx, wasIdempotent: true };
+    return { transaction: serializeTransaction(existingTx), wasIdempotent: true };
   }
 
   const { ipAddress, userAgent } = await getClientInfo();
@@ -346,8 +376,8 @@ async function depositToInvestmentInternal(input: unknown) {
     });
 
     // 8. Update cached balances
-    const newFromBalance = subtractCents(fromAccount.balanceCents, validated.amountCents);
-    const newToBalance = addCents(toAccount.balanceCents, convertedAmountCents);
+    const newFromBalance = subtractCents(Number(fromAccount.balanceCents), validated.amountCents);
+    const newToBalance = addCents(Number(toAccount.balanceCents), convertedAmountCents);
 
     await Promise.all([
       tx.account.update({
@@ -366,7 +396,11 @@ async function depositToInvestmentInternal(input: unknown) {
       }),
     ]);
 
-    return { debitTransaction, creditTransaction, transferId };
+    return {
+      debitTransaction: serializeTransaction(debitTransaction),
+      creditTransaction: serializeTransaction(creditTransaction),
+      transferId,
+    };
   });
 
   // Record successful API attempt (best-effort)
@@ -399,7 +433,7 @@ async function depositToInvestmentInternal(input: unknown) {
   revalidatePath('/[lang]/accounts', 'page');
   revalidatePath('/[lang]/investments', 'page');
 
-  return { transaction: result.creditTransaction, wasIdempotent: false };
+  return { transaction: serializeTransaction(result.creditTransaction), wasIdempotent: false };
 }
 
 export const depositToInvestment = safeAction(depositToInvestmentInternal);
@@ -423,7 +457,7 @@ async function buyAssetInternal(input: unknown) {
       { action: 'investment.buy.idempotent', transactionId: existingTx.id },
       'Duplicate buy request'
     );
-    return { transaction: existingTx, wasIdempotent: true };
+    return { transaction: serializeTransaction(existingTx), wasIdempotent: true };
   }
 
   const { ipAddress, userAgent } = await getClientInfo();
@@ -556,7 +590,7 @@ async function buyAssetInternal(input: unknown) {
       },
     });
 
-    return transaction;
+    return serializeTransaction(transaction);
   });
 
   // Record successful API attempt (best-effort)
@@ -586,7 +620,7 @@ async function buyAssetInternal(input: unknown) {
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/investments', 'page');
 
-  return { transaction: result, wasIdempotent: false };
+  return { transaction: serializeTransaction(result), wasIdempotent: false };
 }
 
 export const buyAsset = safeAction(buyAssetInternal);
@@ -610,7 +644,7 @@ async function sellAssetInternal(input: unknown) {
       { action: 'investment.sell.idempotent', transactionId: existingTx.id },
       'Duplicate sell request'
     );
-    return { transaction: existingTx, wasIdempotent: true };
+    return { transaction: serializeTransaction(existingTx), wasIdempotent: true };
   }
 
   const { ipAddress, userAgent } = await getClientInfo();
@@ -703,7 +737,7 @@ async function sellAssetInternal(input: unknown) {
     }
 
     // 7. Update cached balance
-    const newBalance = addCents(holding.account.balanceCents, totalProceedsCents);
+    const newBalance = addCents(Number(holding.account.balanceCents), totalProceedsCents);
     await tx.account.update({
       where: { id: holding.accountId },
       data: {
@@ -712,7 +746,7 @@ async function sellAssetInternal(input: unknown) {
       },
     });
 
-    return transaction;
+    return serializeTransaction(transaction);
   });
 
   // Record successful API attempt (best-effort)
@@ -741,7 +775,7 @@ async function sellAssetInternal(input: unknown) {
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/investments', 'page');
 
-  return { transaction: result, wasIdempotent: false };
+  return { transaction: serializeTransaction(result), wasIdempotent: false };
 }
 
 export const sellAsset = safeAction(sellAssetInternal);
@@ -827,7 +861,7 @@ async function updateAllAssetPricesInternal(_input: Record<string, never>) {
       if (holdingForSymbol) {
         results.push({
           symbol,
-          oldPrice: holdingForSymbol.currentPriceCents,
+          oldPrice: Number(holdingForSymbol.currentPriceCents),
           newPrice: newPriceCents,
         });
       }
@@ -897,7 +931,7 @@ async function getInvestmentTransactionsInternal(input: unknown) {
   ]);
 
   return {
-    transactions,
+    transactions: transactions.map((t) => serializeTransaction(t)),
     total,
     page: validated.page,
     pageSize: validated.pageSize,

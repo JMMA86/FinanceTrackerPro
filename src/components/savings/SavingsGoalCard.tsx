@@ -7,10 +7,16 @@ import { get } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import type { SavingsGoal, SavingsContribution } from '@prisma/client';
 
-interface GoalWithProgress extends SavingsGoal {
+interface GoalWithProgress extends Omit<
+  SavingsGoal,
+  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
+> {
+  targetAmountCents: number;
+  currentAmountCents: number;
+  monthlyContributionCents: number | null;
   progressPercentage: number;
   projectedCompletion: string | null;
-  contributions: SavingsContribution[];
+  contributions: Array<Omit<SavingsContribution, 'amountCents'> & { amountCents: number }>;
   linkedAccount?: { id: string; name: string; currency: string } | null;
 }
 

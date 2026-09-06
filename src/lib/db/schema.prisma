@@ -123,6 +123,7 @@ enum ApiAction {
   INVESTMENT_BUY
   INVESTMENT_SELL
   SAVINGS_CONTRIBUTE
+  CREDIT_CARD_PAYMENT
 }
 
 // ============================================================================
@@ -136,7 +137,7 @@ model User {
   passwordHash  String?  // Null if using only biometric auth
 
   // User Configuration
-  baseSalaryCents Int?         // Salario mensual en centavos
+  baseSalaryCents BigInt?        // Salario mensual en centavos
   baseCurrency    Currency     @default(COP)
   language        Language     @default(SPANISH)
   theme           Theme        @default(SYSTEM)
@@ -201,14 +202,14 @@ model Account {
 
   // CACHE - Reconcile from transaction history (Rule 13)
   // For POCKET type: independent balance (sum only its own transactions)
-  balanceCents      Int         @default(0)
+  balanceCents      BigInt      @default(0)
   lastReconciled    DateTime?   // Last reconciliation timestamp
 
   // Interest rate for savings/investment accounts (E.A. - Efectiva Anual)
   interestRateEA    Decimal?    @db.Decimal(20, 8) // High precision
 
   // Credit Card specific
-  creditLimitCents  Int?        // Límite de crédito
+  creditLimitCents  BigInt?     // Límite de crédito
   cutoffDay         Int?        // Día de corte (1-31)
   paymentDueDay     Int?        // Día de pago (1-31)
 
@@ -268,11 +269,11 @@ model Transaction {
   date                DateTime          @default(now())
 
   // Money storage in cents - Final currency (Rule 1)
-  amountCents         Int
+  amountCents         BigInt
   currency            Currency
 
   // Currency conversion tracking (Rule 11)
-  originalAmountCents Int?              // Amount before conversion
+  originalAmountCents BigInt?             // Amount before conversion
   originalCurrency    Currency?         // Source currency
   exchangeRate        Decimal?          @db.Decimal(20, 8) // High precision rate
 
@@ -333,7 +334,7 @@ model FixedExpense {
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name            String                  // e.g., "Arriendo", "Netflix"
-  amountCents     Int                     // Expected amount
+  amountCents     BigInt                  // Expected amount
   currency        Currency                @default(COP)
   frequency       FixedExpenseFrequency
   dayOfPayment    Int?                    // Day of month (1-31) or week (1-7)
@@ -366,8 +367,8 @@ model FixedExpensePayment {
   dueDate         DateTime      // Expected payment date
   paidDate        DateTime?     // Actual payment date (null = unpaid)
 
-  expectedAmountCents Int
-  paidAmountCents     Int?
+  expectedAmountCents BigInt
+  paidAmountCents     BigInt?
   currency            Currency
 
   // Link to actual transaction
@@ -430,7 +431,7 @@ model Loan {
   type                LoanType
 
   // Loan details
-  principalCents      Int               // Monto original del préstamo
+  principalCents      BigInt              // Monto original del préstamo
   currency            Currency          @default(COP)
   interestRateEA      Decimal           @db.Decimal(20, 8) // High precision E.A.
   termMonths          Int               // Plazo en meses
@@ -440,7 +441,7 @@ model Loan {
   firstPaymentDate    DateTime
 
   // Current state (computed from installments)
-  balanceCents        Int               @default(0) // CACHE - remaining balance
+  balanceCents        BigInt              @default(0) // CACHE - remaining balance
   lastReconciled      DateTime?
 
   // Relations
@@ -469,15 +470,15 @@ model LoanInstallment {
   dueDate             DateTime
 
   // Calculated amounts (at loan creation) - High precision
-  principalCents      Int          // Capital
-  interestCents       Int          // Intereses
-  totalCents          Int          // Total cuota
-  balanceCents        Int          // Saldo restante después de esta cuota
+  principalCents      BigInt          // Capital
+  interestCents       BigInt          // Intereses
+  totalCents          BigInt          // Total cuota
+  balanceCents        BigInt          // Saldo restante después de esta cuota
   currency            Currency
 
   // Payment tracking
   paidDate            DateTime?    // Fecha de pago real
-  paidAmountCents     Int?         // Monto pagado
+  paidAmountCents     BigInt?      // Monto pagado
 
   // Link to actual transaction
   transaction         Transaction?
@@ -509,14 +510,14 @@ model InvestmentAssetHolding {
   symbol              String      // e.g., "AAPL", "TSLA", "MSFT"
   name                String      // e.g., "Apple Inc."
   quantity            Decimal     @db.Decimal(20, 8) // Número de acciones (permite fraccionales)
-  avgCostCents        Int         // Costo promedio de compra en centavos
+  avgCostCents        BigInt      // Costo promedio de compra en centavos
   currency            Currency    // Moneda del activo (USD, EUR)
-  currentPriceCents   Int         @default(0) // Último precio de mercado en centavos
+  currentPriceCents   BigInt      @default(0) // Último precio de mercado en centavos
   lastPriceUpdate     DateTime?   // Última actualización de precio
 
   // Trazabilidad de moneda original (Rule 11)
   originalCurrency    Currency?
-  originalCostCents   Int?
+  originalCostCents   BigInt?
   exchangeRate        Decimal?    @db.Decimal(20, 8)
 
   // Audit (Rule 4)
@@ -547,13 +548,13 @@ model SavingsGoal {
   type                    SavingsGoalType   @default(CUSTOM)
 
   // Target
-  targetAmountCents       Int               // Meta en centavos
-  currency                Currency          @default(COP)
-  currentAmountCents      Int               @default(0) // CACHE - reconcile from contributions
+  targetAmountCents       BigInt              // Meta en centavos
+  currency                Currency            @default(COP)
+  currentAmountCents      BigInt              @default(0) // CACHE - reconcile from contributions
 
   // Timeline
-  deadline                DateTime?         // null = sin fecha límite
-  monthlyContributionCents Int?             // Contribución mensual planeada
+  deadline                DateTime?           // null = sin fecha límite
+  monthlyContributionCents BigInt?            // Contribución mensual planeada
 
   // Linked savings account (optional)
   linkedAccountId         String?
@@ -592,7 +593,7 @@ model SavingsContribution {
   goalId                  String
   goal                    SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
 
-  amountCents             Int         // Monto contribuido en centavos
+  amountCents             BigInt         // Monto contribuido en centavos
   currency                Currency
   date                    DateTime    @default(now())
 

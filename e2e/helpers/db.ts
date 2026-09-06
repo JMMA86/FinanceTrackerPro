@@ -75,7 +75,7 @@ export async function getAccountBalancesByEmail(email: string): Promise<Record<s
     where: { userId: user.id, isActive: true },
   });
   const balances: Record<string, number> = {};
-  for (const acc of accounts) balances[acc.name] = acc.balanceCents;
+  for (const acc of accounts) balances[acc.name] = Number(acc.balanceCents);
   return balances;
 }
 
@@ -103,7 +103,10 @@ export async function getAccountTotalBalancesByEmail(
   for (const acc of accounts) {
     if (acc.type === 'POCKET' && acc.parentAccountId) continue; // included in its parent
     const pockets = accounts.filter((p) => p.type === 'POCKET' && p.parentAccountId === acc.id);
-    balances[acc.name] = pockets.reduce((sum, p) => sum + p.balanceCents, acc.balanceCents);
+    balances[acc.name] = pockets.reduce(
+      (sum, p) => sum + Number(p.balanceCents),
+      Number(acc.balanceCents)
+    );
   }
   return balances;
 }

@@ -37,7 +37,7 @@ const buildMockAccount = (overrides: Partial<Account> = {}): Account => ({
   name: 'Checking',
   type: 'BANK' as AccountType,
   currency: 'USD' as Currency,
-  balanceCents: 100000,
+  balanceCents: BigInt(100000),
   isActive: true,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -67,8 +67,8 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockRepo = createMockTransactionRepo();
       vi.mocked(mockRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
-        { amountCents: 50000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(50000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
 
       // When
@@ -82,8 +82,8 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockRepo = createMockTransactionRepo();
       vi.mocked(mockRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
-        { amountCents: -30000, type: 'EXPENSE' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: -BigInt(30000), type: 'EXPENSE' as TransactionType } as Transaction,
       ]);
 
       // When
@@ -97,9 +97,9 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockRepo = createMockTransactionRepo();
       vi.mocked(mockRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
-        { amountCents: -20000, type: 'TRANSFER_OUT' as TransactionType } as Transaction,
-        { amountCents: 50000, type: 'TRANSFER_IN' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: -BigInt(20000), type: 'TRANSFER_OUT' as TransactionType } as Transaction,
+        { amountCents: BigInt(50000), type: 'TRANSFER_IN' as TransactionType } as Transaction,
       ]);
 
       // When
@@ -133,10 +133,10 @@ describe('reconciliation.service.ts', () => {
 
     it('should detect discrepancy, update balance, and return reconciliation result', async () => {
       // Given
-      const mockAccount = buildMockAccount({ balanceCents: 90000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(90000) });
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateBalance).mockResolvedValue(mockAccount);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
@@ -159,10 +159,10 @@ describe('reconciliation.service.ts', () => {
 
     it('should not update balance when cached balance is accurate', async () => {
       // Given
-      const mockAccount = buildMockAccount({ balanceCents: 100000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(100000) });
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
 
@@ -195,7 +195,7 @@ describe('reconciliation.service.ts', () => {
       const mockAccount = buildMockAccount();
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
 
@@ -239,7 +239,7 @@ describe('reconciliation.service.ts', () => {
         .mockResolvedValueOnce(mockAccount)
         .mockResolvedValueOnce(null);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
 
@@ -287,7 +287,7 @@ describe('reconciliation.service.ts', () => {
       vi.mocked(mockAccountRepo.findManyByUserId).mockResolvedValue([mockAccount]);
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
 
@@ -304,11 +304,11 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockAccountRepo = createMockAccountRepo();
       const mockTransactionRepo = createMockTransactionRepo();
-      const mockAccount = buildMockAccount({ balanceCents: 50000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(50000) });
       vi.mocked(mockAccountRepo.findManyByUserId).mockResolvedValue([mockAccount]);
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateBalance).mockResolvedValue(mockAccount);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
@@ -341,10 +341,10 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockAccountRepo = createMockAccountRepo();
       const mockTransactionRepo = createMockTransactionRepo();
-      const mockAccount = buildMockAccount({ balanceCents: 90000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(90000) });
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
 
       // When
@@ -362,10 +362,10 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockAccountRepo = createMockAccountRepo();
       const mockTransactionRepo = createMockTransactionRepo();
-      const mockAccount = buildMockAccount({ balanceCents: 100000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(100000) });
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
 
       // When
@@ -388,7 +388,7 @@ describe('reconciliation.service.ts', () => {
       ]);
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);
 
@@ -405,13 +405,13 @@ describe('reconciliation.service.ts', () => {
       // Given
       const mockAccountRepo = createMockAccountRepo();
       const mockTransactionRepo = createMockTransactionRepo();
-      const mockAccount = buildMockAccount({ balanceCents: 50000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(50000) });
       vi.mocked(mockAccountRepo.findActiveWithRecentActivity).mockResolvedValue([
         { id: 'account-1' } as Account,
       ]);
       vi.mocked(mockAccountRepo.findById).mockResolvedValue(mockAccount);
       vi.mocked(mockTransactionRepo.findManyByAccountId).mockResolvedValue([
-        { amountCents: 100000, type: 'INCOME' as TransactionType } as Transaction,
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType } as Transaction,
       ]);
       vi.mocked(mockAccountRepo.updateBalance).mockResolvedValue(mockAccount);
       vi.mocked(mockAccountRepo.updateReconciliation).mockResolvedValue(mockAccount);

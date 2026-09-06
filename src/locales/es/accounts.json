@@ -5,8 +5,6 @@
     "investments": "Cuentas de Inversión",
     "creditCards": "Tarjetas de Crédito"
   },
-  "creditCardsComingSoon": "Próximamente",
-  "creditCardsInDevelopment": "En desarrollo",
   "addAccount": "Nueva Cuenta",
   "noAccounts": "Sin cuentas bancarias",
   "noAccountsDesc": "Agrega tus cuentas corrientes, ahorros, efectivo y bolsillos.",

@@ -19,7 +19,7 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
   userId: 'user-1',
   accountId: 'account-1',
   type: 'INCOME' as TransactionType,
-  amountCents: 100000,
+  amountCents: BigInt(100000),
   currency: 'USD' as Currency,
   description: 'Salary',
   date: new Date(),
@@ -106,8 +106,8 @@ describe('PrismaTransactionRepository', () => {
     it('should return all active transactions for the account', async () => {
       // Given
       const mockTransactions = [
-        { amountCents: 100000, type: 'INCOME' as TransactionType },
-        { amountCents: -30000, type: 'EXPENSE' as TransactionType },
+        { amountCents: BigInt(100000), type: 'INCOME' as TransactionType },
+        { amountCents: -BigInt(30000), type: 'EXPENSE' as TransactionType },
       ] as Transaction[];
       vi.mocked(mockPrisma.transaction.findMany).mockResolvedValue(mockTransactions);
 
@@ -129,7 +129,7 @@ describe('PrismaTransactionRepository', () => {
       const debit = buildMockTransaction({
         id: 'tx-1',
         type: 'TRANSFER_OUT',
-        amountCents: -50000,
+        amountCents: -BigInt(50000),
         transferId: 'transfer-1',
         accountId: 'account-1',
         transferToAccountId: 'account-2',
@@ -138,7 +138,7 @@ describe('PrismaTransactionRepository', () => {
       const credit = buildMockTransaction({
         id: 'tx-2',
         type: 'TRANSFER_IN',
-        amountCents: 50000,
+        amountCents: BigInt(50000),
         transferId: 'transfer-1',
         accountId: 'account-2',
         transferToAccountId: 'account-2',
@@ -151,8 +151,8 @@ describe('PrismaTransactionRepository', () => {
 
       // Then
       expect(result).toHaveLength(2);
-      expect(result[0].amountCents).toBe(-50000);
-      expect(result[1].amountCents).toBe(50000);
+      expect(result[0].amountCents).toBe(-BigInt(50000));
+      expect(result[1].amountCents).toBe(BigInt(50000));
       expect(mockPrisma.transaction.findMany).toHaveBeenCalledWith({
         where: { transferId: 'transfer-1', isActive: true },
         orderBy: { amountCents: 'asc' },
@@ -181,16 +181,16 @@ describe('PrismaTransactionRepository', () => {
       });
 
       // Then
-      expect(result.amountCents).toBe(100000);
+      expect(result.amountCents).toBe(BigInt(100000));
       expect(result.type).toBe('INCOME');
     });
 
     it('should create a transaction with currency conversion fields', async () => {
       // Given
       const mockTx = buildMockTransaction({
-        amountCents: 110000,
+        amountCents: BigInt(110000),
         currency: 'USD' as Currency,
-        originalAmountCents: 100000,
+        originalAmountCents: BigInt(100000),
         originalCurrency: 'EUR' as Currency,
         exchangeRate: new Decimal('1.1'),
       });
@@ -211,7 +211,7 @@ describe('PrismaTransactionRepository', () => {
       });
 
       // Then
-      expect(result.originalAmountCents).toBe(100000);
+      expect(result.originalAmountCents).toBe(BigInt(100000));
       expect(result.exchangeRate).toEqual(new Decimal('1.1'));
     });
   });
@@ -222,13 +222,13 @@ describe('PrismaTransactionRepository', () => {
       const debit = buildMockTransaction({
         id: 'tx-1',
         type: 'TRANSFER_OUT',
-        amountCents: -50000,
+        amountCents: -BigInt(50000),
         transferId: 'transfer-1',
       });
       const credit = buildMockTransaction({
         id: 'tx-2',
         type: 'TRANSFER_IN',
-        amountCents: 50000,
+        amountCents: BigInt(50000),
         transferId: 'transfer-1',
       });
       vi.mocked(mockPrisma.transaction.create)
@@ -265,8 +265,8 @@ describe('PrismaTransactionRepository', () => {
 
       // Then
       expect(result).toHaveLength(2);
-      expect(result[0].amountCents).toBe(-50000);
-      expect(result[1].amountCents).toBe(50000);
+      expect(result[0].amountCents).toBe(-BigInt(50000));
+      expect(result[1].amountCents).toBe(BigInt(50000));
     });
   });
 

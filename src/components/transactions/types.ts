@@ -20,6 +20,10 @@ export interface AccountBrief {
   type: string;
   parentAccountId: string | null;
   balanceCents: number;
+  /** Set for credit cards only: configured credit limit. */
+  creditLimitCents?: number | null;
+  /** Set for credit cards only: limit - debt (what the user can still consume). */
+  availableCreditCents?: number | null;
 }
 
 /**

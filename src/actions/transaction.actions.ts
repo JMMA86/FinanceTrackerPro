@@ -25,6 +25,7 @@ import {
   RateLimitError,
   ValidationError,
   NegativeBalanceError,
+  CreditLimitExceededError,
 } from '@/lib/errors/api-errors';
 import {
   GetAllTransactionsSchema,
@@ -34,6 +35,20 @@ import {
   UpdateTransactionSchema,
 } from './transaction.schema';
 import type { Prisma, ApiAction, TransactionType } from '@prisma/client';
+
+/**
+ * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
+ * safe to serialize back to the client (JSON.stringify throws on bigint).
+ */
+function serializeTransaction<
+  T extends { amountCents: bigint; originalAmountCents: bigint | null },
+>(tx: T) {
+  return {
+    ...tx,
+    amountCents: Number(tx.amountCents),
+    originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
+  };
+}
 
 // ============================================================================
 // getAllTransactions — Paginated list of all user transactions
@@ -80,7 +95,11 @@ async function getAllTransactionsInternal(input: unknown) {
   ]);
 
   return {
-    transactions,
+    transactions: transactions.map((t) => ({
+      ...t,
+      amountCents: Number(t.amountCents),
+      originalAmountCents: t.originalAmountCents == null ? null : Number(t.originalAmountCents),
+    })),
     total,
     page: validated.page,
     pageSize: validated.pageSize,
@@ -120,7 +139,7 @@ async function createTransactionInternal(input: unknown) {
       { action: 'transaction.create.idempotent', transactionId: existing.id },
       'Duplicate transaction request'
     );
-    return { transaction: existing, wasIdempotent: true };
+    return { transaction: serializeTransaction(existing), wasIdempotent: true };
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -133,6 +152,8 @@ async function createTransactionInternal(input: unknown) {
         balanceCents: true,
         currency: true,
         isActive: true,
+        type: true,
+        creditLimitCents: true,
       },
     });
 
@@ -144,6 +165,13 @@ async function createTransactionInternal(input: unknown) {
     // Verify currency matches (Rule 4)
     if (account.currency !== validated.currency) {
       throw new CurrencyMismatchError(account.currency, validated.currency);
+    }
+
+    // Credit cards only support EXPENSE (consumption). INCOME would reduce the
+    // debt without the double-entry payment flow, which is inconsistent with
+    // card semantics (the frontend hides it, but the server must reject it).
+    if (account.type === 'CREDIT_CARD' && validated.type === 'INCOME') {
+      throw new ValidationError('Income cannot be registered on a credit card');
     }
 
     // Validate category if provided (must be system or own, and active)
@@ -158,14 +186,30 @@ async function createTransactionInternal(input: unknown) {
       }
     }
 
-    // For EXPENSE, verify sufficient funds using true balance (Rule 13)
-    if (validated.type === 'EXPENSE') {
+    // Fund verification (Rule 13). Any transaction with a negative amount reduces
+    // the account balance. CREDIT_CARD accounts are exempt from the negative-balance
+    // rule (debt is allowed) but must respect their credit limit.
+    if (validated.amountCents < 0) {
       const transactionRepo = getTransactionRepository();
       const trueBalance = await getTrueBalance(validated.accountId, transactionRepo);
 
-      const projectedBalance = addCents(trueBalance, validated.amountCents);
-      if (projectedBalance < 0) {
-        throw new InsufficientFundsError(Math.abs(validated.amountCents), trueBalance);
+      if (account.type === 'CREDIT_CARD') {
+        // Negative amount = increases debt. Only enforce the credit limit
+        // when one is configured.
+        if (account.creditLimitCents != null) {
+          const projectedDebt = Math.abs(addCents(trueBalance, validated.amountCents));
+          if (projectedDebt > account.creditLimitCents) {
+            throw new CreditLimitExceededError(
+              validated.accountId,
+              Number(account.creditLimitCents)
+            );
+          }
+        }
+      } else {
+        const projectedBalance = addCents(trueBalance, validated.amountCents);
+        if (projectedBalance < 0) {
+          throw new InsufficientFundsError(Math.abs(validated.amountCents), trueBalance);
+        }
       }
     }
 
@@ -192,7 +236,7 @@ async function createTransactionInternal(input: unknown) {
     });
 
     // Update cached balance atomically (Rule 1: Decimal.js via addCents)
-    const newBalance = addCents(account.balanceCents, validated.amountCents);
+    const newBalance = addCents(Number(account.balanceCents), validated.amountCents);
     await tx.account.update({
       where: { id: validated.accountId },
       data: {
@@ -231,7 +275,7 @@ async function createTransactionInternal(input: unknown) {
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/accounts', 'page');
 
-  return { transaction: result, wasIdempotent: false };
+  return { transaction: serializeTransaction(result), wasIdempotent: false };
 }
 
 export const createTransaction = safeAction(createTransactionInternal);
@@ -283,14 +327,17 @@ async function deleteTransactionInternal(input: unknown) {
     if (account.type !== 'CREDIT_CARD') {
       const transactionRepo = getTransactionRepository();
       const trueBalance = await getTrueBalance(transaction.accountId, transactionRepo);
-      const projectedBalance = subtractCents(trueBalance, transaction.amountCents);
+      const projectedBalance = subtractCents(trueBalance, Number(transaction.amountCents));
       if (projectedBalance < 0) {
         throw new NegativeBalanceError(transaction.accountId);
       }
     }
 
     // Reverse balance impact to maintain cache consistency
-    const revertedBalance = addCents(account.balanceCents, -transaction.amountCents);
+    const revertedBalance = addCents(
+      Number(account.balanceCents),
+      -Number(transaction.amountCents)
+    );
 
     await tx.account.update({
       where: { id: account.id },
@@ -359,7 +406,12 @@ async function getTransactionByIdInternal(input: unknown) {
   if (transaction.userId !== session.userId)
     throw new UnauthorizedError('Transaction does not belong to user');
 
-  return transaction;
+  return {
+    ...transaction,
+    amountCents: Number(transaction.amountCents),
+    originalAmountCents:
+      transaction.originalAmountCents == null ? null : Number(transaction.originalAmountCents),
+  };
 }
 
 export const getTransactionById = safeAction(getTransactionByIdInternal);
@@ -476,7 +528,7 @@ async function updateTransactionInternal(input: unknown) {
 
     await validateCategoryForUpdate(tx, validated.categoryId, session.userId);
 
-    const originalAmount = transaction.amountCents;
+    const originalAmount = Number(transaction.amountCents);
     const newAmount = validated.amountCents ?? originalAmount;
 
     if (validated.amountCents !== undefined) {
@@ -499,7 +551,11 @@ async function updateTransactionInternal(input: unknown) {
     });
 
     if (validated.amountCents !== undefined && newAmount !== originalAmount) {
-      const newBalance = computeBalanceAdjustment(account.balanceCents, originalAmount, newAmount);
+      const newBalance = computeBalanceAdjustment(
+        Number(account.balanceCents),
+        originalAmount,
+        newAmount
+      );
       await tx.account.update({
         where: { id: account.id },
         data: {
@@ -538,7 +594,7 @@ async function updateTransactionInternal(input: unknown) {
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/accounts', 'page');
 
-  return { transaction: result, wasIdempotent: false };
+  return { transaction: serializeTransaction(result), wasIdempotent: false };
 }
 
 export const updateTransaction = safeAction(updateTransactionInternal);

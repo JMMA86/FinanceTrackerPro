@@ -21,8 +21,22 @@ const COLOR_PRESETS = [
   'from-pink-500 to-fuchsia-500',
 ];
 
+/**
+ * Serialized savings goal shape — Server Actions convert Prisma BIGINT monetary
+ * fields to JS numbers before sending them to the client, so the prop uses
+ * `number` for money fields instead of the raw Prisma `bigint`.
+ */
+type EditableSavingsGoal = Omit<
+  SavingsGoal,
+  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
+> & {
+  targetAmountCents: number;
+  currentAmountCents: number;
+  monthlyContributionCents: number | null;
+};
+
 interface EditSavingsGoalModalProps {
-  goal: SavingsGoal;
+  goal: EditableSavingsGoal;
   dictionary: Record<string, unknown>;
   locale: string;
   isOpen: boolean;

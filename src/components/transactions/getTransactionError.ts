@@ -36,6 +36,14 @@ export function getTransactionError(
       return get(dictionary, 'balanceNegative');
     case 'POCKET_TRANSFER_NOT_ALLOWED':
       return get(dictionary, 'pocketTransferNotAllowed');
+    case 'CREDIT_LIMIT_EXCEEDED':
+      return get(dictionary, 'creditLimitExceeded');
+    case 'CARD_NO_DEBT':
+      return get(dictionary, 'cardNoDebt');
+    case 'CARD_OVERPAYMENT':
+      return get(dictionary, 'cardOverpayment');
+    case 'CARD_HAS_BALANCE':
+      return get(dictionary, 'cardHasDebt');
     default:
       return result.error || get(dictionary, 'createError');
   }

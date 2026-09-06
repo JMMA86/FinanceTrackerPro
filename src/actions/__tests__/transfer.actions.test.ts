@@ -92,36 +92,46 @@ const buildMockAccount = (id: string, overrides: Record<string, unknown> = {}) =
   ...overrides,
 });
 
-const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
-  id: 'tx-1',
-  idempotencyKey: 'key-1',
-  userId: VALID_USER_ID,
-  accountId: VALID_FROM_ACCOUNT,
-  type: 'TRANSFER_OUT',
-  amountCents: -10000,
-  currency: 'USD' as Currency,
-  description: 'Transfer',
-  date: new Date(),
-  originalAmountCents: null,
-  originalCurrency: null,
-  exchangeRate: null,
-  transferId: 'transfer-1',
-  transferToAccountId: VALID_TO_ACCOUNT,
-  transferFromAccountId: VALID_FROM_ACCOUNT,
-  categoryId: null,
-  fixedExpensePaymentId: null,
-  loanInstallmentId: null,
-  ipAddress: '192.168.1.1',
-  userAgent: 'test',
-  isActive: true,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  deletedAt: null,
-  createdBy: VALID_USER_ID,
-  lastModifiedBy: VALID_USER_ID,
-  openingBalance: false,
-  ...overrides,
-});
+type MockTransactionOverrides = Partial<
+  Omit<Transaction, 'amountCents' | 'originalAmountCents'>
+> & {
+  amountCents?: number;
+  originalAmountCents?: number | null;
+};
+
+const buildMockTransaction = (overrides: MockTransactionOverrides = {}): Transaction => {
+  const { amountCents, originalAmountCents, ...rest } = overrides;
+  return {
+    id: 'tx-1',
+    idempotencyKey: 'key-1',
+    userId: VALID_USER_ID,
+    accountId: VALID_FROM_ACCOUNT,
+    type: 'TRANSFER_OUT',
+    amountCents: amountCents == null ? -BigInt(10000) : BigInt(amountCents),
+    currency: 'USD' as Currency,
+    description: 'Transfer',
+    date: new Date(),
+    originalAmountCents: originalAmountCents == null ? null : BigInt(originalAmountCents),
+    originalCurrency: null,
+    exchangeRate: null,
+    transferId: 'transfer-1',
+    transferToAccountId: VALID_TO_ACCOUNT,
+    transferFromAccountId: VALID_FROM_ACCOUNT,
+    categoryId: null,
+    fixedExpensePaymentId: null,
+    loanInstallmentId: null,
+    ipAddress: '192.168.1.1',
+    userAgent: 'test',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    createdBy: VALID_USER_ID,
+    lastModifiedBy: VALID_USER_ID,
+    openingBalance: false,
+    ...rest,
+  };
+};
 
 describe('transfer.actions.ts', () => {
   beforeEach(() => {
@@ -474,18 +484,21 @@ describe('transfer.actions.ts', () => {
       it('should return INSUFFICIENT_FUNDS', async () => {
         // Given
         const { prisma } = await import('@/lib/db');
-        const { getTrueBalance } = await import('@/services/reconciliation.service');
-        vi.mocked(getTrueBalance).mockResolvedValueOnce(5000);
         vi.mocked(prisma.$transaction).mockImplementationOnce(
           async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
             const mockTx = {
+              $queryRaw: vi.fn().mockResolvedValue([{ id: VALID_FROM_ACCOUNT }]),
               account: {
                 findUnique: vi
                   .fn()
                   .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
-                  .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
+                  .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT))
+                  .mockResolvedValueOnce({ id: VALID_FROM_ACCOUNT, balanceCents: BigInt(100000) }),
               },
-              transaction: { create: vi.fn() },
+              transaction: {
+                findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(5000) }]),
+                create: vi.fn(),
+              },
             };
             return callback(asTransactionClient(mockTx));
           }
@@ -508,13 +521,18 @@ describe('transfer.actions.ts', () => {
         vi.mocked(prisma.$transaction).mockImplementationOnce(
           async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
             const mockTx = {
+              $queryRaw: vi.fn().mockResolvedValue([{ id: VALID_FROM_ACCOUNT }]),
               account: {
                 findUnique: vi
                   .fn()
                   .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
-                  .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
+                  .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT))
+                  .mockResolvedValueOnce({ id: VALID_FROM_ACCOUNT, balanceCents: BigInt(100000) }),
               },
-              transaction: { create: vi.fn().mockRejectedValueOnce(new Error('Database error')) },
+              transaction: {
+                findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(100000) }]),
+                create: vi.fn().mockRejectedValueOnce(new Error('Database error')),
+              },
             };
             return callback(asTransactionClient(mockTx));
           }
@@ -536,14 +554,17 @@ describe('transfer.actions.ts', () => {
         const { prisma } = await import('@/lib/db');
         vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
           const mockTx = {
+            $queryRaw: vi.fn().mockResolvedValue([{ id: VALID_FROM_ACCOUNT }]),
             account: {
               findUnique: vi
                 .fn()
                 .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
-                .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)),
+                .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT))
+                .mockResolvedValueOnce({ id: VALID_FROM_ACCOUNT, balanceCents: BigInt(100000) }),
               update: vi.fn().mockResolvedValue({}),
             },
             transaction: {
+              findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(100000) }]),
               create: vi
                 .fn()
                 .mockResolvedValueOnce(
@@ -576,14 +597,17 @@ describe('transfer.actions.ts', () => {
         const { prisma } = await import('@/lib/db');
         vi.mocked(prisma.$transaction).mockImplementation(async (callback) => {
           const mockTx = {
+            $queryRaw: vi.fn().mockResolvedValue([{ id: VALID_TO_ACCOUNT }]),
             account: {
               findUnique: vi
                 .fn()
                 .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT)) // Swapped
-                .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT)), // Swapped
+                .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT)) // Swapped
+                .mockResolvedValueOnce({ id: VALID_TO_ACCOUNT, balanceCents: BigInt(100000) }),
               update: vi.fn().mockResolvedValue({}),
             },
             transaction: {
+              findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(100000) }]),
               create: vi
                 .fn()
                 .mockResolvedValueOnce(
@@ -634,14 +658,20 @@ describe('transfer.actions.ts', () => {
       vi.mocked(prisma.$transaction).mockImplementation(
         async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
           const mockTx = {
+            $queryRaw: vi.fn().mockResolvedValue([{ id: (from.id as string) ?? '' }]),
             account: {
               findUnique: vi
                 .fn()
                 .mockResolvedValueOnce(buildMockAccount((from.id as string) ?? '', from))
-                .mockResolvedValueOnce(buildMockAccount((to.id as string) ?? '', to)),
+                .mockResolvedValueOnce(buildMockAccount((to.id as string) ?? '', to))
+                .mockResolvedValueOnce({
+                  id: (from.id as string) ?? '',
+                  balanceCents: BigInt(100000),
+                }),
               update: vi.fn().mockResolvedValue({}),
             },
             transaction: {
+              findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(100000) }]),
               create: vi
                 .fn()
                 .mockResolvedValueOnce(
@@ -1013,14 +1043,17 @@ describe('transfer.actions.ts', () => {
         vi.mocked(prisma.$transaction).mockImplementation(
           async <T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => {
             const mockTx = {
+              $queryRaw: vi.fn().mockResolvedValue([{ id: VALID_TO_ACCOUNT }]),
               account: {
                 findUnique: vi
                   .fn()
                   .mockResolvedValueOnce(buildMockAccount(VALID_TO_ACCOUNT))
-                  .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT)),
+                  .mockResolvedValueOnce(buildMockAccount(VALID_FROM_ACCOUNT))
+                  .mockResolvedValueOnce({ id: VALID_TO_ACCOUNT, balanceCents: BigInt(100000) }),
                 update: vi.fn().mockResolvedValue({}),
               },
               transaction: {
+                findMany: vi.fn().mockResolvedValue([{ amountCents: BigInt(100000) }]),
                 create: vi
                   .fn()
                   .mockResolvedValueOnce({

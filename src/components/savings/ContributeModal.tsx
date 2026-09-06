@@ -12,10 +12,16 @@ import type { SavingsGoal, SavingsContribution } from '@prisma/client';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { formatMoney } from '@/lib/money';
 
-interface GoalWithProgress extends SavingsGoal {
+interface GoalWithProgress extends Omit<
+  SavingsGoal,
+  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
+> {
+  targetAmountCents: number;
+  currentAmountCents: number;
+  monthlyContributionCents: number | null;
   progressPercentage: number;
   projectedCompletion: string | null;
-  contributions: SavingsContribution[];
+  contributions: Array<Omit<SavingsContribution, 'amountCents'> & { amountCents: number }>;
   linkedAccount?: { id: string; name: string; currency: string } | null;
 }
 
@@ -62,7 +68,7 @@ export function ContributeModal({
     try {
       const res = await getSavingsGoals({});
       if (res.success && res.data) {
-        const goals = res.data as GoalWithProgress[];
+        const goals = res.data as unknown as GoalWithProgress[];
         const found = goals.find((g) => g.id === goalId);
         if (found) setGoal(found);
       }

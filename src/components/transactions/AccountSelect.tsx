@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useMemo, useEffect } from 'react';
-import { ChevronDown, Wallet, Landmark } from 'lucide-react';
+import { ChevronDown, Wallet, Landmark, CreditCard } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import type { AccountBrief } from './types';
 
@@ -12,8 +12,14 @@ interface AccountSelectProps {
   placeholder: string;
   accountsGroupLabel: string;
   pocketsGroupLabel: string;
-  accounts: AccountBrief[]; // cuentas (no-bolsillo)
-  pockets: AccountBrief[]; // bolsillos
+  /** Label for the dedicated credit-cards group (e.g. "Tarjetas de Crédito"). */
+  creditCardsGroupLabel?: string;
+  /** Cuentas no-tarjeta, no-bolsillo (icono Landmark). */
+  accounts: AccountBrief[];
+  /** Tarjetas de crédito en su propio grupo (icono CreditCard). */
+  creditCards?: AccountBrief[];
+  /** Bolsillos (icono Wallet). */
+  pockets: AccountBrief[];
   /** Map accountId -> account name, used to resolve each pocket's parent account. */
   parentNameById?: Record<string, string>;
   showBalance?: boolean;
@@ -25,6 +31,14 @@ interface AccountSelectProps {
 
 type Option = AccountBrief & { isPocket: boolean };
 
+/** Amount shown next to an option: available credit for cards, balance otherwise. */
+function displayValue(opt: AccountBrief): number {
+  if (opt.type === 'CREDIT_CARD' && opt.availableCreditCents != null) {
+    return opt.availableCreditCents;
+  }
+  return opt.balanceCents;
+}
+
 export function AccountSelect({
   id,
   value,
@@ -32,7 +46,9 @@ export function AccountSelect({
   placeholder,
   accountsGroupLabel,
   pocketsGroupLabel,
+  creditCardsGroupLabel,
   accounts,
+  creditCards = [],
   pockets,
   parentNameById,
   showBalance = false,
@@ -47,9 +63,10 @@ export function AccountSelect({
   const allOptions = useMemo<Option[]>(
     () => [
       ...accounts.map((a) => ({ ...a, isPocket: false })),
+      ...creditCards.map((a) => ({ ...a, isPocket: false })),
       ...pockets.map((a) => ({ ...a, isPocket: true })),
     ],
-    [accounts, pockets]
+    [accounts, creditCards, pockets]
   );
   const selected = allOptions.find((o) => o.id === value);
   const selectedParentName = selected
@@ -109,7 +126,10 @@ export function AccountSelect({
   function renderOption(opt: AccountBrief, isPocket: boolean) {
     const isSelected = opt.id === value;
     const isHighlighted = opt.id === allOptions[highlight]?.id;
+    const isCard = opt.type === 'CREDIT_CARD';
     const parentName = isPocket ? parentNameById?.[opt.parentAccountId ?? ''] : undefined;
+    const iconClass = isPocket ? 'text-amber-400' : isCard ? 'text-orange-400' : 'text-blue-400';
+    const Icon = isPocket ? Wallet : isCard ? CreditCard : Landmark;
     return (
       <button
         key={opt.id}
@@ -127,8 +147,8 @@ export function AccountSelect({
         } ${isSelected ? 'text-white' : 'text-slate-200 hover:text-white'}`}
       >
         <span className="flex items-center gap-2 min-w-0">
-          <span className={`flex-shrink-0 ${isPocket ? 'text-amber-400' : 'text-blue-400'}`}>
-            {isPocket ? <Wallet className="w-3.5 h-3.5" /> : <Landmark className="w-3.5 h-3.5" />}
+          <span className={`flex-shrink-0 ${iconClass}`}>
+            <Icon className="w-3.5 h-3.5" />
           </span>
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
@@ -144,12 +164,16 @@ export function AccountSelect({
         </span>
         {showBalance && (
           <span className="flex-shrink-0 text-xs font-mono tabular-nums text-slate-400">
-            {formatMoney(opt.balanceCents, opt.currency, locale)}
+            {formatMoney(displayValue(opt), opt.currency, locale)}
           </span>
         )}
       </button>
     );
   }
+
+  const showAccountsHeader = accounts.length > 0;
+  const showCardsHeader = creditCards.length > 0 && !!creditCardsGroupLabel;
+  const showPocketsHeader = pockets.length > 0;
 
   return (
     <div ref={rootRef} className="relative">
@@ -193,7 +217,8 @@ export function AccountSelect({
           aria-label={placeholder}
           className="absolute z-30 mt-2 w-full max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur-md shadow-2xl"
         >
-          {accounts.length > 0 && (
+          {/* Group 1: bank accounts */}
+          {showAccountsHeader && (
             <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 pt-2 pb-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-400">
                 {accountsGroupLabel}
@@ -201,10 +226,25 @@ export function AccountSelect({
             </div>
           )}
           {accounts.map((a) => renderOption(a, false))}
-          {accounts.length > 0 && pockets.length > 0 && (
+          {showAccountsHeader && showCardsHeader && (
             <div className="mx-3 my-1 h-px bg-white/8" aria-hidden="true" />
           )}
-          {pockets.length > 0 && (
+
+          {/* Group 2: credit cards */}
+          {showCardsHeader && (
+            <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 pt-2 pb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-400">
+                {creditCardsGroupLabel}
+              </p>
+            </div>
+          )}
+          {creditCards.map((a) => renderOption(a, false))}
+          {showCardsHeader && showPocketsHeader && (
+            <div className="mx-3 my-1 h-px bg-white/8" aria-hidden="true" />
+          )}
+
+          {/* Group 3: pockets */}
+          {showPocketsHeader && (
             <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md px-3 pt-2 pb-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
                 {pocketsGroupLabel}

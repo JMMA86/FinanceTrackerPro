@@ -27,7 +27,7 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
   userId: 'user-1',
   accountId: 'account-1',
   type: 'INCOME' as TransactionType,
-  amountCents: 100000,
+  amountCents: BigInt(100000),
   currency: 'USD' as Currency,
   description: null,
   date: new Date(),

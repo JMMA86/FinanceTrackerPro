@@ -230,7 +230,7 @@ describe('Transaction Update Integration', () => {
       expect(result.data!.transaction.amountCents).toBe(-5000);
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(updatedAccount?.balanceCents).toBe(50000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(50000);
     });
 
     it('should update EXPENSE amount and adjust balance correctly', async () => {
@@ -266,7 +266,7 @@ describe('Transaction Update Integration', () => {
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
       // balance = 50000 - (-5000) + (-8000) = 47000
-      expect(updatedAccount?.balanceCents).toBe(47000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(47000);
     });
 
     it('should update INCOME amount and increase balance', async () => {
@@ -299,7 +299,7 @@ describe('Transaction Update Integration', () => {
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
       // balance = 30000 - 10000 + 15000 = 35000
-      expect(updatedAccount?.balanceCents).toBe(35000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(35000);
     });
 
     it('should update date', async () => {
@@ -372,11 +372,11 @@ describe('Transaction Update Integration', () => {
 
       // Verify nothing changed
       const unchangedTx = await prisma.transaction.findUnique({ where: { id: tx.id } });
-      expect(unchangedTx?.amountCents).toBe(-5000);
+      expect(Number(unchangedTx?.amountCents)).toBe(-5000);
       expect(unchangedTx?.description).toBe('Original expense');
 
       const unchangedAccount = await prisma.account.findUnique({ where: { id: account.id } });
-      expect(unchangedAccount?.balanceCents).toBe(10000);
+      expect(Number(unchangedAccount?.balanceCents)).toBe(10000);
     });
 
     it('should allow EXPENSE amount decrease even with low balance', async () => {
@@ -413,7 +413,7 @@ describe('Transaction Update Integration', () => {
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: account.id } });
       // balance = 8000 - (-5000) + (-3000) = 10000
-      expect(updatedAccount?.balanceCents).toBe(10000);
+      expect(Number(updatedAccount?.balanceCents)).toBe(10000);
     });
   });
 

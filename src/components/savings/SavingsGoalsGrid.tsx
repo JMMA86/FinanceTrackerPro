@@ -11,10 +11,16 @@ import { EditSavingsGoalModal } from './EditSavingsGoalModal';
 import { ContributeModal } from './ContributeModal';
 import { DeleteGoalModal } from './DeleteGoalModal';
 
-interface GoalWithProgress extends SavingsGoal {
+interface GoalWithProgress extends Omit<
+  SavingsGoal,
+  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
+> {
+  targetAmountCents: number;
+  currentAmountCents: number;
+  monthlyContributionCents: number | null;
   progressPercentage: number;
   projectedCompletion: string | null;
-  contributions: SavingsContribution[];
+  contributions: Array<Omit<SavingsContribution, 'amountCents'> & { amountCents: number }>;
   linkedAccount?: { id: string; name: string; currency: string } | null;
 }
 
@@ -42,7 +48,7 @@ export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGr
     try {
       const res = await getSavingsGoals({});
       if (res.success && res.data) {
-        setGoals(res.data as GoalWithProgress[]);
+        setGoals(res.data as unknown as GoalWithProgress[]);
       } else {
         setError(res.error ?? get(dictionary, 'errors.loadFailed'));
       }

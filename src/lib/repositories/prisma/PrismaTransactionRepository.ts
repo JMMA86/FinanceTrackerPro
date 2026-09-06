@@ -69,11 +69,12 @@ export class PrismaTransactionRepository implements ITransactionRepository {
         userId: data.userId,
         accountId: data.accountId,
         type: data.type,
-        amountCents: data.amountCents,
+        amountCents: BigInt(data.amountCents),
         currency: data.currency,
         description: data.description,
         date: data.date ?? new Date(),
-        originalAmountCents: data.originalAmountCents,
+        originalAmountCents:
+          data.originalAmountCents != null ? BigInt(data.originalAmountCents) : null,
         originalCurrency: data.originalCurrency,
         exchangeRate: data.exchangeRate,
         transferId: data.transferId,
@@ -112,6 +113,7 @@ export class PrismaTransactionRepository implements ITransactionRepository {
       const tx = await this.prisma.transaction.create({
         data: {
           ...data,
+          amountCents: BigInt(data.amountCents),
           date: data.date ?? new Date(),
           lastModifiedBy: data.createdBy,
         },

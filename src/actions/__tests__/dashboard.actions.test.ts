@@ -697,8 +697,8 @@ describe('dashboard.actions.ts', () => {
 
     it('sums all pending fixed expense amounts', async () => {
       mockFixed.mockResolvedValue([
-        { expectedAmountCents: 200_000, currency: 'COP' },
-        { expectedAmountCents: 350_000, currency: 'COP' },
+        { expectedAmountCents: BigInt(200_000), currency: 'COP' },
+        { expectedAmountCents: BigInt(350_000), currency: 'COP' },
       ] as Awaited<ReturnType<typeof prisma.fixedExpensePayment.findMany>>);
 
       const result = await getDashboardMetricsByUser(USER_ID, 'en');

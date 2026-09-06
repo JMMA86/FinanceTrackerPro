@@ -59,6 +59,7 @@ const inputCls =
   'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-transparent transition-all';
 const labelCls = 'block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider';
 const errorCls = 'mt-1 text-xs text-red-400';
+const MAX_SAFE = 9_999_999_999_999;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -126,8 +127,14 @@ export function CreateTransactionModal({
   // Find selected account currency for display
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
-  // Split accounts into non-pocket accounts and pockets for the custom selector
-  const accountOptions = accounts.filter((a) => !isPocket(a));
+  // Split accounts into three groups for the custom selector:
+  // bank accounts, credit cards (expense-only), and pockets. Credit cards are
+  // valid expense accounts (a consumption) but NOT valid income accounts, so
+  // the group is empty when the type is INCOME.
+  const bankAccountOptions = accounts.filter((a) => !isPocket(a) && a.type !== 'CREDIT_CARD');
+  const creditCardOptions = accounts.filter(
+    (a) => a.type === 'CREDIT_CARD' && selectedType === 'EXPENSE'
+  );
   const pocketOptions = accounts.filter(isPocket);
   // accountId -> account name map so each pocket can show its parent account.
   const parentNameById = useMemo(
@@ -188,21 +195,37 @@ export function CreateTransactionModal({
     return () => cancelAnimationFrame(id);
   }, [isOpen, accounts, reset, editingTransaction]);
 
-  // Clamp the typed amount when switching to an account whose balance is lower
-  // than the currently typed amount. Only applies in create mode + EXPENSE; for
-  // updates the server validates the true limit (allows up to balance + original
-  // amount), so editing is intentionally left untouched.
+  // Clamp the typed amount when switching to an account whose available amount
+  // is lower than the currently typed amount. Only applies in create mode +
+  // EXPENSE; for updates the server validates the true limit (allows up to
+  // balance + original amount), so editing is intentionally left untouched.
+  // For credit cards the cap is the available credit (limit - debt), not the
+  // (negative) stored balance.
   useEffect(() => {
     if (isEditing) return;
     if (selectedType !== 'EXPENSE') return;
     const acc = accounts.find((a) => a.id === selectedAccountId);
-    if (acc && amountCents > acc.balanceCents) {
+    if (!acc) return;
+    const cap =
+      acc.type === 'CREDIT_CARD' ? (acc.availableCreditCents ?? MAX_SAFE) : acc.balanceCents;
+    if (amountCents > cap) {
       queueMicrotask(() => {
         setAmountCents(0);
         setValue('amountCents', 0);
       });
     }
   }, [selectedAccountId, selectedType, amountCents, accounts, isEditing, setValue]);
+
+  // Clear the account when the type switches to INCOME and a credit card was
+  // selected (cards are expense-only; leaving a card selected would break the
+  // submit and confuse the "disponible" display).
+  useEffect(() => {
+    if (selectedType !== 'INCOME') return;
+    const acc = accounts.find((a) => a.id === selectedAccountId);
+    if (acc && acc.type === 'CREDIT_CARD') {
+      setValue('accountId', '');
+    }
+  }, [selectedType, selectedAccountId, accounts, setValue]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
@@ -451,9 +474,11 @@ export function CreateTransactionModal({
               onChange={(accountId) => setValue('accountId', accountId)}
               placeholder={get(dictionary, 'selectAccount')}
               accountsGroupLabel={get(dictionary, 'accountsGroup')}
+              creditCardsGroupLabel={get(dictionary, 'creditCardsGroup')}
               pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
               parentNameById={parentNameById}
-              accounts={accountOptions}
+              accounts={bankAccountOptions}
+              creditCards={creditCardOptions}
               pockets={pocketOptions}
               showBalance
               disabled={isEditing}
@@ -482,7 +507,13 @@ export function CreateTransactionModal({
               <p className="mt-1 mb-3 text-xs text-slate-400">
                 {get(dictionary, 'availableToSpend')}:{' '}
                 <span className="font-semibold text-emerald-400 tabular-nums">
-                  {formatMoney(selectedAccount.balanceCents, selectedAccount.currency, locale)}
+                  {formatMoney(
+                    selectedAccount.type === 'CREDIT_CARD'
+                      ? (selectedAccount.availableCreditCents ?? 0)
+                      : selectedAccount.balanceCents,
+                    selectedAccount.currency,
+                    locale
+                  )}
                 </span>
               </p>
             )}
@@ -495,8 +526,12 @@ export function CreateTransactionModal({
               }}
               maxValue={
                 !isEditing && isExpense
-                  ? (selectedAccount?.balanceCents ?? 9_999_999_999_999)
-                  : 9_999_999_999_999
+                  ? selectedAccount
+                    ? selectedAccount.type === 'CREDIT_CARD'
+                      ? (selectedAccount.availableCreditCents ?? MAX_SAFE)
+                      : selectedAccount.balanceCents
+                    : MAX_SAFE
+                  : MAX_SAFE
               }
               aria-invalid={!!errors.amountCents}
               aria-describedby={errors.amountCents ? 'tx-amount-error' : undefined}

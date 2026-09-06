@@ -90,7 +90,14 @@ describe('EditSavingsGoalModal', () => {
   const mockOnClose = vi.fn();
   const defaultDictionary = {};
 
-  const baseGoal: SavingsGoal = {
+  const baseGoal: Omit<
+    SavingsGoal,
+    'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
+  > & {
+    targetAmountCents: number;
+    currentAmountCents: number;
+    monthlyContributionCents: number | null;
+  } = {
     id: MOCK_CUID,
     userId: 'user-1',
     name: 'Vacaciones 2026',

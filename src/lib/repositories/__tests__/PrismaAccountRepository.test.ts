@@ -18,7 +18,7 @@ const buildMockAccount = (overrides: Partial<Account> = {}): Account => ({
   name: 'Checking',
   type: 'BANK' as AccountType,
   currency: 'USD' as Currency,
-  balanceCents: 100000,
+  balanceCents: BigInt(100000),
   isActive: true,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -84,7 +84,7 @@ describe('PrismaAccountRepository', () => {
       // Given
       const mockAccounts = [
         buildMockAccount({ id: 'account-1', name: 'Checking' }),
-        buildMockAccount({ id: 'account-2', name: 'Savings', balanceCents: 50000 }),
+        buildMockAccount({ id: 'account-2', name: 'Savings', balanceCents: BigInt(50000) }),
       ];
       vi.mocked(mockPrisma.account.findMany).mockResolvedValue(mockAccounts);
 
@@ -125,17 +125,24 @@ describe('PrismaAccountRepository', () => {
   describe('updateBalance', () => {
     it('should update balance and lastModifiedBy', async () => {
       // Given
-      const mockAccount = buildMockAccount({ balanceCents: 200000, lastModifiedBy: 'system' });
+      const mockAccount = buildMockAccount({
+        balanceCents: BigInt(200000),
+        lastModifiedBy: 'system',
+      });
       vi.mocked(mockPrisma.account.update).mockResolvedValue(mockAccount);
 
       // When
       const result = await repository.updateBalance('account-1', 200000, 'system');
 
       // Then
-      expect(result.balanceCents).toBe(200000);
+      expect(result.balanceCents).toBe(BigInt(200000));
       expect(mockPrisma.account.update).toHaveBeenCalledWith({
         where: { id: 'account-1' },
-        data: { balanceCents: 200000, lastModifiedBy: 'system', updatedAt: expect.any(Date) },
+        data: {
+          balanceCents: BigInt(200000),
+          lastModifiedBy: 'system',
+          updatedAt: expect.any(Date),
+        },
       });
     });
   });
@@ -161,7 +168,7 @@ describe('PrismaAccountRepository', () => {
   describe('create', () => {
     it('should create account with zero initial balance by default', async () => {
       // Given
-      const mockAccount = buildMockAccount({ balanceCents: 0 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(0) });
       vi.mocked(mockPrisma.account.create).mockResolvedValue(mockAccount);
 
       // When
@@ -175,12 +182,12 @@ describe('PrismaAccountRepository', () => {
 
       // Then
       expect(result.name).toBe('Checking');
-      expect(result.balanceCents).toBe(0);
+      expect(result.balanceCents).toBe(BigInt(0));
     });
 
     it('should create account with provided initial balance', async () => {
       // Given
-      const mockAccount = buildMockAccount({ balanceCents: 100000 });
+      const mockAccount = buildMockAccount({ balanceCents: BigInt(100000) });
       vi.mocked(mockPrisma.account.create).mockResolvedValue(mockAccount);
 
       // When
@@ -194,7 +201,7 @@ describe('PrismaAccountRepository', () => {
       });
 
       // Then
-      expect(result.balanceCents).toBe(100000);
+      expect(result.balanceCents).toBe(BigInt(100000));
     });
   });
 

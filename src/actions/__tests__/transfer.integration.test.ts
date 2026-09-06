@@ -233,15 +233,15 @@ describe('Transfer Integration Tests', () => {
         return { debitTx, creditTx };
       });
 
-      expect(result.debitTx.amountCents).toBe(-3000);
-      expect(result.creditTx.amountCents).toBe(3000);
+      expect(Number(result.debitTx.amountCents)).toBe(-3000);
+      expect(Number(result.creditTx.amountCents)).toBe(3000);
       expect(result.debitTx.transferId).toBe(result.creditTx.transferId);
 
       const updatedFromAccount = await prisma.account.findUnique({ where: { id: fromAccount.id } });
       const updatedToAccount = await prisma.account.findUnique({ where: { id: toAccount.id } });
 
-      expect(updatedFromAccount?.balanceCents).toBe(7000);
-      expect(updatedToAccount?.balanceCents).toBe(8000);
+      expect(Number(updatedFromAccount?.balanceCents)).toBe(7000);
+      expect(Number(updatedToAccount?.balanceCents)).toBe(8000);
     });
 
     it('should rollback on insufficient balance (atomic)', async () => {
@@ -305,7 +305,7 @@ describe('Transfer Integration Tests', () => {
       ).rejects.toThrow('Insufficient balance');
 
       const unchangedAccount = await prisma.account.findUnique({ where: { id: fromAccount.id } });
-      expect(unchangedAccount?.balanceCents).toBe(1000);
+      expect(Number(unchangedAccount?.balanceCents)).toBe(1000);
     });
 
     it('should handle idempotent transfer requests', async () => {
@@ -515,14 +515,15 @@ describe('Transfer Integration Tests', () => {
       const updatedFromAccount = await prisma.account.findUnique({
         where: { id: fromAccount.id },
       });
-      expect(updatedFromAccount?.balanceCents).toBe(10000);
+      expect(Number(updatedFromAccount?.balanceCents)).toBe(10000);
     });
   });
 
   describe('Pocket Transfer Rules', () => {
     // Creates a CUID user plus a parent account, two pockets under it and an
-    // external account. All balances are cached on the accounts; getTrueBalance
-    // is mocked to a high value so the balance check never blocks the flow.
+    // external account. Each account is FUNDED with a real INCOME transaction
+    // equal to its cached balance so the transfer true-balance check (Rule 13,
+    // transactional snapshot) never blocks the flow.
     async function setupPocketHierarchy() {
       await prisma.user.create({
         data: {
@@ -591,6 +592,32 @@ describe('Transfer Integration Tests', () => {
         },
       });
 
+      // Fund each account with a real INCOME transaction matching its cached
+      // balance so getTrueBalance/snapshot-based funds checks pass (Rule 13).
+      const funding: Array<{ accountId: string; amount: number }> = [
+        { accountId: parent.id, amount: 10000 },
+        { accountId: pocket1.id, amount: 5000 },
+        { accountId: pocket2.id, amount: 3000 },
+        { accountId: external.id, amount: 7000 },
+      ];
+      for (const f of funding) {
+        await prisma.transaction.create({
+          data: {
+            idempotencyKey: crypto.randomUUID(),
+            userId: POCKET_USER_ID,
+            accountId: f.accountId,
+            type: 'INCOME',
+            amountCents: f.amount,
+            currency: Currency.USD,
+            description: 'Opening balance',
+            date: new Date(),
+            isActive: true,
+            createdBy: POCKET_USER_ID,
+            lastModifiedBy: POCKET_USER_ID,
+          },
+        });
+      }
+
       return { parent, pocket1, pocket2, external };
     }
 
@@ -627,16 +654,16 @@ describe('Transfer Integration Tests', () => {
       const credit = txs.find((t) => t.type === 'TRANSFER_IN');
       expect(debit?.accountId).toBe(parent.id);
       expect(debit?.transferToAccountId).toBe(pocket1.id);
-      expect(debit?.amountCents).toBe(-2000);
+      expect(Number(debit?.amountCents)).toBe(-2000);
       expect(credit?.accountId).toBe(pocket1.id);
       expect(credit?.transferFromAccountId).toBe(parent.id);
-      expect(credit?.amountCents).toBe(2000);
+      expect(Number(credit?.amountCents)).toBe(2000);
 
       // Cached balances move from parent to pocket
       const updatedParent = await prisma.account.findUnique({ where: { id: parent.id } });
       const updatedPocket = await prisma.account.findUnique({ where: { id: pocket1.id } });
-      expect(updatedParent?.balanceCents).toBe(8000);
-      expect(updatedPocket?.balanceCents).toBe(7000);
+      expect(Number(updatedParent?.balanceCents)).toBe(8000);
+      expect(Number(updatedPocket?.balanceCents)).toBe(7000);
     });
 
     it('allows pocket → its parent account', async () => {
@@ -660,7 +687,7 @@ describe('Transfer Integration Tests', () => {
       const debit = txs.find((t) => t.type === 'TRANSFER_OUT');
       expect(debit?.accountId).toBe(pocket1.id);
       expect(debit?.transferToAccountId).toBe(parent.id);
-      expect(debit?.amountCents).toBe(-1500);
+      expect(Number(debit?.amountCents)).toBe(-1500);
     });
 
     it('allows pocket → sibling pocket', async () => {
@@ -684,7 +711,7 @@ describe('Transfer Integration Tests', () => {
       const credit = txs.find((t) => t.type === 'TRANSFER_IN');
       expect(credit?.accountId).toBe(pocket2.id);
       expect(credit?.transferFromAccountId).toBe(pocket1.id);
-      expect(credit?.amountCents).toBe(1000);
+      expect(Number(credit?.amountCents)).toBe(1000);
     });
 
     it('rejects pocket → external account with POCKET_TRANSFER_NOT_ALLOWED', async () => {
@@ -703,7 +730,7 @@ describe('Transfer Integration Tests', () => {
       expect(result.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
 
       const transactions = await prisma.transaction.findMany({
-        where: { userId: POCKET_USER_ID },
+        where: { userId: POCKET_USER_ID, type: { in: ['TRANSFER_OUT', 'TRANSFER_IN'] } },
       });
       expect(transactions).toHaveLength(0);
     });
@@ -724,7 +751,7 @@ describe('Transfer Integration Tests', () => {
       expect(result.code).toBe('POCKET_TRANSFER_NOT_ALLOWED');
 
       const transactions = await prisma.transaction.findMany({
-        where: { userId: POCKET_USER_ID },
+        where: { userId: POCKET_USER_ID, type: { in: ['TRANSFER_OUT', 'TRANSFER_IN'] } },
       });
       expect(transactions).toHaveLength(0);
     });

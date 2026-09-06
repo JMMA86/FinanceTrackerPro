@@ -1,17 +1,15 @@
+import { redirect } from 'next/navigation';
 import type { Locale } from '@/lib/i18n';
 
 interface CreditCardsPageProps {
   params: Promise<{ lang: Locale }>;
 }
 
+/**
+ * Credit cards now live inside the Accounts page. This route is kept only as a
+ * backward-compatible alias that redirects to /accounts.
+ */
 export default async function CreditCardsPage({ params }: Readonly<CreditCardsPageProps>) {
-  await params;
-
-  return (
-    <div className="space-y-6">
-      <div className="app-shell rounded-2xl p-6">
-        <p className="text-gray-400">In development...</p>
-      </div>
-    </div>
-  );
+  const { lang } = await params;
+  redirect(`/${lang}/accounts`);
 }

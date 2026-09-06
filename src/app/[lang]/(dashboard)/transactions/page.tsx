@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { getDictionary, get } from '@/lib/i18n';
 import { getAllTransactions } from '@/actions/transaction.actions';
 import { getBankAccounts } from '@/actions/account.actions';
+import { getCreditCards } from '@/actions/credit-card.actions';
 import { getCategories } from '@/actions/category.actions';
 import { getSession } from '@/lib/auth/session';
 import type { TransactionType } from '@prisma/client';
@@ -13,6 +14,7 @@ import { TransactionTable } from '@/components/transactions/TransactionTable';
 import { TransactionPagination } from '@/components/transactions/TransactionPagination';
 import { TransactionHeaderActions } from '@/components/transactions/TransactionHeaderActions';
 import type { AccountBrief, CategoryBrief } from '@/components/transactions/types';
+import type { CreditCard } from '@/components/credit-cards/credit-card.types';
 
 interface TransactionsPageProps {
   params: Promise<{ lang: Locale }>;
@@ -62,15 +64,21 @@ export default async function TransactionsPage({
   const { lang } = await params;
   const sp = await searchParams;
 
-  const [dictionary, accountsRes, categoriesRes, session] = await Promise.all([
-    getDictionary(lang, 'transactions'),
-    getBankAccounts({} as Record<string, never>),
-    getCategories({} as Record<string, never>),
-    getSession(),
-  ]);
+  const [dictionary, creditCardsDictionary, accountsRes, cardsRes, categoriesRes, session] =
+    await Promise.all([
+      getDictionary(lang, 'transactions'),
+      getDictionary(lang, 'credit-cards'),
+      getBankAccounts({} as Record<string, never>),
+      getCreditCards({}),
+      getCategories({} as Record<string, never>),
+      getSession(),
+    ]);
 
   const accounts: AccountBrief[] =
     accountsRes.success && accountsRes.data ? (accountsRes.data as unknown as AccountBrief[]) : [];
+
+  const creditCards: CreditCard[] =
+    cardsRes.success && cardsRes.data ? (cardsRes.data as CreditCard[]) : [];
 
   const categories: CategoryBrief[] =
     categoriesRes.success && categoriesRes.data
@@ -112,7 +120,9 @@ export default async function TransactionsPage({
         <h1 className="text-xl font-semibold text-white">{get(dictionary, 'title')}</h1>
         <TransactionHeaderActions
           dictionary={dictionary}
+          creditCardsDictionary={creditCardsDictionary}
           accounts={accounts}
+          creditCards={creditCards}
           categories={categories}
           hasAccounts={!hasNoAccounts}
           lang={lang}

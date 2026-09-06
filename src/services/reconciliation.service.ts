@@ -38,8 +38,8 @@ export async function getTrueBalance(
     // - TRANSFER_OUT: negative
     // - INVESTMENT: negative
     // - LOAN_PAYMENT: negative
-    // - CREDIT_PAYMENT: negative
-    balance = addCents(balance, tx.amountCents);
+    // - CREDIT_PAYMENT: positive on the card (reduces debt; balance becomes less negative)
+    balance = addCents(balance, Number(tx.amountCents));
   }
 
   return balance;
@@ -72,7 +72,7 @@ export async function reconcileAccount(
     throw new Error(`Account ${accountId} not found`);
   }
 
-  const cachedBalance = account.balanceCents;
+  const cachedBalance = Number(account.balanceCents);
 
   // Compute true balance from transaction history
   const trueBalance = await getTrueBalance(accountId, transactionRepo);
@@ -237,7 +237,7 @@ export async function getBalanceDiscrepancy(
     throw new Error(`Account ${accountId} not found`);
   }
 
-  const cachedBalance = account.balanceCents;
+  const cachedBalance = Number(account.balanceCents);
   const trueBalance = await getTrueBalance(accountId, transactionRepo);
   const discrepancy = subtractCents(cachedBalance, trueBalance);
 

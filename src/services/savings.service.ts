@@ -44,10 +44,10 @@ export async function reconcileGoalBalance(goalId: string): Promise<{
 
   let trueAmount = 0;
   for (const contribution of contributions) {
-    trueAmount = addCents(trueAmount, contribution.amountCents);
+    trueAmount = addCents(trueAmount, Number(contribution.amountCents));
   }
 
-  const cachedAmount = goal.currentAmountCents;
+  const cachedAmount = Number(goal.currentAmountCents);
   const discrepancy = subtractCents(cachedAmount, trueAmount);
 
   if (discrepancy !== 0) {
@@ -98,13 +98,15 @@ export function calculateProjectedCompletion(
     return null;
   }
 
-  const remaining = subtractCents(goal.targetAmountCents, goal.currentAmountCents);
+  const remaining = subtractCents(Number(goal.targetAmountCents), Number(goal.currentAmountCents));
   if (remaining <= 0) {
     return formatDate(new Date(), locale); // Already completed
   }
 
   // Calculate months needed = remaining / monthlyContribution (keep fractional for correct ceiling)
-  const monthsNeeded = new Decimal(remaining).dividedBy(goal.monthlyContributionCents).toNumber();
+  const monthsNeeded = new Decimal(remaining)
+    .dividedBy(Number(goal.monthlyContributionCents))
+    .toNumber();
 
   if (monthsNeeded <= 0) {
     return formatDate(new Date(), locale);
@@ -176,7 +178,7 @@ export async function getMaxSpendable(
 
   let totalIncomeCents = 0;
   for (const tx of incomeTransactions) {
-    totalIncomeCents = addCents(totalIncomeCents, tx.amountCents);
+    totalIncomeCents = addCents(totalIncomeCents, Number(tx.amountCents));
   }
 
   // 2. Fixed Expenses: expected payments due in the month
@@ -191,7 +193,10 @@ export async function getMaxSpendable(
 
   let totalFixedExpensesCents = 0;
   for (const payment of fixedExpensePayments) {
-    totalFixedExpensesCents = addCents(totalFixedExpensesCents, payment.expectedAmountCents);
+    totalFixedExpensesCents = addCents(
+      totalFixedExpensesCents,
+      Number(payment.expectedAmountCents)
+    );
   }
 
   // 3. Savings Commitments: monthly contributions from active goals
@@ -210,7 +215,7 @@ export async function getMaxSpendable(
     if (goal.monthlyContributionCents) {
       totalSavingsCommitmentsCents = addCents(
         totalSavingsCommitmentsCents,
-        goal.monthlyContributionCents
+        Number(goal.monthlyContributionCents)
       );
     }
   }
@@ -229,7 +234,10 @@ export async function getMaxSpendable(
   let totalVariableExpensesCents = 0;
   for (const tx of expenseTransactions) {
     // EXPENSE amounts are stored as negative, take absolute value
-    totalVariableExpensesCents = addCents(totalVariableExpensesCents, Math.abs(tx.amountCents));
+    totalVariableExpensesCents = addCents(
+      totalVariableExpensesCents,
+      Math.abs(Number(tx.amountCents))
+    );
   }
 
   // Calculate max spendable using Decimal.js for precision (can be negative — caller must handle)
@@ -300,8 +308,8 @@ export async function getSavingsSummary(
   let completedGoalsCount = 0;
 
   for (const goal of goals) {
-    totalSavedCents = addCents(totalSavedCents, goal.currentAmountCents);
-    totalTargetCents = addCents(totalTargetCents, goal.targetAmountCents);
+    totalSavedCents = addCents(totalSavedCents, Number(goal.currentAmountCents));
+    totalTargetCents = addCents(totalTargetCents, Number(goal.targetAmountCents));
 
     if (goal.status === 'ACTIVE') {
       activeGoalsCount++;
@@ -338,7 +346,7 @@ export async function getSavingsSummary(
 
   let monthlyContributedCents = 0;
   for (const contribution of monthlyContributions) {
-    monthlyContributedCents = addCents(monthlyContributedCents, contribution.amountCents);
+    monthlyContributedCents = addCents(monthlyContributedCents, Number(contribution.amountCents));
   }
 
   return {

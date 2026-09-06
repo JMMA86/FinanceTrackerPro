@@ -1,11 +1,14 @@
 import type { Locale } from '@/lib/i18n';
-import { getDictionary, get } from '@/lib/i18n';
+import { getDictionary } from '@/lib/i18n';
 import { getBankAccounts } from '@/actions/account.actions';
+import { getCreditCards } from '@/actions/credit-card.actions';
 import { BankAccountsSection } from '@/components/accounts/BankAccountsSection';
 import { CreateAccountModal } from '@/components/accounts/CreateAccountModal';
 import { EditAccountModal } from '@/components/accounts/EditAccountModal';
 import { DeleteConfirmModal } from '@/components/accounts/DeleteConfirmModal';
+import { CreditCardsSection } from '@/components/credit-cards/CreditCardsSection';
 import type { AccountCardData } from '@/components/accounts/AccountCard';
+import type { CreditCard } from '@/components/credit-cards/credit-card.types';
 
 interface AccountsPageProps {
   params: Promise<{ lang: Locale }>;
@@ -19,35 +22,27 @@ const LOCALE_MAP: Record<string, string> = {
 export default async function AccountsPage({ params }: Readonly<AccountsPageProps>) {
   const { lang } = await params;
 
-  const [accountsRes, dictionary] = await Promise.all([
+  const [accountsRes, cardsRes, accountsDict, creditCardsDict] = await Promise.all([
     getBankAccounts({} as Record<string, never>),
+    getCreditCards({}),
     getDictionary(lang, 'accounts'),
+    getDictionary(lang, 'credit-cards'),
   ]);
 
   const accounts: AccountCardData[] =
     accountsRes.success && accountsRes.data ? (accountsRes.data as AccountCardData[]) : [];
+  const cards: CreditCard[] =
+    cardsRes.success && cardsRes.data ? (cardsRes.data as CreditCard[]) : [];
   const locale = LOCALE_MAP[lang] ?? 'en-US';
 
   return (
     <div className="space-y-6">
-      <BankAccountsSection accounts={accounts} dictionary={dictionary} locale={locale} />
-      <CreateAccountModal accounts={accounts} dictionary={dictionary} />
-      <EditAccountModal accounts={accounts} dictionary={dictionary} />
-      <DeleteConfirmModal dictionary={dictionary} />
+      <BankAccountsSection accounts={accounts} dictionary={accountsDict} locale={locale} />
+      <CreateAccountModal accounts={accounts} dictionary={accountsDict} />
+      <EditAccountModal accounts={accounts} dictionary={accountsDict} />
+      <DeleteConfirmModal dictionary={accountsDict} />
 
-      <section className="app-shell rounded-2xl p-5 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-white">
-            {get(dictionary, 'sections.creditCards')}
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {get(dictionary, 'creditCardsComingSoon')}
-          </p>
-        </div>
-        <span className="text-xs font-medium text-slate-500 bg-white/5 px-2.5 py-1 rounded-full">
-          {get(dictionary, 'creditCardsInDevelopment')}
-        </span>
-      </section>
+      <CreditCardsSection cards={cards} dictionary={creditCardsDict} locale={locale} />
     </div>
   );
 }

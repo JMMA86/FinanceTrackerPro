@@ -66,7 +66,10 @@ async function getAccountTransactionsInternal(input: unknown) {
   ]);
 
   return {
-    transactions,
+    transactions: transactions.map((t) => ({
+      ...t,
+      amountCents: Number(t.amountCents),
+    })),
     total,
     page,
     pageSize: PAGE_SIZE,

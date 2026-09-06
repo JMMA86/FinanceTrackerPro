@@ -31,8 +31,6 @@ const staticRoutes = [
   '/en/variable-expenses',
   '/es/settings',
   '/en/settings',
-  '/es/credit-cards',
-  '/en/credit-cards',
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

@@ -17,6 +17,22 @@ Decimal.set({
 });
 
 /**
+ * Convert a Prisma BIGINT monetary field to a JS number.
+ * Safe because every valid amount is bounded by MAX_SAFE_CENTS
+ * (9_999_999_999_999), well below Number.MAX_SAFE_INTEGER.
+ */
+export function bigintToNumber(v: bigint | null | undefined): number {
+  return v == null ? 0 : Number(v);
+}
+
+/**
+ * Convert a JS number to a Prisma BIGINT monetary value before writing.
+ */
+export function numberToBigInt(v: number): bigint {
+  return BigInt(v);
+}
+
+/**
  * Add two amounts in cents
  * @param a Amount A in cents
  * @param b Amount B in cents

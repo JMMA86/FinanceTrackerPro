@@ -25,6 +25,10 @@ const dictionary = {
   transferUnauthorized: 'No autorizado para hacer esta transferencia',
   pocketTransferNotAllowed:
     'Transferencia no permitida: solo puedes mover dinero entre una cuenta y sus bolsillos, o entre cuentas.',
+  creditLimitExceeded: 'No tienes suficiente crédito disponible en esta tarjeta',
+  cardNoDebt: 'Esta tarjeta no tiene saldo pendiente por pagar',
+  cardOverpayment: 'El monto no puede superar la deuda pendiente de la tarjeta',
+  cardHasDebt: 'La tarjeta tiene deuda pendiente',
 };
 
 describe('getTransactionError', () => {
@@ -75,6 +79,30 @@ describe('getTransactionError', () => {
   it('maps POCKET_TRANSFER_NOT_ALLOWED to the localized pocket transfer message', () => {
     expect(getTransactionError({ code: 'POCKET_TRANSFER_NOT_ALLOWED' }, dictionary)).toBe(
       'Transferencia no permitida: solo puedes mover dinero entre una cuenta y sus bolsillos, o entre cuentas.'
+    );
+  });
+
+  it('maps CREDIT_LIMIT_EXCEEDED to the localized available credit message', () => {
+    expect(getTransactionError({ code: 'CREDIT_LIMIT_EXCEEDED' }, dictionary)).toBe(
+      'No tienes suficiente crédito disponible en esta tarjeta'
+    );
+  });
+
+  it('maps CARD_NO_DEBT to the localized no debt message', () => {
+    expect(getTransactionError({ code: 'CARD_NO_DEBT' }, dictionary)).toBe(
+      'Esta tarjeta no tiene saldo pendiente por pagar'
+    );
+  });
+
+  it('maps CARD_OVERPAYMENT to the localized overpayment message', () => {
+    expect(getTransactionError({ code: 'CARD_OVERPAYMENT' }, dictionary)).toBe(
+      'El monto no puede superar la deuda pendiente de la tarjeta'
+    );
+  });
+
+  it('maps CARD_HAS_BALANCE to the localized card debt message', () => {
+    expect(getTransactionError({ code: 'CARD_HAS_BALANCE' }, dictionary)).toBe(
+      'La tarjeta tiene deuda pendiente'
     );
   });
 

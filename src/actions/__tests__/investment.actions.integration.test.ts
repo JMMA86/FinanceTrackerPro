@@ -314,7 +314,7 @@ describe('Investment Actions Integration', () => {
       expect(account.name).toBe('New Investment');
       expect(account.type).toBe('INVESTMENT');
       expect(account.currency).toBe('USD');
-      expect(account.balanceCents).toBe(0);
+      expect(Number(account.balanceCents)).toBe(0);
     });
 
     it('should create an investment account with initial balance', async () => {
@@ -331,7 +331,7 @@ describe('Investment Actions Integration', () => {
         },
       });
 
-      expect(account.balanceCents).toBe(50000);
+      expect(Number(account.balanceCents)).toBe(50000);
       expect(account.currency).toBe('EUR');
     });
 
@@ -450,22 +450,22 @@ describe('Investment Actions Integration', () => {
 
       // Verify transactions
       expect(debitTx.type).toBe('TRANSFER_OUT');
-      expect(debitTx.amountCents).toBe(-amountCents);
+      expect(Number(debitTx.amountCents)).toBe(-amountCents);
       expect(debitTx.transferId).toBe(transferId);
 
       expect(creditTx.type).toBe('INVESTMENT');
-      expect(creditTx.amountCents).toBe(convertedAmountCents);
+      expect(Number(creditTx.amountCents)).toBe(convertedAmountCents);
 
       // Verify currency traceability (Rule 11)
-      expect(creditTx.originalAmountCents).toBe(amountCents);
+      expect(Number(creditTx.originalAmountCents)).toBe(amountCents);
       expect(creditTx.originalCurrency).toBe('COP');
       expect(Number(creditTx.exchangeRate)).toBeCloseTo(exchangeRate, 0);
 
       // Verify balances updated
       const updatedBank = await prisma.account.findUnique({ where: { id: bankAccount.id } });
       const updatedInv = await prisma.account.findUnique({ where: { id: invAccount.id } });
-      expect(updatedBank?.balanceCents).toBe(500000); // 1000000 - 500000
-      expect(updatedInv?.balanceCents).toBe(convertedAmountCents);
+      expect(Number(updatedBank?.balanceCents)).toBe(500000); // 1000000 - 500000
+      expect(Number(updatedInv?.balanceCents)).toBe(convertedAmountCents);
     });
 
     it('should reject when source account has insufficient funds', async () => {
@@ -487,7 +487,7 @@ describe('Investment Actions Integration', () => {
 
       // Verify balances unchanged
       const bankCheck = await prisma.account.findUnique({ where: { id: bankAccount.id } });
-      expect(bankCheck?.balanceCents).toBe(1000);
+      expect(Number(bankCheck?.balanceCents)).toBe(1000);
     });
 
     it('should reject when source account is not COP', async () => {
@@ -568,7 +568,7 @@ describe('Investment Actions Integration', () => {
 
       expect(holding.symbol).toBe('AAPL');
       expect(Number(holding.quantity)).toBe(10);
-      expect(holding.avgCostCents).toBe(15000);
+      expect(Number(holding.avgCostCents)).toBe(15000);
     });
 
     it('should update avgCostCents on second purchase (weighted average)', async () => {
@@ -620,7 +620,7 @@ describe('Investment Actions Integration', () => {
 
       expect(updatedHolding).not.toBeNull();
       expect(Number(updatedHolding!.quantity)).toBe(15);
-      expect(updatedHolding!.avgCostCents).toBe(weightedAvgCost);
+      expect(Number(updatedHolding!.avgCostCents)).toBe(weightedAvgCost);
     });
 
     it('should reject purchase when insufficient funds', async () => {
@@ -668,11 +668,11 @@ describe('Investment Actions Integration', () => {
       });
 
       expect(tx.type).toBe('INVESTMENT');
-      expect(tx.amountCents).toBe(-totalCostCents);
+      expect(Number(tx.amountCents)).toBe(-totalCostCents);
       expect(tx.amountCents).toBeLessThan(0);
 
       const updatedAccount = await prisma.account.findUnique({ where: { id: invAccount.id } });
-      expect(updatedAccount?.balanceCents).toBe(500000 - totalCostCents);
+      expect(Number(updatedAccount?.balanceCents)).toBe(500000 - totalCostCents);
     });
   });
 
@@ -728,7 +728,7 @@ describe('Investment Actions Integration', () => {
       });
 
       expect(tx.type).toBe('INVESTMENT');
-      expect(tx.amountCents).toBe(proceedsCents);
+      expect(Number(tx.amountCents)).toBe(proceedsCents);
       expect(tx.amountCents).toBeGreaterThan(0); // Positive = inflow
 
       const updatedHolding = await prisma.investmentAssetHolding.findUnique({

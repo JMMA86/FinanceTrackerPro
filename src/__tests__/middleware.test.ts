@@ -161,6 +161,7 @@ describe('middleware', () => {
       '/dashboard',
       '/transactions',
       '/accounts',
+      '/credit-cards',
       '/savings',
       '/investments',
       '/fixed-expenses',

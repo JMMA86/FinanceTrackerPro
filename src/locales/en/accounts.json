@@ -5,8 +5,6 @@
     "investments": "Investment Accounts",
     "creditCards": "Credit Cards"
   },
-  "creditCardsComingSoon": "Coming soon",
-  "creditCardsInDevelopment": "In development",
   "addAccount": "Add Account",
   "noAccounts": "No bank accounts yet",
   "noAccountsDesc": "Add your checking accounts, savings, cash, and pockets.",

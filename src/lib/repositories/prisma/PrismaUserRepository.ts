@@ -35,7 +35,7 @@ export class PrismaUserRepository implements IUserRepository {
         email: data.email.toLowerCase(),
         name: data.name,
         passwordHash: data.passwordHash,
-        baseSalaryCents: data.baseSalaryCents,
+        baseSalaryCents: data.baseSalaryCents == null ? null : BigInt(data.baseSalaryCents),
         baseCurrency: data.baseCurrency,
         language: data.language,
         theme: data.theme,

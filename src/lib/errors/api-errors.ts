@@ -157,6 +157,58 @@ export class AccountHasBalanceError extends AppError {
 }
 
 /**
+ * 400 - Card Has Balance (debt)
+ * Thrown when deleting a credit card that still has outstanding debt
+ */
+export class CardHasBalanceError extends AppError {
+  constructor(accountId: string, debtCents: number) {
+    super(
+      `Credit card ${accountId} still has an outstanding debt of ${debtCents} cents. Pay the balance before deleting the card`,
+      400,
+      'CARD_HAS_BALANCE'
+    );
+  }
+}
+
+/**
+ * 400 - Credit Limit Exceeded
+ * Thrown when a credit card expense would exceed the configured credit limit
+ */
+export class CreditLimitExceededError extends AppError {
+  constructor(accountId: string, creditLimitCents: number) {
+    super(
+      `Credit card ${accountId} does not have enough available credit. Limit is ${creditLimitCents} cents`,
+      400,
+      'CREDIT_LIMIT_EXCEEDED'
+    );
+  }
+}
+
+/**
+ * 400 - Card No Debt
+ * Thrown when trying to pay a credit card that has no outstanding balance
+ */
+export class CardNoDebtError extends AppError {
+  constructor(accountId: string) {
+    super(`Credit card ${accountId} has no outstanding balance to pay`, 400, 'CARD_NO_DEBT');
+  }
+}
+
+/**
+ * 400 - Card Overpayment
+ * Thrown when a payment amount exceeds the card's outstanding debt
+ */
+export class CardOverpaymentError extends AppError {
+  constructor(amountCents: number, debtCents: number) {
+    super(
+      `Payment amount ${amountCents} cents exceeds the card's outstanding debt of ${debtCents} cents`,
+      400,
+      'CARD_OVERPAYMENT'
+    );
+  }
+}
+
+/**
  * 500 - Internal Server Error
  * Generic error for unexpected failures
  */

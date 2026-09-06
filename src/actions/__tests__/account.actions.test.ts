@@ -376,7 +376,7 @@ describe('account.actions.ts', () => {
           data: expect.objectContaining({
             type: 'POCKET',
             parentAccountId: PARENT_ID,
-            balanceCents: 0,
+            balanceCents: BigInt(0),
           }),
         })
       );

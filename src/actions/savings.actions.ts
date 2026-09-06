@@ -52,6 +52,36 @@ import {
 } from '@/services/savings.service';
 
 // ============================================================================
+// Serialization helpers — convert Prisma BIGINT monetary fields to JS numbers
+// so Server Action responses stay serializable (JSON.stringify throws on bigint).
+// ============================================================================
+
+function serializeContribution<T extends { amountCents: bigint }>(contribution: T) {
+  return { ...contribution, amountCents: Number(contribution.amountCents) };
+}
+
+function serializeGoal<
+  T extends {
+    targetAmountCents: bigint;
+    currentAmountCents: bigint;
+    monthlyContributionCents: bigint | null;
+    contributions?: Array<{ amountCents: bigint }>;
+  },
+>(goal: T) {
+  return {
+    ...goal,
+    targetAmountCents: Number(goal.targetAmountCents),
+    currentAmountCents: Number(goal.currentAmountCents),
+    monthlyContributionCents:
+      goal.monthlyContributionCents == null ? null : Number(goal.monthlyContributionCents),
+    contributions: goal.contributions?.map((c) => ({
+      ...c,
+      amountCents: Number(c.amountCents),
+    })),
+  };
+}
+
+// ============================================================================
 // 1. createSavingsGoal — Create a new savings goal
 // ============================================================================
 
@@ -84,7 +114,7 @@ async function createSavingsGoalInternal(input: unknown) {
     'Savings goal created'
   );
 
-  return goal;
+  return serializeGoal(goal);
 }
 
 export const createSavingsGoal = safeAction(createSavingsGoalInternal);
@@ -121,12 +151,13 @@ async function getSavingsGoalsInternal(input: unknown) {
   });
 
   const goalsWithProgress = goals.map((goal) => {
+    const serialized = serializeGoal(goal);
     const progressPercentage =
-      goal.targetAmountCents > 0
+      serialized.targetAmountCents > 0
         ? Math.min(
             100,
-            new Decimal(goal.currentAmountCents)
-              .dividedBy(goal.targetAmountCents)
+            new Decimal(serialized.currentAmountCents)
+              .dividedBy(serialized.targetAmountCents)
               .times(100)
               .toDecimalPlaces(1, Decimal.ROUND_HALF_EVEN)
               .toNumber()
@@ -136,7 +167,7 @@ async function getSavingsGoalsInternal(input: unknown) {
     const projectedCompletion = calculateProjectedCompletion(goal, 'es-CO');
 
     return {
-      ...goal,
+      ...serialized,
       progressPercentage,
       projectedCompletion,
     };
@@ -187,7 +218,7 @@ async function updateSavingsGoalInternal(input: unknown) {
     'Savings goal updated'
   );
 
-  return goal;
+  return serializeGoal(goal);
 }
 
 export const updateSavingsGoal = safeAction(updateSavingsGoalInternal);
@@ -271,7 +302,7 @@ async function contributeToGoalInternal(input: unknown) {
       { action: 'savings.contribute.idempotent', contributionId: existing.id },
       'Duplicate contribution request'
     );
-    return { contribution: existing, wasIdempotent: true };
+    return { contribution: serializeContribution(existing), wasIdempotent: true };
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -373,8 +404,8 @@ async function contributeToGoalInternal(input: unknown) {
     });
 
     // Update goal cached balance atomically (Rule 1: Decimal.js via addCents)
-    const newBalance = addCents(goal.currentAmountCents, validated.amountCents);
-    const shouldComplete = newBalance >= goal.targetAmountCents;
+    const newBalance = addCents(Number(goal.currentAmountCents), validated.amountCents);
+    const shouldComplete = newBalance >= Number(goal.targetAmountCents);
 
     await tx.savingsGoal.update({
       where: { id: validated.goalId },
@@ -386,7 +417,7 @@ async function contributeToGoalInternal(input: unknown) {
     });
 
     // Reduce cached source account balance (Rule 13 - maintain cache)
-    const newAccountBalance = subtractCents(account.balanceCents, validated.amountCents);
+    const newAccountBalance = subtractCents(Number(account.balanceCents), validated.amountCents);
     await tx.account.update({
       where: { id: validated.sourceAccountId },
       data: {
@@ -421,7 +452,7 @@ async function contributeToGoalInternal(input: unknown) {
     'Contribution recorded'
   );
 
-  return { contribution: result, wasIdempotent: false };
+  return { contribution: serializeContribution(result), wasIdempotent: false };
 }
 
 export const contributeToGoal = safeAction(contributeToGoalInternal);

@@ -66,6 +66,16 @@ vi.mock('@/components/transactions/CategoryManagerModal', () => ({
   CategoryManagerModal: () => <div data-testid="category-manager-modal" />,
 }));
 
+vi.mock('@/components/credit-cards/PayCreditCardModal', () => ({
+  PayCreditCardModal: (props: {
+    open: boolean;
+    cards: unknown[];
+    dictionary: Record<string, unknown>;
+    onClose: () => void;
+    locale?: string;
+  }) => <div data-testid="pay-card-modal" data-open={String(props.open)} />,
+}));
+
 // ---------------------------------------------------------------------------
 // Test data
 // ---------------------------------------------------------------------------
@@ -95,7 +105,9 @@ const renderHeader = (overrides: Record<string, unknown> = {}) =>
   render(
     <TransactionHeaderActions
       dictionary={dictionary}
+      creditCardsDictionary={{}}
       accounts={mockAccounts}
+      creditCards={[]}
       categories={[]}
       hasAccounts
       lang="es"

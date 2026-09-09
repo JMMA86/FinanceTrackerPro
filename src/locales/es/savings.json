@@ -34,6 +34,7 @@
   "sourceAccount": "Cuenta de origen",
   "confirmContribute": "Confirmar Contribución",
   "progress": "Progreso",
+  "currentProgress": "Progreso actual",
   "target": "Meta",
   "saved": "Ahorrado",
   "remaining": "Restante",
@@ -46,7 +47,8 @@
   "totalSaved": "Total Ahorrado",
   "totalTargets": "Meta Total",
   "overallProgress": "Progreso General",
-  "activeGoals": "Metas Activas",
+  "activeGoal": "meta activa",
+  "activeGoals": "metas activas",
   "completedGoals": "Metas Completadas",
   "thisMonth": "Este Mes",
   "maxSpendable": "Disponible para Gastar",
@@ -63,7 +65,20 @@
   "retry": "Reintentar",
   "goal": "meta",
   "goals": "metas",
-  "status": "Estado",
+  "status": {
+    "label": "Estado",
+    "ACTIVE": "Activa",
+    "COMPLETED": "Completada",
+    "CANCELLED": "Cancelada"
+  },
+  "colorNames": {
+    "violet": "Violeta",
+    "blue": "Azul",
+    "emerald": "Esmeralda",
+    "amber": "Ámbar",
+    "red": "Rojo",
+    "pink": "Rosa"
+  },
   "recentContributions": "Últimas contribuciones",
   "overdraftWarning": "Tus gastos y compromisos de ahorro exceden tus ingresos este mes.",
   "deadlineToday": "Hoy",
@@ -80,5 +95,6 @@
     "contributeFailed": "No se pudo registrar la contribución",
     "sessionInvalid": "Tu sesión expiró. Inicia sesión de nuevo.",
     "sourceAccountRequired": "Selecciona una cuenta de origen"
-  }
+  },
+  "metaDescription": "Define metas de ahorro y sigue tu progreso financiero."
 }

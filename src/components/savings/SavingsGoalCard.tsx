@@ -5,27 +5,14 @@ import type { CSSProperties } from 'react';
 import { Plus, Pencil, Trash2, Calendar, Clock, CheckCircle2 } from 'lucide-react';
 import { get } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
-import type { SavingsGoal, SavingsContribution } from '@prisma/client';
-
-interface GoalWithProgress extends Omit<
-  SavingsGoal,
-  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
-> {
-  targetAmountCents: number;
-  currentAmountCents: number;
-  monthlyContributionCents: number | null;
-  progressPercentage: number;
-  projectedCompletion: string | null;
-  contributions: Array<Omit<SavingsContribution, 'amountCents'> & { amountCents: number }>;
-  linkedAccount?: { id: string; name: string; currency: string } | null;
-}
+import type { SavingsGoalWithProgress } from '@/types/savings';
 
 interface SavingsGoalCardProps {
-  goal: GoalWithProgress;
+  goal: SavingsGoalWithProgress;
   dictionary: Record<string, unknown>;
   locale: string;
   onContribute: (goalId: string) => void;
-  onEdit: (goal: GoalWithProgress) => void;
+  onEdit: (goal: SavingsGoalWithProgress) => void;
   onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
 }
 
@@ -127,13 +114,13 @@ export function SavingsGoalCard({
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={handleContribute}
               disabled={isCompleted}
               aria-label={`${get(dictionary, 'contribute')} - ${goal.name}`}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -141,7 +128,7 @@ export function SavingsGoalCard({
               type="button"
               onClick={handleEdit}
               aria-label={`${get(dictionary, 'updateGoal')} - ${goal.name}`}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-400 hover:bg-violet-500/10 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-400 hover:bg-violet-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
             >
               <Pencil className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -149,7 +136,7 @@ export function SavingsGoalCard({
               type="button"
               onClick={handleDelete}
               aria-label={`${get(dictionary, 'deleteGoal')} - ${goal.name}`}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/70"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>

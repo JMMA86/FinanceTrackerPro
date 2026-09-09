@@ -177,3 +177,33 @@ export async function getActiveAccountIdByEmail(email: string, name: string): Pr
   }
   return account.id;
 }
+
+/**
+ * Returns the currentAmountCents of the ACTIVE savings goal matching the given
+ * user email + exact goal name.
+ *
+ * Why: the contribute happy-path asserts the card's "Ahorrado" value right after
+ * a contribution. Reading the value from the DB (rather than hardcoding a seed
+ * number) keeps the assertion correct even if a previous attempt in the same run
+ * already contributed (CI retries reuse the same seeded DB).
+ */
+export async function getActiveGoalCurrentAmountByEmail(
+  email: string,
+  goalName: string
+): Promise<number> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getActiveGoalCurrentAmountByEmail: user ${email} not found`);
+  }
+  const goal = await db.savingsGoal.findFirst({
+    where: { userId: user.id, name: goalName, isActive: true },
+    select: { currentAmountCents: true },
+  });
+  if (!goal) {
+    throw new Error(
+      `getActiveGoalCurrentAmountByEmail: active goal "${goalName}" not found for ${email}`
+    );
+  }
+  return Number(goal.currentAmountCents);
+}

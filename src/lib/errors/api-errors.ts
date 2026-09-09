@@ -256,3 +256,59 @@ export class GoalHasContributionsError extends AppError {
     );
   }
 }
+
+/**
+ * 400 - Goal Cancelled
+ * Thrown when attempting to contribute to a savings goal that was cancelled
+ */
+export class GoalCancelledError extends AppError {
+  constructor() {
+    super('Cannot contribute to a cancelled goal', 400, 'GOAL_CANCELLED');
+  }
+}
+
+/**
+ * 400 - Goal Target Below Current
+ * Thrown when editing a goal's target below the amount already saved
+ */
+export class GoalTargetBelowCurrentError extends AppError {
+  constructor(goalId: string) {
+    super(
+      `Cannot lower the target of goal ${goalId} below the amount already saved`,
+      400,
+      'GOAL_TARGET_BELOW_CURRENT'
+    );
+  }
+}
+
+/**
+ * 400 - Goal Cannot Complete
+ * Thrown when trying to mark a goal as COMPLETED before reaching the target
+ */
+export class GoalCannotCompleteError extends AppError {
+  constructor() {
+    super(
+      'Cannot mark a goal as COMPLETED before reaching its target amount',
+      400,
+      'GOAL_CANNOT_COMPLETE'
+    );
+  }
+}
+
+/**
+ * 400 - Transaction Linked To Savings
+ * Thrown when trying to EDIT the amount or date of a transaction that is the
+ * funding source of an active savings contribution. Deleting such a
+ * transaction is allowed (it cascades to soft-delete the linked contribution),
+ * so this error is intentionally scoped to monetary/date edits only. The
+ * message is generic and does not expose any IDs.
+ */
+export class TransactionLinkedToSavingsError extends AppError {
+  constructor() {
+    super(
+      'This transaction is linked to an active savings contribution. Its amount and date cannot be changed.',
+      400,
+      'TRANSACTION_LINKED_TO_SAVINGS'
+    );
+  }
+}

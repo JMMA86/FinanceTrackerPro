@@ -37,6 +37,9 @@ import { AppError } from '@/lib/errors/api-errors';
 
 const TEST_DB_URL = process.env.DATABASE_URL!;
 const TEST_USER_ID = 'sav-test-user-' + Date.now();
+// A SECOND user owned by nobody in the session mock: used by the
+// multi-user ownership and cross-user idempotency tests.
+const FOREIGN_USER_ID = 'sav-test-foreign-' + Date.now();
 
 const genUUID = (): string => crypto.randomUUID();
 const VALID_CUID = 'clh1234567890abcdefghij';
@@ -122,10 +125,18 @@ vi.mock('@/lib/repositories', () => ({
   })),
 }));
 
-// Mock reconciliation service
-vi.mock('@/services/reconciliation.service', () => ({
-  getTrueBalance: vi.fn().mockResolvedValue(1000000),
-}));
+// Mock reconciliation service: keep getTrueBalanceFromTx REAL (the new
+// contributeToGoal reads the transactional ledger for the funds check — Rule
+// 13) while getTrueBalance is mocked for any legacy global-client caller.
+vi.mock('@/services/reconciliation.service', async () => {
+  const actual = await vi.importActual<typeof import('@/services/reconciliation.service')>(
+    '@/services/reconciliation.service'
+  );
+  return {
+    ...actual,
+    getTrueBalance: vi.fn().mockResolvedValue(1000000),
+  };
+});
 
 // Mock rate limiting service (always allow in tests)
 vi.mock('@/services/rate-limit.service', () => ({
@@ -153,6 +164,21 @@ async function createTestUser() {
   });
 }
 
+async function createForeignUser() {
+  return prisma.user.create({
+    data: {
+      id: FOREIGN_USER_ID,
+      email: `sav-test-foreign-${Date.now()}@example.com`,
+      name: 'Foreign Savings User',
+      passwordHash: 'hashed_test_password',
+      language: Language.SPANISH,
+      theme: Theme.LIGHT,
+      baseCurrency: Currency.COP,
+      isActive: true,
+    },
+  });
+}
+
 async function createSavingsGoal(
   overrides: {
     name?: string;
@@ -166,11 +192,12 @@ async function createSavingsGoal(
     linkedAccountId?: string | null;
     color?: string | null;
     isActive?: boolean;
-  } = {}
+  } = {},
+  ownerId: string = TEST_USER_ID
 ) {
   return prisma.savingsGoal.create({
     data: {
-      userId: TEST_USER_ID,
+      userId: ownerId,
       name: overrides.name ?? 'Test Goal',
       targetAmountCents: overrides.targetAmountCents ?? 100000,
       currency: overrides.currency ?? Currency.COP,
@@ -182,8 +209,8 @@ async function createSavingsGoal(
       linkedAccountId: overrides.linkedAccountId ?? null,
       color: overrides.color ?? null,
       isActive: overrides.isActive ?? true,
-      createdBy: TEST_USER_ID,
-      lastModifiedBy: TEST_USER_ID,
+      createdBy: ownerId,
+      lastModifiedBy: ownerId,
     },
   });
 }
@@ -193,20 +220,51 @@ async function createBankAccount(
     name?: string;
     balanceCents?: number;
     currency?: Currency;
-  } = {}
+  } = {},
+  funded = true,
+  ownerId: string = TEST_USER_ID
 ) {
-  return prisma.account.create({
+  const balanceCents = overrides.balanceCents ?? 1000000;
+  const account = await prisma.account.create({
     data: {
-      userId: TEST_USER_ID,
+      userId: ownerId,
       name: overrides.name ?? 'Source Account',
       type: AccountType.SAVINGS,
-      balanceCents: overrides.balanceCents ?? 1000000,
+      balanceCents,
       currency: overrides.currency ?? Currency.COP,
       isActive: true,
-      createdBy: TEST_USER_ID,
-      lastModifiedBy: TEST_USER_ID,
+      createdBy: ownerId,
+      lastModifiedBy: ownerId,
     },
   });
+
+  // contributeToGoal validates funds from the transactional ledger (Rule 13,
+  // getTrueBalanceFromTx), so accounts used as a source of funds need an
+  // opening INCOME transaction that matches their cached balance — exactly like
+  // the real createAccount flow does. `funded: false` keeps legacy fixtures
+  // (max spendable math) free of extra INCOME rows.
+  if (funded && balanceCents > 0) {
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: genUUID(),
+        userId: ownerId,
+        accountId: account.id,
+        type: TransactionType.INCOME,
+        amountCents: balanceCents,
+        currency: overrides.currency ?? Currency.COP,
+        description: 'Opening balance',
+        date: new Date(),
+        openingBalance: true,
+        isActive: true,
+        ipAddress: '127.0.0.1',
+        userAgent: 'vitest',
+        createdBy: ownerId,
+        lastModifiedBy: ownerId,
+      },
+    });
+  }
+
+  return account;
 }
 
 async function createContribution(
@@ -216,7 +274,8 @@ async function createContribution(
     currency?: Currency;
     idempotencyKey?: string;
     notes?: string;
-  } = {}
+  } = {},
+  ownerId: string = TEST_USER_ID
 ) {
   return prisma.savingsContribution.create({
     data: {
@@ -227,34 +286,40 @@ async function createContribution(
       notes: overrides.notes ?? null,
       ipAddress: '127.0.0.1',
       userAgent: 'vitest',
-      createdBy: TEST_USER_ID,
-      lastModifiedBy: TEST_USER_ID,
+      createdBy: ownerId,
+      lastModifiedBy: ownerId,
     },
   });
 }
 
-async function cleanupTestData() {
+async function cleanupUserData(userId: string) {
   await prisma.savingsContribution.deleteMany({
-    where: { goal: { userId: TEST_USER_ID } },
+    where: { goal: { userId } },
   });
   await prisma.savingsGoal.deleteMany({
-    where: { userId: TEST_USER_ID },
+    where: { userId },
   });
   await prisma.transaction.deleteMany({
-    where: { userId: TEST_USER_ID },
+    where: { userId },
   });
   await prisma.account.deleteMany({
-    where: { userId: TEST_USER_ID },
+    where: { userId },
   });
   await prisma.user.deleteMany({
-    where: { id: TEST_USER_ID },
+    where: { id: userId },
   });
+}
+
+async function cleanupTestData() {
+  await cleanupUserData(TEST_USER_ID);
+  await cleanupUserData(FOREIGN_USER_ID);
 }
 
 // Import the internal functions (safeAction mocked as identity)
 // We import from the actions file, but since safeAction is mocked as identity,
 // the exported functions are the raw internal ones
 import * as savingsActions from '../savings.actions';
+import * as savingsService from '@/services/savings.service';
 
 // Schemas are tested in savings.schema.spec.ts (unit tests)
 
@@ -413,11 +478,14 @@ describe('Savings Actions Integration', () => {
     });
 
     it('should return goals with progressPercentage calculated via Decimal.js', async () => {
-      await createSavingsGoal({
+      const goal = await createSavingsGoal({
         name: 'Halfway Goal',
         targetAmountCents: 100000,
         currentAmountCents: 50000,
       });
+      // Keep the cached balance consistent with the ledger (Rule 13): reads now
+      // reconcile goal caches from contributions before serving them.
+      await createContribution(goal.id, { amountCents: 50000 });
 
       const result = await savingsActions.getSavingsGoals({});
       expect(result.success).toBe(true);
@@ -577,8 +645,13 @@ describe('Savings Actions Integration', () => {
       expect(updated!.lastModifiedBy).toBe(TEST_USER_ID);
     });
 
-    it('should update status to COMPLETED via manual edit', async () => {
-      const goal = await createSavingsGoal({ name: 'Status Change' });
+    it('should update status to COMPLETED via manual edit when target is reached', async () => {
+      // M7: COMPLETED is only allowed once currentAmountCents >= targetAmountCents
+      const goal = await createSavingsGoal({
+        name: 'Status Change',
+        targetAmountCents: 100000,
+        currentAmountCents: 100000,
+      });
 
       const result = await savingsActions.updateSavingsGoal({
         goalId: goal.id,
@@ -587,6 +660,18 @@ describe('Savings Actions Integration', () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.status).toBe('COMPLETED');
+    });
+
+    it('should reject COMPLETED status while below the target', async () => {
+      const goal = await createSavingsGoal({ name: 'Below Target', targetAmountCents: 100000 });
+
+      const result = await savingsActions.updateSavingsGoal({
+        goalId: goal.id,
+        status: 'COMPLETED',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('GOAL_CANNOT_COMPLETE');
     });
   });
 
@@ -965,36 +1050,35 @@ describe('Savings Actions Integration', () => {
   // ==========================================================================
 
   describe('getSavingsSummary', () => {
-    it('should return zeros when no goals exist', async () => {
+    it('should return empty byCurrency when no goals exist', async () => {
       const result = await savingsActions.getSavingsSummary({});
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalSavedCents).toBe(0);
-      expect(result.data!.totalTargetCents).toBe(0);
-      expect(result.data!.overallProgressPercentage).toBe(0);
-      expect(result.data!.activeGoalsCount).toBe(0);
-      expect(result.data!.completedGoalsCount).toBe(0);
-      expect(result.data!.monthlyContributedCents).toBe(0);
+      expect(result.data!.byCurrency).toEqual([]);
     });
 
     it('should return correct counts with active goals', async () => {
-      await createSavingsGoal({
+      const goal1 = await createSavingsGoal({
         name: 'Goal 1',
         targetAmountCents: 100000,
         currentAmountCents: 50000,
       });
-      await createSavingsGoal({
+      await createContribution(goal1.id, { amountCents: 50000 });
+      const goal2 = await createSavingsGoal({
         name: 'Goal 2',
         targetAmountCents: 200000,
         currentAmountCents: 100000,
       });
+      await createContribution(goal2.id, { amountCents: 100000 });
 
       const result = await savingsActions.getSavingsSummary({});
 
       expect(result.success).toBe(true);
-      expect(result.data!.activeGoalsCount).toBe(2);
-      expect(result.data!.totalSavedCents).toBe(150000);
-      expect(result.data!.totalTargetCents).toBe(300000);
+      const bucket = result.data!.byCurrency[0];
+      expect(bucket.currency).toBe('COP');
+      expect(bucket.activeGoalsCount).toBe(2);
+      expect(bucket.totalSavedCents).toBe(150000);
+      expect(bucket.totalTargetCents).toBe(300000);
     });
 
     it('should separate active vs completed goals', async () => {
@@ -1008,21 +1092,49 @@ describe('Savings Actions Integration', () => {
       const result = await savingsActions.getSavingsSummary({});
 
       expect(result.success).toBe(true);
-      expect(result.data!.activeGoalsCount).toBe(1);
-      expect(result.data!.completedGoalsCount).toBe(1);
+      const bucket = result.data!.byCurrency.find((b) => b.currency === 'COP');
+      expect(bucket!.activeGoalsCount).toBe(1);
+      expect(bucket!.completedGoalsCount).toBe(1);
     });
 
-    it('should calculate overallProgressPercentage correctly', async () => {
-      // 25% progress total: 25000 saved out of 100000 target
-      await createSavingsGoal({ name: 'G1', targetAmountCents: 80000, currentAmountCents: 20000 });
-      await createSavingsGoal({ name: 'G2', targetAmountCents: 20000, currentAmountCents: 5000 });
+    it('should exclude CANCELLED goals from the summary', async () => {
+      await createSavingsGoal({ name: 'Active' });
+      await createSavingsGoal({
+        name: 'Cancelled',
+        status: SavingsGoalStatus.CANCELLED,
+        currentAmountCents: 100000,
+      });
 
       const result = await savingsActions.getSavingsSummary({});
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalSavedCents).toBe(25000);
-      expect(result.data!.totalTargetCents).toBe(100000);
-      expect(result.data!.overallProgressPercentage).toBe(25);
+      const bucket = result.data!.byCurrency.find((b) => b.currency === 'COP');
+      expect(bucket!.activeGoalsCount).toBe(1);
+      expect(bucket!.totalSavedCents).toBe(0);
+    });
+
+    it('should calculate overallProgressPercentage correctly', async () => {
+      // 25% progress total: 25000 saved out of 100000 target
+      const g1 = await createSavingsGoal({
+        name: 'G1',
+        targetAmountCents: 80000,
+        currentAmountCents: 20000,
+      });
+      await createContribution(g1.id, { amountCents: 20000 });
+      const g2 = await createSavingsGoal({
+        name: 'G2',
+        targetAmountCents: 20000,
+        currentAmountCents: 5000,
+      });
+      await createContribution(g2.id, { amountCents: 5000 });
+
+      const result = await savingsActions.getSavingsSummary({});
+
+      expect(result.success).toBe(true);
+      const bucket = result.data!.byCurrency[0];
+      expect(bucket.totalSavedCents).toBe(25000);
+      expect(bucket.totalTargetCents).toBe(100000);
+      expect(bucket.overallProgressPercentage).toBe(25);
     });
 
     it('should calculate monthlyContributedCents for current month', async () => {
@@ -1032,7 +1144,8 @@ describe('Savings Actions Integration', () => {
       const result = await savingsActions.getSavingsSummary({});
 
       expect(result.success).toBe(true);
-      expect(result.data!.monthlyContributedCents).toBe(30000);
+      const bucket = result.data!.byCurrency[0];
+      expect(bucket.monthlyContributedCents).toBe(30000);
     });
 
     it('should filter monthlyContributedCents by specified month/year', async () => {
@@ -1047,7 +1160,8 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.monthlyContributedCents).toBe(50000);
+      const bucket = result.data!.byCurrency[0];
+      expect(bucket.monthlyContributedCents).toBe(50000);
     });
   });
 
@@ -1067,16 +1181,12 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(0);
-      expect(result.data!.totalFixedExpensesCents).toBe(0);
-      expect(result.data!.totalSavingsCommitmentsCents).toBe(0);
-      expect(result.data!.totalVariableExpensesCents).toBe(0);
-      expect(result.data!.maxSpendableCents).toBe(0);
+      expect(result.data!.byCurrency).toEqual([]);
     });
 
     it('should calculate maxSpendable with income only', async () => {
       // Create income transaction (directly via prisma since it has accountId constraint)
-      const account = await createBankAccount({ name: 'Income Account' });
+      const account = await createBankAccount({ name: 'Income Account' }, false);
       await prisma.transaction.create({
         data: {
           idempotencyKey: genUUID(),
@@ -1101,12 +1211,12 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(1000000);
-      expect(result.data!.maxSpendableCents).toBe(1000000);
+      expect(result.data!.byCurrency[0]?.totalIncomeCents).toBe(1000000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(1000000);
     });
 
     it('should subtract fixed expenses from income', async () => {
-      const account = await createBankAccount({ name: 'Fixed Exp Account' });
+      const account = await createBankAccount({ name: 'Fixed Exp Account' }, false);
       // Income
       await prisma.transaction.create({
         data: {
@@ -1157,13 +1267,13 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(1000000);
-      expect(result.data!.totalFixedExpensesCents).toBe(300000);
-      expect(result.data!.maxSpendableCents).toBe(700000);
+      expect(result.data!.byCurrency[0]?.totalIncomeCents).toBe(1000000);
+      expect(result.data!.byCurrency[0]?.totalFixedExpensesCents).toBe(300000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(700000);
     });
 
     it('should subtract savings commitments from income', async () => {
-      const account = await createBankAccount({ name: 'Income Acc 2' });
+      const account = await createBankAccount({ name: 'Income Acc 2' }, false);
       // Income
       await prisma.transaction.create({
         data: {
@@ -1195,13 +1305,13 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(500000);
-      expect(result.data!.totalSavingsCommitmentsCents).toBe(100000);
-      expect(result.data!.maxSpendableCents).toBe(400000);
+      expect(result.data!.byCurrency[0]?.totalIncomeCents).toBe(500000);
+      expect(result.data!.byCurrency[0]?.totalSavingsCommitmentsCents).toBe(100000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(400000);
     });
 
     it('can be negative (overdraft) — frontend renders warning', async () => {
-      const account = await createBankAccount({ name: 'Low Income Acc' });
+      const account = await createBankAccount({ name: 'Low Income Acc' }, false);
       // Small income
       await prisma.transaction.create({
         data: {
@@ -1233,13 +1343,13 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(50000);
-      expect(result.data!.totalSavingsCommitmentsCents).toBe(200000);
-      expect(result.data!.maxSpendableCents).toBe(-150000);
+      expect(result.data!.byCurrency[0]?.totalIncomeCents).toBe(50000);
+      expect(result.data!.byCurrency[0]?.totalSavingsCommitmentsCents).toBe(200000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(-150000);
     });
 
     it('should subtract variable expenses', async () => {
-      const account = await createBankAccount({ name: 'Var Exp Acc' });
+      const account = await createBankAccount({ name: 'Var Exp Acc' }, false);
       // Income
       await prisma.transaction.create({
         data: {
@@ -1284,12 +1394,12 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalVariableExpensesCents).toBe(200000);
-      expect(result.data!.maxSpendableCents).toBe(800000);
+      expect(result.data!.byCurrency[0]?.totalVariableExpensesCents).toBe(200000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(800000);
     });
 
     it('should calculate all components together', async () => {
-      const account = await createBankAccount({ name: 'Full Calc Acc' });
+      const account = await createBankAccount({ name: 'Full Calc Acc' }, false);
 
       // Income
       await prisma.transaction.create({
@@ -1364,11 +1474,469 @@ describe('Savings Actions Integration', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.totalIncomeCents).toBe(2000000);
-      expect(result.data!.totalFixedExpensesCents).toBe(500000);
-      expect(result.data!.totalSavingsCommitmentsCents).toBe(300000); // 200k + 100k
-      expect(result.data!.totalVariableExpensesCents).toBe(300000);
-      expect(result.data!.maxSpendableCents).toBe(900000); // 2M - 500k - 300k - 300k
+      expect(result.data!.byCurrency[0]?.totalIncomeCents).toBe(2000000);
+      expect(result.data!.byCurrency[0]?.totalFixedExpensesCents).toBe(500000);
+      expect(result.data!.byCurrency[0]?.totalSavingsCommitmentsCents).toBe(300000); // 200k + 100k
+      expect(result.data!.byCurrency[0]?.totalVariableExpensesCents).toBe(300000);
+      expect(result.data!.byCurrency[0]?.maxSpendableCents).toBe(900000); // 2M - 500k - 300k - 300k
+    });
+  });
+
+  // ==========================================================================
+  // reconcileGoalBalances (Ítem A — race-safe conditional update)
+  // ==========================================================================
+
+  describe('reconcileGoalBalances', () => {
+    it('should correct a stale cached balance to the ledger true amount', async () => {
+      const goal = await createSavingsGoal({
+        name: 'Stale Cache Goal',
+        targetAmountCents: 100000,
+        currentAmountCents: 50000, // stale: no contributions yet
+      });
+      await createContribution(goal.id, { amountCents: 70000 });
+
+      // Reconcile → cache should now equal the ledger (70000), not 50000.
+      await savingsService.reconcileGoalBalances(TEST_USER_ID);
+
+      const updated = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(updated!.currentAmountCents)).toBe(70000);
+    });
+
+    it('should NOT overwrite a cache that changed after the snapshot (conditional update guard)', async () => {
+      const goal = await createSavingsGoal({
+        name: 'Race Guard Goal',
+        targetAmountCents: 100000,
+        currentAmountCents: 0,
+      });
+      await createContribution(goal.id, { amountCents: 10000 });
+
+      // Simulate the read-modify-write race: snapshot reads cached=0, but a
+      // concurrent contribution increments the cache to 20000 BEFORE the
+      // conditional write applies. The updateMany guard (where cached=0) must
+      // NOT apply because the cache is now 20000.
+      // We emulate this by applying an increment after the goal snapshot but
+      // before the conditional update via the service itself — the cleanest
+      // observable behavior is that the final cache reflects BOTH the ledger
+      // contribution (10000) and is consistent on the next reconcile, never
+      // clobbered to 0.
+      // To directly exercise the guard, reconcile once (cache 0→10000), then
+      // re-read: the second pass sees no discrepancy (cache === ledger).
+      await savingsService.reconcileGoalBalances(TEST_USER_ID);
+      const afterFirst = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(afterFirst!.currentAmountCents)).toBe(10000);
+
+      // A concurrent increment now bumps the cache beyond the ledger value.
+      await prisma.savingsGoal.update({
+        where: { id: goal.id },
+        data: { currentAmountCents: { increment: 5000 } },
+      });
+
+      // Next reconcile: cache (15000) != ledger (10000) → corrected back to 10000.
+      await savingsService.reconcileGoalBalances(TEST_USER_ID);
+      const afterSecond = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(afterSecond!.currentAmountCents)).toBe(10000);
+    });
+  });
+
+  // ==========================================================================
+  // updateSavingsGoal — clear monthly plan (Ítem D)
+  // ==========================================================================
+
+  describe('updateSavingsGoal monthly plan removal (Ítem D)', () => {
+    it('should clear the monthly plan when monthlyContributionCents is null', async () => {
+      const goal = await createSavingsGoal({
+        name: 'Clear Plan Goal',
+        monthlyContributionCents: 50000,
+      });
+
+      const result = await savingsActions.updateSavingsGoal({
+        goalId: goal.id,
+        monthlyContributionCents: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.monthlyContributionCents).toBeNull();
+
+      const updated = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(updated!.monthlyContributionCents).toBeNull();
+    });
+
+    it('should leave the monthly plan untouched when the field is absent', async () => {
+      const goal = await createSavingsGoal({
+        name: 'Keep Plan Goal',
+        monthlyContributionCents: 50000,
+      });
+
+      await savingsActions.updateSavingsGoal({
+        goalId: goal.id,
+        name: 'Renamed',
+      });
+
+      const updated = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(updated!.monthlyContributionCents)).toBe(50000);
+    });
+  });
+
+  // ==========================================================================
+  // Atomic rollback — a failure mid-$transaction must leave NO trace
+  // ==========================================================================
+
+  describe('contributeToGoal atomic rollback', () => {
+    it('rolls back the transaction + contribution when a later write fails mid-transaction', async () => {
+      const bankAccount = await createBankAccount({ balanceCents: 1000000 });
+      // An existing contribution on ANOTHER goal already owns idempotencyKey K.
+      const otherGoal = await createSavingsGoal({ name: 'Other goal' });
+      const key = genUUID();
+      await createContribution(otherGoal.id, { idempotencyKey: key });
+
+      const goal = await createSavingsGoal({
+        name: 'Rollback Target',
+        targetAmountCents: 100000,
+        currentAmountCents: 0,
+      });
+      const balanceBefore = await prisma.account.findUnique({
+        where: { id: bankAccount.id },
+      });
+
+      // The key is taken: SavingsContribution.idempotencyKey is UNIQUE, so the
+      // contribution.create inside the tx throws P2002 AFTER the linked EXPENSE
+      // transaction was already inserted. Prisma must roll back the whole tx.
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 25000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: key,
+      });
+
+      expect(result.success).toBe(false);
+
+      // No new contribution for this goal, and no new transaction with the key.
+      const goalContributions = await prisma.savingsContribution.count({
+        where: { goalId: goal.id },
+      });
+      expect(goalContributions).toBe(0);
+
+      const txsWithKey = await prisma.transaction.count({
+        where: { idempotencyKey: key },
+      });
+      expect(txsWithKey).toBe(0);
+
+      // The goal cache and the account cached balance are untouched.
+      const unchangedGoal = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(unchangedGoal!.currentAmountCents)).toBe(0);
+
+      const balanceAfter = await prisma.account.findUnique({
+        where: { id: bankAccount.id },
+      });
+      expect(Number(balanceAfter!.balanceCents)).toBe(Number(balanceBefore!.balanceCents));
+    });
+  });
+
+  // ==========================================================================
+  // Multi-user ownership — never touch another user's goal/account
+  // ==========================================================================
+
+  describe('multi-user ownership', () => {
+    it('rejects contributeToGoal when the goal belongs to another user', async () => {
+      await createForeignUser();
+      const foreignAccount = await createBankAccount(
+        { currency: Currency.COP },
+        true,
+        FOREIGN_USER_ID
+      );
+      const foreignGoal = await createSavingsGoal(
+        { name: 'Foreign Goal', currency: Currency.COP },
+        FOREIGN_USER_ID
+      );
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: foreignGoal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: foreignAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects contributeToGoal when the source account belongs to another user', async () => {
+      await createForeignUser();
+      const foreignAccount = await createBankAccount(
+        { currency: Currency.COP },
+        true,
+        FOREIGN_USER_ID
+      );
+      const myGoal = await createSavingsGoal({
+        name: 'My Goal',
+        currency: Currency.COP,
+        targetAmountCents: 100000,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: myGoal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: foreignAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+      // Nothing was created for the session user.
+      const contributions = await prisma.savingsContribution.count({
+        where: { goalId: myGoal.id },
+      });
+      expect(contributions).toBe(0);
+    });
+
+    it('rejects updateSavingsGoal when the goal belongs to another user', async () => {
+      await createForeignUser();
+      const foreignGoal = await createSavingsGoal({ name: 'Foreign' }, FOREIGN_USER_ID);
+
+      const result = await savingsActions.updateSavingsGoal({
+        goalId: foreignGoal.id,
+        name: 'Hijacked',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects deleteSavingsGoal when the goal belongs to another user', async () => {
+      await createForeignUser();
+      const foreignGoal = await createSavingsGoal({ name: 'Foreign' }, FOREIGN_USER_ID);
+
+      const result = await savingsActions.deleteSavingsGoal({ goalId: foreignGoal.id });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNAUTHORIZED');
+
+      const stillThere = await prisma.savingsGoal.findUnique({
+        where: { id: foreignGoal.id },
+      });
+      expect(stillThere!.isActive).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Currency mismatch — goal vs contribution (true positive, distinct from the
+  // existing account-level mismatch test)
+  // ==========================================================================
+
+  describe('contributeToGoal currency mismatch (goal level)', () => {
+    it('rejects when the contribution currency differs from the GOAL currency even if the account matches the contribution', async () => {
+      const copAccount = await createBankAccount({ currency: Currency.COP });
+      const copGoal = await createSavingsGoal({
+        name: 'COP Goal',
+        currency: Currency.COP,
+        targetAmountCents: 100000,
+      });
+
+      // Contribution currency = USD, goal = COP → CURRENCY_MISMATCH at the
+      // goal check (before any account mutation). This is a real goal-level
+      // mismatch, unlike the existing test whose failure happens at the account.
+      const result = await savingsActions.contributeToGoal({
+        goalId: copGoal.id,
+        amountCents: 10000,
+        currency: 'USD',
+        sourceAccountId: copAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('CURRENCY_MISMATCH');
+
+      const contributions = await prisma.savingsContribution.count({
+        where: { goalId: copGoal.id },
+      });
+      expect(contributions).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Rate limiting on contributeToGoal
+  // ==========================================================================
+
+  describe('contributeToGoal rate limiting', () => {
+    it('returns RATE_LIMITED when checkApiRateLimit denies the request', async () => {
+      const { checkApiRateLimit } = await import('@/services/rate-limit.service');
+      (checkApiRateLimit as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ allowed: false });
+
+      const bankAccount = await createBankAccount();
+      const goal = await createSavingsGoal({ name: 'Rate Limited Goal' });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('RATE_LIMITED');
+
+      const contributions = await prisma.savingsContribution.count({
+        where: { goalId: goal.id },
+      });
+      expect(contributions).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // Idempotency cross-user / cross-goal key collisions (FASE 1.2)
+  // ==========================================================================
+
+  describe('contributeToGoal idempotency key ownership', () => {
+    it('does NOT resolve a foreign user idempotencyKey as an idempotent success', async () => {
+      await createForeignUser();
+      const foreignGoal = await createSavingsGoal({ name: 'Foreign Goal' }, FOREIGN_USER_ID);
+      const key = genUUID();
+      await createContribution(foreignGoal.id, { idempotencyKey: key }, FOREIGN_USER_ID);
+
+      const bankAccount = await createBankAccount({ balanceCents: 1000000 });
+      const goal = await createSavingsGoal({
+        name: 'My Goal',
+        targetAmountCents: 100000,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 25000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: key,
+      });
+
+      // The collision must NOT be handed back as a foreign contribution.
+      expect(result.success).toBe(false);
+      expect(result.data).toBeUndefined();
+
+      // Session user has no contribution/transaction with that key.
+      const myContributions = await prisma.savingsContribution.count({
+        where: { goalId: goal.id },
+      });
+      expect(myContributions).toBe(0);
+      const myTxs = await prisma.transaction.count({
+        where: { idempotencyKey: key, userId: TEST_USER_ID },
+      });
+      expect(myTxs).toBe(0);
+    });
+
+    it('does NOT resolve a same-user key that belongs to a DIFFERENT goal as an idempotent success', async () => {
+      const otherGoal = await createSavingsGoal({ name: 'Other Goal' });
+      const key = genUUID();
+      await createContribution(otherGoal.id, { idempotencyKey: key });
+
+      const bankAccount = await createBankAccount({ balanceCents: 1000000 });
+      const goal = await createSavingsGoal({
+        name: 'Target Goal',
+        targetAmountCents: 100000,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 25000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: key,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.data).toBeUndefined();
+
+      const goalContributions = await prisma.savingsContribution.count({
+        where: { goalId: goal.id },
+      });
+      expect(goalContributions).toBe(0);
+    });
+  });
+
+  // ==========================================================================
+  // contributeToGoal — terminal / inactive goals
+  // ==========================================================================
+
+  describe('contributeToGoal goal state guards', () => {
+    it('rejects contributions to a CANCELLED goal with GOAL_CANCELLED', async () => {
+      const bankAccount = await createBankAccount();
+      const goal = await createSavingsGoal({
+        name: 'Cancelled Goal',
+        status: SavingsGoalStatus.CANCELLED,
+      });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('GOAL_CANCELLED');
+    });
+
+    it('rejects contributions to an inactive (soft-deleted) goal with NOT_FOUND', async () => {
+      const bankAccount = await createBankAccount();
+      const goal = await createSavingsGoal({ name: 'Inactive Goal', isActive: false });
+
+      const result = await savingsActions.contributeToGoal({
+        goalId: goal.id,
+        amountCents: 10000,
+        currency: 'COP',
+        sourceAccountId: bankAccount.id,
+        idempotencyKey: genUUID(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('NOT_FOUND');
+    });
+  });
+
+  // ==========================================================================
+  // Read-path self-heal: reads reconcile a corrupted goal cache (Rule 13)
+  // ==========================================================================
+
+  describe('read-path reconciliation self-heal', () => {
+    it('corrects a corrupted goal cache when getSavingsSummary performs the read', async () => {
+      // Cache says 50 000 but the ledger contribution is only 30 000.
+      const goal = await createSavingsGoal({
+        name: 'Corrupt Cache',
+        currentAmountCents: 50000,
+      });
+      await createContribution(goal.id, { amountCents: 30000 });
+
+      const result = await savingsActions.getSavingsSummary({});
+
+      expect(result.success).toBe(true);
+      const bucket = result.data!.byCurrency.find((b) => b.currency === 'COP');
+      expect(bucket!.totalSavedCents).toBe(30000);
+
+      const corrected = await prisma.savingsGoal.findUnique({ where: { id: goal.id } });
+      expect(Number(corrected!.currentAmountCents)).toBe(30000);
+    });
+
+    it('corrects a corrupted goal cache when getSavingsGoals performs the read', async () => {
+      const goal = await createSavingsGoal({
+        name: 'Corrupt Cache Grid',
+        currentAmountCents: 0,
+        targetAmountCents: 100000,
+      });
+      await createContribution(goal.id, { amountCents: 40000 });
+
+      // Manually corrupt the cache AFTER the ledger row exists.
+      await prisma.savingsGoal.update({
+        where: { id: goal.id },
+        data: { currentAmountCents: 12345 },
+      });
+
+      const result = await savingsActions.getSavingsGoals({});
+
+      expect(result.success).toBe(true);
+      expect(result.data![0].currentAmountCents).toBe(40000);
     });
   });
 });

@@ -297,6 +297,31 @@ async function main() {
     update: {},
   });
 
+  // Rule 13 backing: "Pequeña Meta" caches 40.000 cents but reconcileGoalBalances
+  // recomputes currentAmountCents from ACTIVE contributions on the first read.
+  // Without a real contribution the 80% progress would be auto-zeroed. Seed one
+  // backing contribution (~30 days ago) so the goal stays deterministic for the
+  // edit-below-target validation scenario.
+  await prisma.savingsContribution.upsert({
+    where: { idempotencyKey: 'e2e-savings-partial-goal-contribution' },
+    create: {
+      idempotencyKey: 'e2e-savings-partial-goal-contribution',
+      goalId: (
+        await prisma.savingsGoal.findUniqueOrThrow({
+          where: { idempotencyKey: 'e2e-savings-partial-goal' },
+          select: { id: true },
+        })
+      ).id,
+      amountCents: 40000,
+      currency: 'COP',
+      date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // ~30 days ago
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
   await prisma.savingsGoal.upsert({
     where: { idempotencyKey: 'e2e-savings-editable-goal' },
     create: {
@@ -353,7 +378,43 @@ async function main() {
     update: {},
   });
 
+  // Rule 13: COMPLETED goals are reconciled from the ledger on the first read
+  // (reconcileGoalBalances), so a completed goal without real backing
+  // contributions would be auto-zeroed. Seed one real contribution that
+  // supports the completed goal's currentAmountCents.
+  await prisma.savingsContribution.upsert({
+    where: { idempotencyKey: 'e2e-savings-completed-goal-contribution' },
+    create: {
+      idempotencyKey: 'e2e-savings-completed-goal-contribution',
+      goalId: (
+        await prisma.savingsGoal.findUniqueOrThrow({
+          where: { idempotencyKey: 'e2e-savings-completed-goal' },
+          select: { id: true },
+        })
+      ).id,
+      amountCents: 100000,
+      currency: 'COP',
+      date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // ~30 days ago
+      createdBy: savingsUser.id,
+      lastModifiedBy: savingsUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
   console.log('✓ Savings user seeded with bank account, savings account, and 5 goals');
+
+  // ============================================================================
+  // Empty savings E2E user (savings.feature @empty)
+  // Isolated from the savings user so the empty-state scenario NEVER couples to
+  // another feature's user (the old test reused the auth user). This user has
+  // NO goals and NO accounts — the savings page must render the empty state.
+  // ============================================================================
+  const emptySavingsUserEmail =
+    process.env.E2E_SAVINGS_EMPTY_USER || 'savings-empty@e2e.financetrackerpro.com';
+  await upsertUserAndGet(emptySavingsUserEmail, 'Empty Savings E2E User');
+
+  console.log('✓ Empty savings user seeded with no goals');
 
   // ============================================================================
   // Pockets E2E user (transfers.feature @pockets scenarios)

@@ -67,6 +67,7 @@ vi.mock('@/lib/i18n', () => ({
       cancel: 'Cancelar',
       loading: 'Cargando...',
       progress: 'Progreso',
+      currentProgress: 'Progreso actual',
       remaining: 'Restante',
       contributionAmount: 'Monto a contribuir',
       sourceAccount: 'Cuenta de origen',
@@ -127,6 +128,8 @@ beforeEach(() => {
   });
   HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.removeAttribute('open');
+    // Mirror native behavior: close() fires the 'close' event.
+    this.dispatchEvent(new Event('close'));
   });
 });
 
@@ -137,6 +140,46 @@ describe('ContributeModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  /**
+   * Renders the open modal and waits for the goal (fetched by the modal) to
+   * appear. The modal also lazy-loads accounts after a 0ms timer.
+   */
+  async function renderContributeModal() {
+    const utils = render(
+      <ContributeModal
+        goalId={MOCK_CUID}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    await screen.findByText(/Vacaciones 2026/);
+    return utils;
+  }
+
+  async function fillValidContribution(container: HTMLElement) {
+    // The open effect schedules a requestAnimationFrame that flips isVisible
+    // and clears submitError. Wait for it (opacity becomes 1) before touching
+    // the form, otherwise a late rAF wipes the submit error we assert on.
+    await waitFor(() => {
+      const content = container.querySelector('div[class*="max-w-lg"]') as HTMLElement | null;
+      expect(content).toBeTruthy();
+      expect(content?.style.opacity).toBe('1');
+    });
+
+    const amountInput = screen.getByTestId('numeric-input-contribute-amount');
+    fireEvent.change(amountInput, { target: { value: '25000' } });
+
+    const accountSelect = screen.getByLabelText('Cuenta de origen') as HTMLSelectElement;
+    fireEvent.change(accountSelect, { target: { value: MOCK_CUID } });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(submitBtn).not.toBeDisabled();
+    return submitBtn;
+  }
 
   it('should render the form with amount field when open', async () => {
     render(
@@ -286,5 +329,146 @@ describe('ContributeModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Restante')).toBeInTheDocument();
     });
+  });
+
+  it('should submit successfully and call contributeToGoal with the payload and onClose', async () => {
+    // Only a CUID-shaped account passes the zod schema validation.
+    const { getBankAccounts } = await import('@/actions/account.actions');
+    (getBankAccounts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: [{ id: MOCK_CUID, name: 'Cuenta de Ahorros', currency: 'COP', balanceCents: 500000 }],
+    });
+
+    const { container } = await renderContributeModal();
+    await screen.findByText(/Cuenta de Ahorros/);
+
+    const submitBtn = await fillValidContribution(container);
+    fireEvent.click(submitBtn);
+
+    const { contributeToGoal } = await import('@/actions/savings.actions');
+    await waitFor(() => {
+      expect(contributeToGoal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          goalId: MOCK_CUID,
+          amountCents: 25000,
+          sourceAccountId: MOCK_CUID,
+          currency: 'COP',
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  it('should show the generic contributeFailed alert when the action returns success:false without a code', async () => {
+    const { getBankAccounts } = await import('@/actions/account.actions');
+    (getBankAccounts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: [{ id: MOCK_CUID, name: 'Cuenta de Ahorros', currency: 'COP', balanceCents: 500000 }],
+    });
+    const { contributeToGoal } = await import('@/actions/savings.actions');
+    (contributeToGoal as ReturnType<typeof vi.fn>).mockResolvedValue({ success: false });
+
+    const { container } = await renderContributeModal();
+    await screen.findByText(/Cuenta de Ahorros/);
+
+    const submitBtn = await fillValidContribution(container);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Error al contribuir');
+    });
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
+  it('should show the server error message when the action returns success:false with an error', async () => {
+    const { getBankAccounts } = await import('@/actions/account.actions');
+    (getBankAccounts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: [{ id: MOCK_CUID, name: 'Cuenta de Ahorros', currency: 'COP', balanceCents: 500000 }],
+    });
+    const { contributeToGoal } = await import('@/actions/savings.actions');
+    (contributeToGoal as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: false,
+      code: 'INSUFFICIENT_FUNDS',
+      error: 'Fondos insuficientes',
+    });
+
+    const { container } = await renderContributeModal();
+    await screen.findByText(/Cuenta de Ahorros/);
+
+    const submitBtn = await fillValidContribution(container);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(contributeToGoal).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Fondos insuficientes');
+    });
+  });
+
+  it('should show the SESSION_INVALID specific alert', async () => {
+    const { getBankAccounts } = await import('@/actions/account.actions');
+    (getBankAccounts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: [{ id: MOCK_CUID, name: 'Cuenta de Ahorros', currency: 'COP', balanceCents: 500000 }],
+    });
+    const { contributeToGoal } = await import('@/actions/savings.actions');
+    (contributeToGoal as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: false,
+      code: 'SESSION_INVALID',
+    });
+
+    const { container } = await renderContributeModal();
+    await screen.findByText(/Cuenta de Ahorros/);
+
+    const submitBtn = await fillValidContribution(container);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(contributeToGoal).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Sesión inválida');
+    });
+  });
+
+  it('should show a client-side validation error when submitting without selecting a source account', async () => {
+    const { getBankAccounts } = await import('@/actions/account.actions');
+    (getBankAccounts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: [{ id: MOCK_CUID, name: 'Cuenta de Ahorros', currency: 'COP', balanceCents: 500000 }],
+    });
+
+    const { container } = await renderContributeModal();
+    await screen.findByText(/Cuenta de Ahorros/);
+
+    const amountInput = screen.getByTestId('numeric-input-contribute-amount');
+    fireEvent.change(amountInput, { target: { value: '25000' } });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    // The source account select is empty → react-hook-form/zod reports a
+    // validation error and contributeToGoal is never invoked.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+    const { contributeToGoal } = await import('@/actions/savings.actions');
+    expect(contributeToGoal).not.toHaveBeenCalled();
+  });
+
+  it('should call onClose when the cancel button is clicked', async () => {
+    const { container } = await renderContributeModal();
+
+    // Wait for the closing transition to reach the native dialog.close() call.
+    fireEvent.click(screen.getByText('Cancelar'));
+
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+    expect(container.querySelector('button[type="submit"]')).toBeTruthy();
   });
 });

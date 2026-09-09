@@ -34,7 +34,10 @@ vi.mock('@/lib/i18n', () => ({
       monthlyContributionHint: 'Opcional - Cuánto planeas ahorrar cada mes',
       deadline: 'Fecha límite',
       deadlineHint: 'Opcional - Cuándo esperas cumplir la meta',
-      status: 'Estado',
+      'status.label': 'Estado',
+      'status.ACTIVE': 'ACTIVE',
+      'status.COMPLETED': 'COMPLETED',
+      'status.CANCELLED': 'CANCELLED',
       color: 'Color',
       customColor: 'Color personalizado',
       'errors.sessionInvalid': 'Sesión inválida',
@@ -120,6 +123,8 @@ describe('EditSavingsGoalModal', () => {
     deletedAt: null,
     createdBy: 'user-1',
     lastModifiedBy: 'user-1',
+    ipAddress: null,
+    userAgent: null,
   };
 
   beforeEach(() => {
@@ -212,7 +217,7 @@ describe('EditSavingsGoalModal', () => {
       expect(screen.getByText('Editar Meta')).toBeInTheDocument();
     });
 
-    const colorSwatchButtons = container.querySelectorAll('button[aria-label^="from-"]');
+    const colorSwatchButtons = container.querySelectorAll('button[class*="bg-gradient-to-r"]');
     expect(colorSwatchButtons).toHaveLength(6);
     expect(container.querySelector('input[type="color"]')).toBeInTheDocument();
   });

@@ -54,6 +54,14 @@ export function isValidLocale(locale: string | undefined): locale is Locale {
 }
 
 /**
+ * Map an app locale to its BCP 47 tag for Intl APIs (Intl.NumberFormat, dates).
+ * es → 'es-CO', en → 'en-US'.
+ */
+export function localeToBCP47(lang: Locale): string {
+  return lang === 'en' ? 'en-US' : 'es-CO';
+}
+
+/**
  * Get locale from Accept-Language header
  */
 export function getLocaleFromHeader(acceptLanguage: string | null): Locale {

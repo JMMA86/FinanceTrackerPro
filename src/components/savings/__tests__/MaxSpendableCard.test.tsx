@@ -1,15 +1,13 @@
 /**
  * MaxSpendableCard Component Tests
+ *
+ * The component is presentational: per-currency buckets are loaded on the
+ * server page and passed via the `buckets` prop. It never calls Server Actions.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { MaxSpendableCard } from '../MaxSpendableCard';
-
-const mockCalculateMaxSpendable = vi.fn();
-
-vi.mock('@/actions/savings.actions', () => ({
-  calculateMaxSpendable: (...args: unknown[]) => mockCalculateMaxSpendable(...args),
-}));
+import type { MaxSpendablePerCurrency } from '@/types/savings';
 
 vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_dict: Record<string, unknown>, key: string) => {
@@ -36,7 +34,8 @@ vi.mock('@/lib/money', () => ({
 describe('MaxSpendableCard', () => {
   const defaultDictionary = {};
 
-  const data = {
+  const copBucket: MaxSpendablePerCurrency = {
+    currency: 'COP',
     totalIncomeCents: 500000,
     totalFixedExpensesCents: 200000,
     totalSavingsCommitmentsCents: 50000,
@@ -44,40 +43,20 @@ describe('MaxSpendableCard', () => {
     maxSpendableCents: 150000,
   };
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockCalculateMaxSpendable.mockResolvedValue({ success: true, data });
-  });
+  const renderCard = (buckets: MaxSpendablePerCurrency[], error: string | null = null) =>
+    render(
+      <MaxSpendableCard
+        buckets={buckets}
+        error={error}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+      />
+    );
 
-  const renderCard = () => (
-    <MaxSpendableCard dictionary={defaultDictionary} locale="es-CO" month={8} year={2026} />
-  );
+  it('should render the four breakdown bars with values', () => {
+    renderCard([copBucket]);
 
-  it('should show a skeleton while data is loading', () => {
-    mockCalculateMaxSpendable.mockReturnValue(new Promise<never>(() => {}));
-
-    const { container } = render(renderCard());
-
-    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(1);
-  });
-
-  it('should call calculateMaxSpendable with month and year', async () => {
-    render(renderCard());
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Disponible').length).toBeGreaterThan(0);
-    });
-
-    expect(mockCalculateMaxSpendable).toHaveBeenCalledWith({ month: 8, year: 2026 });
-  });
-
-  it('should render the four breakdown bars with values', async () => {
-    render(renderCard());
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Disponible').length).toBeGreaterThan(0);
-    });
-
+    expect(screen.getByRole('heading', { name: 'Disponible' })).toBeInTheDocument();
     expect(screen.getByText('Ingresos')).toBeInTheDocument();
     expect(screen.getByText('Gastos fijos')).toBeInTheDocument();
     expect(screen.getByText('Ahorro')).toBeInTheDocument();
@@ -91,12 +70,8 @@ describe('MaxSpendableCard', () => {
     expect(screen.getByText('$1500.00 COP')).toBeInTheDocument();
   });
 
-  it('should render native progress bars with value and max attributes', async () => {
-    const { container } = render(renderCard());
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Disponible').length).toBeGreaterThan(0);
-    });
+  it('should render native progress bars with value and max attributes', () => {
+    const { container } = renderCard([copBucket]);
 
     const progressBars = container.querySelectorAll('progress');
     expect(progressBars).toHaveLength(4);
@@ -114,45 +89,30 @@ describe('MaxSpendableCard', () => {
     ]);
   });
 
-  it('should render the max spendable headline value', async () => {
-    render(renderCard());
+  it('should render one breakdown block per currency when several currencies exist', () => {
+    renderCard([copBucket, { ...copBucket, currency: 'USD', maxSpendableCents: 75000 }]);
 
-    await waitFor(() => {
-      expect(screen.getByText('$1500.00 COP')).toBeInTheDocument();
-    });
+    expect(screen.getByText('COP')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.getByText('$750.00 USD')).toBeInTheDocument();
   });
 
-  it('should show an overdraft warning when max spendable is negative', async () => {
-    mockCalculateMaxSpendable.mockResolvedValue({
-      success: true,
-      data: { ...data, maxSpendableCents: -25000 },
-    });
+  it('should show an overdraft warning when max spendable is negative', () => {
+    renderCard([{ ...copBucket, maxSpendableCents: -25000 }]);
 
-    render(renderCard());
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('¡Alerta de sobregiro!');
-    });
+    expect(screen.getByRole('alert')).toHaveTextContent('¡Alerta de sobregiro!');
     expect(screen.getByText('$-250.00 COP')).toBeInTheDocument();
   });
 
-  it('should render nothing when the action returns an error', async () => {
-    mockCalculateMaxSpendable.mockResolvedValue({ success: false, error: 'failed' });
+  it('should render nothing when there are no buckets and no error', () => {
+    const { container } = renderCard([]);
 
-    const { container } = render(renderCard());
-
-    await waitFor(() => {
-      expect(container.firstChild).toBeNull();
-    });
+    expect(container.firstChild).toBeNull();
   });
 
-  it('should render nothing when the action throws', async () => {
-    mockCalculateMaxSpendable.mockRejectedValue(new Error('boom'));
+  it('should show the error alert when the server fetch failed', () => {
+    renderCard([], 'Error al cargar el desglose');
 
-    const { container } = render(renderCard());
-
-    await waitFor(() => {
-      expect(container.firstChild).toBeNull();
-    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Error al cargar el desglose');
   });
 });

@@ -87,6 +87,7 @@ export const UpdateSavingsGoalSchema = z.object({
     .int('Monthly contribution must be an integer')
     .min(1, 'Monthly contribution must be positive')
     .max(MAX_SAFE_CENTS, 'Monthly contribution exceeds maximum safe value')
+    .nullable()
     .optional(),
   color: z.string().max(50).optional(),
   status: SavingsGoalStatusSchema.optional(),

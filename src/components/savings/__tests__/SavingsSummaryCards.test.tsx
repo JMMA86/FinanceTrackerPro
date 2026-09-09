@@ -1,17 +1,13 @@
 /**
  * SavingsSummaryCards Component Tests
+ *
+ * The component is presentational: summary buckets are loaded on the server
+ * page and passed via `buckets` prop. It never calls Server Actions.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { SavingsSummaryCards } from '../SavingsSummaryCards';
-
-const mockGetSavingsSummary = vi.fn();
-const mockCalculateMaxSpendable = vi.fn();
-
-vi.mock('@/actions/savings.actions', () => ({
-  getSavingsSummary: (...args: unknown[]) => mockGetSavingsSummary(...args),
-  calculateMaxSpendable: (...args: unknown[]) => mockCalculateMaxSpendable(...args),
-}));
+import type { SavingsSummaryPerCurrency } from '@/types/savings';
 
 vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_dict: Record<string, unknown>, key: string) => {
@@ -19,8 +15,10 @@ vi.mock('@/lib/i18n', () => ({
       totalSaved: 'Total ahorrado',
       totalTargets: 'Total metas',
       overallProgress: 'Progreso general',
+      activeGoal: 'meta activa',
       activeGoals: 'metas activas',
-      maxSpendable: 'Disponible',
+      thisMonth: 'Este mes',
+      summary: 'Resumen',
       'errors.loadFailed': 'Error al cargar el resumen',
     };
     return keyMap[key] ?? key;
@@ -37,7 +35,8 @@ vi.mock('@/lib/money', () => ({
 describe('SavingsSummaryCards', () => {
   const defaultDictionary = {};
 
-  const summary = {
+  const copBucket: SavingsSummaryPerCurrency = {
+    currency: 'COP',
     totalSavedCents: 100000,
     totalTargetCents: 200000,
     overallProgressPercentage: 50,
@@ -46,151 +45,71 @@ describe('SavingsSummaryCards', () => {
     monthlyContributedCents: 10000,
   };
 
-  const maxSpendable = {
-    totalIncomeCents: 500000,
-    totalFixedExpensesCents: 200000,
-    totalSavingsCommitmentsCents: 50000,
-    totalVariableExpensesCents: 100000,
-    maxSpendableCents: 150000,
+  const usdBucket: SavingsSummaryPerCurrency = {
+    ...copBucket,
+    currency: 'USD',
+    totalSavedCents: 50000,
+    totalTargetCents: 100000,
+    overallProgressPercentage: 30,
+    monthlyContributedCents: 5000,
   };
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetSavingsSummary.mockResolvedValue({ success: true, data: summary });
-    mockCalculateMaxSpendable.mockResolvedValue({ success: true, data: maxSpendable });
-  });
+  const renderCards = (buckets: SavingsSummaryPerCurrency[], error: string | null = null) =>
+    render(
+      <SavingsSummaryCards
+        buckets={buckets}
+        error={error}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+      />
+    );
 
-  const renderCards = () => <SavingsSummaryCards dictionary={defaultDictionary} locale="es-CO" />;
+  it('should render the four summary cards for a single currency bucket', () => {
+    renderCards([copBucket]);
 
-  it('should show a skeleton while data is loading', () => {
-    mockGetSavingsSummary.mockReturnValue(new Promise<never>(() => {}));
-    mockCalculateMaxSpendable.mockReturnValue(new Promise<never>(() => {}));
-
-    const { container } = render(renderCards());
-
-    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(4);
-  });
-
-  it('should call the actions with the current month and year', async () => {
-    render(renderCards());
-
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-
-    await waitFor(() => {
-      expect(screen.getByText('Total ahorrado')).toBeInTheDocument();
-    });
-
-    expect(mockGetSavingsSummary).toHaveBeenCalledWith({ month, year });
-    expect(mockCalculateMaxSpendable).toHaveBeenCalledWith({ month, year });
-  });
-
-  it('should render the four summary cards with values', async () => {
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByText('Total ahorrado')).toBeInTheDocument();
-    });
-
+    expect(screen.getByText('Total ahorrado')).toBeInTheDocument();
     expect(screen.getByText('$1000.00 COP')).toBeInTheDocument();
     expect(screen.getByText('Total metas')).toBeInTheDocument();
     expect(screen.getByText('$2000.00 COP')).toBeInTheDocument();
     expect(screen.getByText('Progreso general')).toBeInTheDocument();
     expect(screen.getByText('50.0%')).toBeInTheDocument();
     expect(screen.getByText('2 metas activas')).toBeInTheDocument();
-    expect(screen.getByText('Disponible')).toBeInTheDocument();
-    expect(screen.getByText('$1500.00 COP')).toBeInTheDocument();
+    expect(screen.getByText('Este mes')).toBeInTheDocument();
+    expect(screen.getByText('$100.00 COP')).toBeInTheDocument();
   });
 
-  it('should use an emerald progress color when progress >= 50', async () => {
-    render(renderCards());
+  it('should render one row per currency bucket when several currencies exist', () => {
+    renderCards([copBucket, usdBucket]);
 
-    await waitFor(() => {
-      expect(screen.getByText('50.0%')).toBeInTheDocument();
-    });
+    expect(screen.getByText('COP')).toBeInTheDocument();
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.getByText('$1000.00 COP')).toBeInTheDocument();
+    expect(screen.getByText('$500.00 USD')).toBeInTheDocument();
+  });
+
+  it('should use an emerald progress color when progress >= 50', () => {
+    renderCards([copBucket]);
 
     const progressValue = screen.getByText('50.0%');
     expect(progressValue.className).toContain('text-emerald-400');
   });
 
-  it('should use an amber progress color when progress >= 25 and < 50', async () => {
-    mockGetSavingsSummary.mockResolvedValue({
-      success: true,
-      data: { ...summary, overallProgressPercentage: 30 },
-    });
-
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByText('30.0%')).toBeInTheDocument();
-    });
-
-    const progressValue = screen.getByText('30.0%');
-    expect(progressValue.className).toContain('text-amber-400');
-  });
-
-  it('should use a slate progress color when progress < 25', async () => {
-    mockGetSavingsSummary.mockResolvedValue({
-      success: true,
-      data: { ...summary, overallProgressPercentage: 10 },
-    });
-
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByText('10.0%')).toBeInTheDocument();
-    });
+  it('should use a slate progress color when progress < 25', () => {
+    renderCards([{ ...copBucket, overallProgressPercentage: 10 }]);
 
     const progressValue = screen.getByText('10.0%');
     expect(progressValue.className).toContain('text-slate-400');
   });
 
-  it('should render max spendable in red when it is negative', async () => {
-    mockCalculateMaxSpendable.mockResolvedValue({
-      success: true,
-      data: { ...maxSpendable, maxSpendableCents: -50000 },
-    });
+  it('should render nothing when there are no buckets and no error', () => {
+    const { container } = renderCards([]);
 
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByText('$-500.00 COP')).toBeInTheDocument();
-    });
-
-    const maxValue = screen.getByText('$-500.00 COP');
-    expect(maxValue.className).toContain('text-red-400');
+    expect(container.firstChild).toBeNull();
   });
 
-  it('should render $0 when max spendable data is missing but summary loads', async () => {
-    mockCalculateMaxSpendable.mockResolvedValue({ success: false, error: 'missing' });
+  it('should show the error alert when the server fetch failed', () => {
+    renderCards([], 'Error al cargar el resumen');
 
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByText('Total ahorrado')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('$0.00 COP')).toBeInTheDocument();
-  });
-
-  it('should show the error alert when the summary request fails', async () => {
-    mockGetSavingsSummary.mockResolvedValue({ success: false, error: 'summary failed' });
-
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Error al cargar el resumen');
-    });
-  });
-
-  it('should show the error alert when an action throws', async () => {
-    mockGetSavingsSummary.mockRejectedValue(new Error('boom'));
-
-    render(renderCards());
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Error al cargar el resumen');
-    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Error al cargar el resumen');
   });
 });

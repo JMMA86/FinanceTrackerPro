@@ -369,6 +369,8 @@ function formatMetricsResult(
     totalSavedCents: number;
     savingsProgress: number;
     maxSpendableCents: number;
+    savingsCurrency: Currency;
+    maxSpendableCurrency: Currency;
   },
   locale: string
 ): DashboardMetrics {
@@ -399,8 +401,8 @@ function formatMetricsResult(
     },
     maxSpendable: {
       amount: maxSpendable,
-      formatted: formatMoney(maxSpendable, defaultCurrency, locale),
-      currency: defaultCurrency,
+      formatted: formatMoney(maxSpendable, metrics.maxSpendableCurrency, locale),
+      currency: metrics.maxSpendableCurrency,
     },
     savingsComparison: {
       amount: Math.abs(savingsComparisonPercentage),
@@ -474,8 +476,8 @@ function formatMetricsResult(
     activeSavingsGoals: metrics.activeSavingsGoals,
     totalSavedCents: {
       amount: metrics.totalSavedCents,
-      formatted: formatMoney(metrics.totalSavedCents, defaultCurrency, locale),
-      currency: defaultCurrency,
+      formatted: formatMoney(metrics.totalSavedCents, metrics.savingsCurrency, locale),
+      currency: metrics.savingsCurrency,
     },
     savingsProgress: metrics.savingsProgress,
 
@@ -640,13 +642,29 @@ export async function getDashboardMetricsByUser(
   );
   const pendingFixedExpensesTotal = calculatePendingFixedExpenses(pendingFixedExpenses);
 
-  // Savings metrics
+  // Savings metrics (C1: per-currency buckets — never mix currencies)
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { baseCurrency: true },
+  });
+  const preferredCurrency: Currency = user?.baseCurrency ?? 'COP';
+
   const savingsSummary = await getSavingsSummary(userId);
   const maxSpendableBreakdown = await getMaxSpendable(
     userId,
     now.getMonth() + 1,
     now.getFullYear()
   );
+
+  const summaryBucket =
+    savingsSummary.byCurrency.find((bucket) => bucket.currency === preferredCurrency) ??
+    savingsSummary.byCurrency[0];
+  const maxSpendableBucket =
+    maxSpendableBreakdown.byCurrency.find((bucket) => bucket.currency === preferredCurrency) ??
+    maxSpendableBreakdown.byCurrency[0];
+
+  const savingsCurrency = summaryBucket?.currency ?? preferredCurrency;
+  const maxSpendableCurrency = maxSpendableBucket?.currency ?? savingsCurrency;
 
   // Build and return final result
   return formatMetricsResult(
@@ -660,10 +678,12 @@ export async function getDashboardMetricsByUser(
       transactions: allTransactions,
       dollarRate,
       investmentSparkline,
-      activeSavingsGoals: savingsSummary.activeGoalsCount,
-      totalSavedCents: savingsSummary.totalSavedCents,
-      savingsProgress: savingsSummary.overallProgressPercentage,
-      maxSpendableCents: maxSpendableBreakdown.maxSpendableCents,
+      activeSavingsGoals: summaryBucket?.activeGoalsCount ?? 0,
+      totalSavedCents: summaryBucket?.totalSavedCents ?? 0,
+      savingsProgress: summaryBucket?.overallProgressPercentage ?? 0,
+      maxSpendableCents: maxSpendableBucket?.maxSpendableCents ?? 0,
+      savingsCurrency,
+      maxSpendableCurrency,
     },
     locale
   );

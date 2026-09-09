@@ -581,6 +581,9 @@ model SavingsGoal {
   deletedAt               DateTime?
   createdBy               String?
   lastModifiedBy          String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress               String?
+  userAgent               String?
 
   @@index([userId])
   @@index([status])
@@ -591,7 +594,7 @@ model SavingsGoal {
 model SavingsContribution {
   id                      String      @id @default(cuid())
   goalId                  String
-  goal                    SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  goal                    SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
 
   amountCents             BigInt         // Monto contribuido en centavos
   currency                Currency

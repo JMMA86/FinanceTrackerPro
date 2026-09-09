@@ -93,6 +93,7 @@
   "cardNoDebt": "Esta tarjeta no tiene saldo pendiente por pagar",
   "cardOverpayment": "El monto no puede superar la deuda pendiente de la tarjeta",
   "cardHasDebt": "La tarjeta tiene deuda pendiente",
+  "transactionLinkedToSavings": "Esta transacción está vinculada a una meta de ahorro. No se puede modificar su monto ni su fecha.",
   "deleteTransaction": "Eliminar transacción",
   "delete": "Eliminar",
   "actions": "Acciones",

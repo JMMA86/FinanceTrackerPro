@@ -152,6 +152,12 @@ async function createTestCategory(
 }
 
 async function cleanupTestData() {
+  await prisma.savingsContribution.deleteMany({
+    where: { OR: [{ createdBy: TEST_USER_ID }, { createdBy: TEST_USER_ID_2 }] },
+  });
+  await prisma.savingsGoal.deleteMany({
+    where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
+  });
   await prisma.transaction.deleteMany({
     where: { OR: [{ userId: TEST_USER_ID }, { userId: TEST_USER_ID_2 }] },
   });
@@ -771,6 +777,99 @@ describe('Transaction Update Integration', () => {
 
       expect(result.success).toBe(false);
       expect(result.code).toBe('RATE_LIMITED');
+    });
+  });
+
+  // ==========================================================================
+  // Savings-linked transaction protection (Ítem B)
+  // ==========================================================================
+
+  describe('updateTransaction savings-linked transaction protection', () => {
+    async function createContributionLinkedTx() {
+      const account = await createTestAccount(TEST_USER_ID);
+      const goal = await prisma.savingsGoal.create({
+        data: {
+          userId: TEST_USER_ID,
+          name: 'Test Goal',
+          targetAmountCents: 100000,
+          currency: Currency.COP,
+          currentAmountCents: 0,
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+      const tx = await prisma.transaction.create({
+        data: {
+          idempotencyKey: crypto.randomUUID(),
+          userId: TEST_USER_ID,
+          accountId: account.id,
+          type: 'EXPENSE',
+          amountCents: -5000,
+          currency: Currency.COP,
+          description: 'Contribution expense',
+          date: new Date('2024-06-01'),
+          isActive: true,
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+          ipAddress: '127.0.0.1',
+          userAgent: 'vitest',
+        },
+      });
+      await prisma.savingsContribution.create({
+        data: {
+          goalId: goal.id,
+          amountCents: 5000,
+          currency: Currency.COP,
+          transactionId: tx.id,
+          idempotencyKey: crypto.randomUUID(),
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+          isActive: true,
+        },
+      });
+      return { account, goal, tx };
+    }
+
+    it('should reject editing amount of a contribution-linked EXPENSE', async () => {
+      const { tx } = await createContributionLinkedTx();
+
+      const result = await transactionActions.updateTransaction({
+        transactionId: tx.id,
+        amountCents: -8000,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('TRANSACTION_LINKED_TO_SAVINGS');
+    });
+
+    it('should reject editing the date of a contribution-linked EXPENSE', async () => {
+      const { tx } = await createContributionLinkedTx();
+
+      const result = await transactionActions.updateTransaction({
+        transactionId: tx.id,
+        date: new Date('2024-09-01'),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('TRANSACTION_LINKED_TO_SAVINGS');
+    });
+
+    it('should allow editing only the description of a contribution-linked EXPENSE', async () => {
+      const { tx } = await createContributionLinkedTx();
+
+      const result = await transactionActions.updateTransaction({
+        transactionId: tx.id,
+        description: 'Updated contribution description',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.transaction.description).toBe('Updated contribution description');
+
+      // The linked contribution must remain intact.
+      const contribution = await prisma.savingsContribution.findFirst({
+        where: { transactionId: tx.id, isActive: true },
+      });
+      expect(contribution).toBeDefined();
     });
   });
 });

@@ -44,6 +44,8 @@ export function getTransactionError(
       return get(dictionary, 'cardOverpayment');
     case 'CARD_HAS_BALANCE':
       return get(dictionary, 'cardHasDebt');
+    case 'TRANSACTION_LINKED_TO_SAVINGS':
+      return get(dictionary, 'transactionLinkedToSavings');
     default:
       return result.error || get(dictionary, 'createError');
   }

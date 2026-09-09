@@ -586,8 +586,12 @@ async function main() {
       },
     });
 
-    // Add some contributions to active goals
-    if (goalData.status === 'ACTIVE' && goalData.currentAmountCents > 0) {
+    // Add contributions to back the cached balance (Rule 13): ACTIVE goals with
+    // progress, AND COMPLETED goals. COMPLETED goals are reconciled from the
+    // ledger on the first read (reconcileGoalBalances), so a completed goal
+    // without real contributions would be auto-zeroed — we must seed the real
+    // contributions that support its currentAmountCents (e.g. "MacBook Pro").
+    if (goalData.currentAmountCents > 0) {
       const contributionAmount = Math.floor(goalData.currentAmountCents / 3);
       const months = [3, 2, 1];
       for (const monthsAgo of months) {

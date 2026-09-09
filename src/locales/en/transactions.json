@@ -93,6 +93,7 @@
   "cardNoDebt": "This card has no outstanding balance to pay",
   "cardOverpayment": "The amount cannot exceed the card's outstanding debt",
   "cardHasDebt": "The card has an outstanding debt",
+  "transactionLinkedToSavings": "This transaction is linked to a savings goal. Its amount and date cannot be changed.",
   "deleteTransaction": "Delete transaction",
   "delete": "Delete",
   "actions": "Actions",

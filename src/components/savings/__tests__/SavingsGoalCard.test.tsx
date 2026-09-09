@@ -74,6 +74,8 @@ describe('SavingsGoalCard', () => {
     deletedAt: null,
     createdBy: 'user-1',
     lastModifiedBy: 'user-1',
+    ipAddress: null,
+    userAgent: null,
     progressPercentage: 25,
     projectedCompletion: null,
     contributions: [],
@@ -412,5 +414,83 @@ describe('SavingsGoalCard', () => {
       />
     );
     expect(screen.getByText('Sin proyección')).toBeInTheDocument();
+  });
+
+  it('should render the overdue deadline label for a past deadline', () => {
+    const overdueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    render(
+      <SavingsGoalCard
+        goal={{ ...baseGoal, deadline: overdueDate }}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        onContribute={mockOnContribute}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+    expect(screen.getByText(/Vencido hace 3 días/)).toBeInTheDocument();
+  });
+
+  it('should render "Hoy" for a deadline that is today', () => {
+    const todayDate = new Date(Date.now() - 5 * 60 * 1000); // a few minutes ago
+    render(
+      <SavingsGoalCard
+        goal={{ ...baseGoal, deadline: todayDate }}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        onContribute={mockOnContribute}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+    expect(screen.getByText('Hoy')).toBeInTheDocument();
+  });
+
+  it('should render "Mañana" for a deadline within the next day', () => {
+    const tomorrowDate = new Date(Date.now() + 60 * 60 * 1000); // +1h
+    render(
+      <SavingsGoalCard
+        goal={{ ...baseGoal, deadline: tomorrowDate }}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        onContribute={mockOnContribute}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+    expect(screen.getByText('Mañana')).toBeInTheDocument();
+  });
+
+  it('should render months left for a deadline more than 30 days away', () => {
+    const farDate = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000);
+    render(
+      <SavingsGoalCard
+        goal={{ ...baseGoal, deadline: farDate }}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        onContribute={mockOnContribute}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+    expect(screen.getByText(/2 meses restantes/)).toBeInTheDocument();
+  });
+
+  it('should clamp a progressPercentage above 100 to 100 for the progressbar', () => {
+    const overProgressGoal = { ...baseGoal, progressPercentage: 125 };
+    render(
+      <SavingsGoalCard
+        goal={overProgressGoal}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        onContribute={mockOnContribute}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+
+    expect(screen.getByText('100.0%')).toBeInTheDocument();
+    const progressbar = screen.getByRole('progressbar');
+    expect(progressbar).toHaveAttribute('value', '100');
   });
 });

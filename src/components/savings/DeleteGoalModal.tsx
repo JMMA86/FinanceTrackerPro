@@ -31,6 +31,10 @@ export function DeleteGoalModal({
     if (!dialog) return;
     if (isOpen) {
       dialog.showModal();
+      // Native showModal focuses the FIRST focusable element; the backdrop is a
+      // non-focusable aria-hidden div, so move focus to the visible heading
+      // instead (WCAG 2.4.3 Focus Order — no phantom focus).
+      dialog.querySelector<HTMLElement>('[data-modal-heading]')?.focus();
     } else if (dialog.open) {
       setIsVisible(false);
       setTimeout(() => {
@@ -90,9 +94,11 @@ export function DeleteGoalModal({
       aria-labelledby="delete-goal-title"
       className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
     >
-      <button
-        type="button"
-        aria-label="Close"
+      {/* Non-focusable backdrop: click-to-close only (X, Cancel and Esc remain).
+          aria-hidden keeps it out of the accessibility tree and tab order —
+          otherwise SRs announced a phantom "Close" button (WCAG 2.2). */}
+      <div
+        aria-hidden="true"
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -109,14 +115,19 @@ export function DeleteGoalModal({
         }}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-          <h2 id="delete-goal-title" className="text-base font-semibold text-white">
+          <h2
+            id="delete-goal-title"
+            data-modal-heading
+            tabIndex={-1}
+            className="text-base font-semibold text-white focus:outline-none"
+          >
             {get(dictionary, 'deleteGoal')}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            aria-label="Close"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
+            aria-label={get(dictionary, 'close')}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
           >
             <X className="w-4 h-4" />
           </button>
@@ -164,7 +175,7 @@ export function DeleteGoalModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
             >
               {get(dictionary, 'cancel')}
             </button>
@@ -172,7 +183,7 @@ export function DeleteGoalModal({
               type="button"
               onClick={handleDelete}
               disabled={hasContributions}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/70"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
               {get(dictionary, 'delete')}

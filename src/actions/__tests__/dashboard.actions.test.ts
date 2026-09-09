@@ -17,6 +17,7 @@ vi.mock('@/lib/auth/session', () => ({
 
 vi.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     account: { findMany: vi.fn() },
     loan: { findMany: vi.fn() },
     transaction: { findMany: vi.fn(), findFirst: vi.fn() },
@@ -46,21 +47,13 @@ vi.mock('@/lib/money', () => ({
 // Mock savings service to avoid interfering with dashboard tests
 vi.mock('@/services/savings.service', () => ({
   getSavingsSummary: vi.fn().mockResolvedValue({
-    totalSavedCents: 0,
-    totalTargetCents: 0,
-    overallProgressPercentage: 0,
-    activeGoalsCount: 0,
-    completedGoalsCount: 0,
-    monthlyContributedCents: 0,
+    byCurrency: [],
   }),
   getMaxSpendable: vi.fn().mockResolvedValue({
-    totalIncomeCents: 0,
-    totalFixedExpensesCents: 0,
-    totalSavingsCommitmentsCents: 0,
-    totalVariableExpensesCents: 0,
-    maxSpendableCents: 0,
+    byCurrency: [],
   }),
   reconcileGoalBalance: vi.fn(),
+  reconcileGoalBalances: vi.fn().mockResolvedValue(undefined),
   calculateProjectedCompletion: vi.fn(),
 }));
 
@@ -75,6 +68,7 @@ import { formatMoney } from '@/lib/money';
 // ── Typed mocks ───────────────────────────────────────────────────────────────
 
 const mockGetSession = vi.mocked(getSession);
+const mockUser = vi.mocked(prisma.user.findUnique);
 const mockAccount = vi.mocked(prisma.account.findMany);
 const mockLoan = vi.mocked(prisma.loan.findMany);
 const mockTx = vi.mocked(prisma.transaction.findMany);
@@ -155,6 +149,9 @@ describe('dashboard.actions.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default: empty database
+    mockUser.mockResolvedValue({
+      baseCurrency: 'COP',
+    } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>);
     mockAccount.mockResolvedValue([]);
     mockLoan.mockResolvedValue([]);
     mockTx.mockResolvedValue([]);

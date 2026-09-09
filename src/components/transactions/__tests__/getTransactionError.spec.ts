@@ -29,6 +29,8 @@ const dictionary = {
   cardNoDebt: 'Esta tarjeta no tiene saldo pendiente por pagar',
   cardOverpayment: 'El monto no puede superar la deuda pendiente de la tarjeta',
   cardHasDebt: 'La tarjeta tiene deuda pendiente',
+  transactionLinkedToSavings:
+    'Esta transacción está vinculada a una meta de ahorro. No se puede modificar su monto ni su fecha.',
 };
 
 describe('getTransactionError', () => {
@@ -103,6 +105,12 @@ describe('getTransactionError', () => {
   it('maps CARD_HAS_BALANCE to the localized card debt message', () => {
     expect(getTransactionError({ code: 'CARD_HAS_BALANCE' }, dictionary)).toBe(
       'La tarjeta tiene deuda pendiente'
+    );
+  });
+
+  it('maps TRANSACTION_LINKED_TO_SAVINGS to the localized savings link message', () => {
+    expect(getTransactionError({ code: 'TRANSACTION_LINKED_TO_SAVINGS' }, dictionary)).toBe(
+      'Esta transacción está vinculada a una meta de ahorro. No se puede modificar su monto ni su fecha.'
     );
   });
 

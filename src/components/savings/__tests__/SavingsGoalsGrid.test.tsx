@@ -1,47 +1,22 @@
 /**
  * SavingsGoalsGrid Component Tests
  *
- * The grid is a client container that loads goals via getSavingsGoals and
- * manages modal state. Children are mocked so we can assert wiring only.
+ * The grid is a client container whose initial state (goals) arrives from the
+ * server page via props. After a mutation it calls `router.refresh()` so the
+ * server re-runs the module. Children are mocked so we can assert wiring only.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { SavingsGoalsGrid } from '../SavingsGoalsGrid';
+import type { SavingsGoalWithProgress } from '@/types/savings';
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-interface GoalFixture {
-  id: string;
-  userId: string;
-  name: string;
-  description: string | null;
-  type: string;
-  targetAmountCents: number;
-  currency: string;
-  currentAmountCents: number;
-  deadline: Date | null;
-  monthlyContributionCents: number | null;
-  linkedAccountId: string | null;
-  linkedAccount: { id: string; name: string; currency: string } | null;
-  status: string;
-  priority: number;
-  color: string | null;
-  icon: string | null;
-  idempotencyKey: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-  createdBy: string | null;
-  lastModifiedBy: string | null;
-  progressPercentage: number;
-  projectedCompletion: string | null;
-  contributions: unknown[];
-}
+const { mockRefresh } = vi.hoisted(() => ({ mockRefresh: vi.fn() }));
 
-const makeGoal = (overrides: Partial<GoalFixture> = {}): GoalFixture => ({
+const makeGoal = (overrides: Partial<SavingsGoalWithProgress> = {}): SavingsGoalWithProgress => ({
   id: 'clh1234567890abcdefghij',
   userId: 'user-1',
   name: 'Vacaciones 2026',
@@ -65,6 +40,8 @@ const makeGoal = (overrides: Partial<GoalFixture> = {}): GoalFixture => ({
   deletedAt: null,
   createdBy: 'user-1',
   lastModifiedBy: 'user-1',
+  ipAddress: null,
+  userAgent: null,
   progressPercentage: 25,
   projectedCompletion: null,
   contributions: [],
@@ -75,10 +52,8 @@ const makeGoal = (overrides: Partial<GoalFixture> = {}): GoalFixture => ({
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockGetSavingsGoals = vi.fn();
-
-vi.mock('@/actions/savings.actions', () => ({
-  getSavingsGoals: (...args: unknown[]) => mockGetSavingsGoals(...args),
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: mockRefresh }),
 }));
 
 vi.mock('@/lib/i18n', () => ({
@@ -99,11 +74,11 @@ vi.mock('@/lib/i18n', () => ({
 vi.mock('../SavingsGoalCard', () => ({
   SavingsGoalCard: vi.fn(
     (_props: {
-      goal: GoalFixture;
+      goal: SavingsGoalWithProgress;
       dictionary: Record<string, unknown>;
       locale: string;
       onContribute: (goalId: string) => void;
-      onEdit: (goal: GoalFixture) => void;
+      onEdit: (goal: SavingsGoalWithProgress) => void;
       onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
     }) => <article data-testid="goal-card" />
   ),
@@ -123,7 +98,7 @@ vi.mock('../CreateSavingsGoalModal', () => ({
 vi.mock('../EditSavingsGoalModal', () => ({
   EditSavingsGoalModal: vi.fn(
     (_props: {
-      goal: GoalFixture;
+      goal: SavingsGoalWithProgress;
       dictionary: Record<string, unknown>;
       locale: string;
       isOpen: boolean;
@@ -172,80 +147,50 @@ describe('SavingsGoalsGrid', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [] });
   });
 
-  const renderGrid = () => <SavingsGoalsGrid dictionary={defaultDictionary} locale="es-CO" />;
+  const renderGrid = (goals: SavingsGoalWithProgress[], loadError: string | null = null) =>
+    render(
+      <SavingsGoalsGrid
+        goals={goals}
+        loadError={loadError}
+        dictionary={defaultDictionary}
+        locale="es-CO"
+      />
+    );
 
-  it('should show a skeleton while goals are loading', () => {
-    mockGetSavingsGoals.mockReturnValue(new Promise<never>(() => {}));
+  it('should show the empty state with an add-goal button', () => {
+    renderGrid([]);
 
-    const { container } = render(renderGrid());
-
-    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(4);
-  });
-
-  it('should show the error alert and allow retry', async () => {
-    mockGetSavingsGoals
-      .mockResolvedValueOnce({ success: false, error: 'load failed' })
-      .mockResolvedValueOnce({ success: true, data: [makeGoal()] });
-
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('load failed');
-    });
-
-    fireEvent.click(screen.getByText('Reintentar'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('goal-card')).toBeInTheDocument();
-    });
-  });
-
-  it('should show the empty state with an add-goal button', async () => {
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [] });
-
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByText('No hay metas')).toBeInTheDocument();
-    });
+    expect(screen.getByText('No hay metas')).toBeInTheDocument();
     expect(screen.getByText('Agregar meta')).toBeInTheDocument();
   });
 
-  it('should show the goal count header and cards when goals exist', async () => {
-    mockGetSavingsGoals.mockResolvedValue({
-      success: true,
-      data: [makeGoal(), makeGoal({ id: 'clh99999999999999999999', name: 'Fondo de Emergencia' })],
-    });
+  it('should show the goal count header and cards when goals exist', () => {
+    renderGrid([
+      makeGoal(),
+      makeGoal({ id: 'clh99999999999999999999', name: 'Fondo de Emergencia' }),
+    ]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByText('2 metas')).toBeInTheDocument();
-    });
+    expect(screen.getByText('2 metas')).toBeInTheDocument();
     expect(screen.getAllByTestId('goal-card')).toHaveLength(2);
   });
 
-  it('should use singular "meta" when there is exactly one goal', async () => {
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [makeGoal()] });
+  it('should use singular "meta" when there is exactly one goal', () => {
+    renderGrid([makeGoal()]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByText('1 meta')).toBeInTheDocument();
-    });
+    expect(screen.getByText('1 meta')).toBeInTheDocument();
   });
 
-  it('should open the CreateSavingsGoalModal when add-goal is clicked', async () => {
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [makeGoal()] });
+  it('should show the error alert with a retry button when loadError is set', () => {
+    renderGrid([], 'Error al cargar metas');
 
-    render(renderGrid());
+    expect(screen.getByRole('alert')).toHaveTextContent('Error al cargar metas');
+    expect(screen.getByText('Reintentar')).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByText('1 meta')).toBeInTheDocument();
-    });
+  it('should open the CreateSavingsGoalModal when add-goal is clicked', () => {
+    renderGrid([makeGoal()]);
 
     fireEvent.click(screen.getByText('Agregar meta'));
 
@@ -253,21 +198,11 @@ describe('SavingsGoalsGrid', () => {
     expect(calls[calls.length - 1][0].isOpen).toBe(true);
   });
 
-  it('should open EditSavingsGoalModal when a goal is edited', async () => {
+  it('should open EditSavingsGoalModal when a goal is edited', () => {
     const goal = makeGoal();
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [goal] });
+    renderGrid([goal]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByTestId('goal-card')).toBeInTheDocument();
-    });
-
-    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0] as unknown as {
-      onContribute: (goalId: string) => void;
-      onEdit: (goal: GoalFixture) => void;
-      onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
-    };
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
     act(() => {
       cardProps.onEdit(goal);
     });
@@ -277,21 +212,11 @@ describe('SavingsGoalsGrid', () => {
     expect(calls[calls.length - 1][0].goal).toEqual(goal);
   });
 
-  it('should open ContributeModal with the goal id when contributing', async () => {
+  it('should open ContributeModal with the goal id when contributing', () => {
     const goal = makeGoal();
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [goal] });
+    renderGrid([goal]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByTestId('goal-card')).toBeInTheDocument();
-    });
-
-    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0] as unknown as {
-      onContribute: (goalId: string) => void;
-      onEdit: (goal: GoalFixture) => void;
-      onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
-    };
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
     act(() => {
       cardProps.onContribute(goal.id);
     });
@@ -301,21 +226,11 @@ describe('SavingsGoalsGrid', () => {
     expect(calls[calls.length - 1][0].isOpen).toBe(true);
   });
 
-  it('should open DeleteGoalModal with goal metadata when deleting', async () => {
+  it('should open DeleteGoalModal with goal metadata when deleting', () => {
     const goal = makeGoal();
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [goal] });
+    renderGrid([goal]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByTestId('goal-card')).toBeInTheDocument();
-    });
-
-    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0] as unknown as {
-      onContribute: (goalId: string) => void;
-      onEdit: (goal: GoalFixture) => void;
-      onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
-    };
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
     act(() => {
       cardProps.onDelete(goal.id, goal.name, true);
     });
@@ -327,21 +242,11 @@ describe('SavingsGoalsGrid', () => {
     expect(calls[calls.length - 1][0].isOpen).toBe(true);
   });
 
-  it('should reload goals when a modal is closed', async () => {
+  it('should refresh server data when a modal is closed', async () => {
     const goal = makeGoal();
-    mockGetSavingsGoals.mockResolvedValue({ success: true, data: [goal] });
+    renderGrid([goal]);
 
-    render(renderGrid());
-
-    await waitFor(() => {
-      expect(screen.getByTestId('goal-card')).toBeInTheDocument();
-    });
-
-    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0] as unknown as {
-      onContribute: (goalId: string) => void;
-      onEdit: (goal: GoalFixture) => void;
-      onDelete: (goalId: string, goalName: string, hasContributions: boolean) => void;
-    };
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
     act(() => {
       cardProps.onDelete(goal.id, goal.name, false);
     });
@@ -351,14 +256,79 @@ describe('SavingsGoalsGrid', () => {
       expect(calls[calls.length - 1][0].isOpen).toBe(true);
     });
 
-    const callsBefore = mockGetSavingsGoals.mock.calls.length;
     const deleteProps = vi.mocked(DeleteGoalModal).mock.calls.at(-1)![0];
     act(() => {
       deleteProps.onClose();
     });
 
     await waitFor(() => {
-      expect(mockGetSavingsGoals.mock.calls.length).toBeGreaterThan(callsBefore);
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('should refresh server data when the create modal closes in a NON-empty state', async () => {
+    const goal = makeGoal();
+    renderGrid([goal]);
+
+    fireEvent.click(screen.getByText('Agregar meta'));
+
+    const calls = vi.mocked(CreateSavingsGoalModal).mock.calls;
+    await waitFor(() => {
+      expect(calls.at(-1)![0].isOpen).toBe(true);
+    });
+
+    act(() => {
+      calls.at(-1)![0].onClose();
+    });
+
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('should refresh server data when the edit modal closes in a NON-empty state', async () => {
+    const goal = makeGoal();
+    renderGrid([goal]);
+
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
+    act(() => {
+      cardProps.onEdit(goal);
+    });
+
+    const calls = vi.mocked(EditSavingsGoalModal).mock.calls;
+    await waitFor(() => {
+      expect(calls.at(-1)![0].isOpen).toBe(true);
+    });
+
+    act(() => {
+      calls.at(-1)![0].onClose();
+    });
+
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('should refresh server data when the contribute modal closes in a NON-empty state', async () => {
+    const goal = makeGoal();
+    renderGrid([goal]);
+
+    const cardProps = vi.mocked(SavingsGoalCard).mock.calls[0][0];
+    act(() => {
+      cardProps.onContribute(goal.id);
+    });
+
+    const calls = vi.mocked(ContributeModal).mock.calls;
+    await waitFor(() => {
+      expect(calls.at(-1)![0].isOpen).toBe(true);
+    });
+
+    act(() => {
+      calls.at(-1)![0].onClose();
+    });
+
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalled();
     });
   });
 });

@@ -1,118 +1,112 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, PiggyBank } from 'lucide-react';
 import { get } from '@/lib/i18n';
-import { getSavingsGoals } from '@/actions/savings.actions';
-import type { SavingsGoal, SavingsContribution } from '@prisma/client';
+import type { SavingsGoalWithProgress } from '@/types/savings';
 import { SavingsGoalCard } from './SavingsGoalCard';
 import { CreateSavingsGoalModal } from './CreateSavingsGoalModal';
 import { EditSavingsGoalModal } from './EditSavingsGoalModal';
 import { ContributeModal } from './ContributeModal';
 import { DeleteGoalModal } from './DeleteGoalModal';
 
-interface GoalWithProgress extends Omit<
-  SavingsGoal,
-  'targetAmountCents' | 'currentAmountCents' | 'monthlyContributionCents'
-> {
-  targetAmountCents: number;
-  currentAmountCents: number;
-  monthlyContributionCents: number | null;
-  progressPercentage: number;
-  projectedCompletion: string | null;
-  contributions: Array<Omit<SavingsContribution, 'amountCents'> & { amountCents: number }>;
-  linkedAccount?: { id: string; name: string; currency: string } | null;
+interface DeletingGoalState {
+  id: string;
+  name: string;
+  hasContributions: boolean;
 }
 
 interface SavingsGoalsGridProps {
+  /** Goals + progress loaded on the server page. */
+  goals: SavingsGoalWithProgress[];
+  /** Resolved error message (i18n) when the server fetch failed, else null. */
+  loadError: string | null;
   dictionary: Record<string, unknown>;
   locale: string;
 }
 
-export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGridProps>) {
-  const [goals, setGoals] = useState<GoalWithProgress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function SavingsGoalsGrid({
+  goals,
+  loadError,
+  dictionary,
+  locale,
+}: Readonly<SavingsGoalsGridProps>) {
+  const router = useRouter();
 
-  // Modal states
+  // Modal states (UI only). Initial data always comes from server props; after
+  // any mutation the page is re-rendered server-side via router.refresh().
   const [showCreate, setShowCreate] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<GoalWithProgress | null>(null);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoalWithProgress | null>(null);
   const [contributingGoalId, setContributingGoalId] = useState<string | null>(null);
-  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
-  const [deletingGoalName, setDeletingGoalName] = useState('');
-  const [deletingHasContributions, setDeletingHasContributions] = useState(false);
+  const [deletingGoal, setDeletingGoal] = useState<DeletingGoalState | null>(null);
 
-  const loadGoals = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getSavingsGoals({});
-      if (res.success && res.data) {
-        setGoals(res.data as unknown as GoalWithProgress[]);
-      } else {
-        setError(res.error ?? get(dictionary, 'errors.loadFailed'));
-      }
-    } catch {
-      setError(get(dictionary, 'errors.loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [dictionary]);
+  // Each modal calls onClose() twice per close cycle: once directly from its
+  // submit handler after a successful mutation and once via the native
+  // <dialog> 'close' event ~240ms later (fade-out). Both fire router.refresh(),
+  // so two overlapping refreshes race and can intermittently leave stale
+  // server-rendered DOM after a mutation. Coalesce the duplicate; the guard is
+  // reset whenever a modal opens so genuinely consecutive mutations always
+  // refresh.
+  const lastRefreshAtRef = useRef(0);
 
-  useEffect(() => {
-    const id = setTimeout(() => {
-      loadGoals();
-    }, 0);
-    return () => clearTimeout(id);
-  }, [loadGoals]);
+  const refreshOnce = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < 1000) return;
+    lastRefreshAtRef.current = now;
+    router.refresh();
+  }, [router]);
 
   const handleContribute = useCallback((goalId: string) => {
+    lastRefreshAtRef.current = 0;
     setContributingGoalId(goalId);
   }, []);
 
-  const handleEdit = useCallback((goal: GoalWithProgress) => {
+  const handleEdit = useCallback((goal: SavingsGoalWithProgress) => {
+    lastRefreshAtRef.current = 0;
     setEditingGoal(goal);
   }, []);
 
   const handleDelete = useCallback(
     (goalId: string, goalName: string, hasContributions: boolean) => {
-      setDeletingGoalId(goalId);
-      setDeletingGoalName(goalName);
-      setDeletingHasContributions(hasContributions);
+      lastRefreshAtRef.current = 0;
+      setDeletingGoal({ id: goalId, name: goalName, hasContributions });
     },
     []
   );
 
-  const handleModalClose = useCallback(() => {
-    loadGoals();
-  }, [loadGoals]);
+  const handleCreateClose = useCallback(() => {
+    setShowCreate(false);
+    refreshOnce();
+  }, [refreshOnce]);
 
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="app-shell rounded-2xl p-5 animate-pulse space-y-4">
-            <div className="h-1.5 bg-white/5 rounded-full" />
-            <div className="h-5 w-32 bg-white/5 rounded" />
-            <div className="h-2.5 bg-white/5 rounded-full" />
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-8 bg-white/5 rounded" />
-              <div className="h-8 bg-white/5 rounded" />
-            </div>
-            <div className="h-4 w-24 bg-white/5 rounded" />
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const handleEditClose = useCallback(() => {
+    setEditingGoal(null);
+    refreshOnce();
+  }, [refreshOnce]);
 
-  if (error) {
+  const handleContributeClose = useCallback(() => {
+    setContributingGoalId(null);
+    refreshOnce();
+  }, [refreshOnce]);
+
+  const handleDeleteClose = useCallback(() => {
+    setDeletingGoal(null);
+    refreshOnce();
+  }, [refreshOnce]);
+
+  const openCreate = useCallback(() => {
+    lastRefreshAtRef.current = 0;
+    setShowCreate(true);
+  }, []);
+
+  if (loadError) {
     return (
       <div role="alert" className="app-shell rounded-2xl p-6 text-center">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">{loadError}</p>
         <button
           type="button"
-          onClick={loadGoals}
+          onClick={refreshOnce}
           className="mt-3 px-4 py-2 rounded-xl bg-white/5 text-sm text-slate-300 hover:bg-white/10 transition-colors"
         >
           {get(dictionary, 'retry')}
@@ -121,79 +115,67 @@ export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGr
     );
   }
 
-  if (goals.length === 0) {
-    return (
-      <div className="app-shell rounded-2xl py-16 flex flex-col items-center gap-4 text-center">
-        <div className="p-4 rounded-2xl bg-violet-500/10 text-violet-400">
-          <PiggyBank className="w-8 h-8" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-white mb-1">{get(dictionary, 'noGoals')}</p>
-          <p className="text-xs text-slate-400 max-w-sm">{get(dictionary, 'noGoalsDesc')}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors"
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          {get(dictionary, 'addGoal')}
-        </button>
-
-        <CreateSavingsGoalModal
-          dictionary={dictionary}
-          locale={locale}
-          isOpen={showCreate}
-          onClose={() => {
-            setShowCreate(false);
-            handleModalClose();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <>
-      {/* Header with add button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-          {goals.length} {goals.length === 1 ? get(dictionary, 'goal') : get(dictionary, 'goals')}
-        </h2>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-          {get(dictionary, 'addGoal')}
-        </button>
-      </div>
+      {goals.length === 0 ? (
+        <div className="app-shell rounded-2xl py-16 flex flex-col items-center gap-4 text-center">
+          <div className="p-4 rounded-2xl bg-violet-500/10 text-violet-400">
+            <PiggyBank className="w-8 h-8" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white mb-1">{get(dictionary, 'noGoals')}</p>
+            <p className="text-xs text-slate-400 max-w-sm">{get(dictionary, 'noGoalsDesc')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            {get(dictionary, 'addGoal')}
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Header with add button */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              {goals.length}{' '}
+              {goals.length === 1 ? get(dictionary, 'goal') : get(dictionary, 'goals')}
+            </h2>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              {get(dictionary, 'addGoal')}
+            </button>
+          </div>
 
-      {/* Goals grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {goals.map((goal) => (
-          <SavingsGoalCard
-            key={goal.id}
-            goal={goal}
-            dictionary={dictionary}
-            locale={locale}
-            onContribute={handleContribute}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
-        ))}
-      </div>
+          {/* Goals grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {goals.map((goal) => (
+              <SavingsGoalCard
+                key={goal.id}
+                goal={goal}
+                dictionary={dictionary}
+                locale={locale}
+                onContribute={handleContribute}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Modals */}
       <CreateSavingsGoalModal
         dictionary={dictionary}
         locale={locale}
         isOpen={showCreate}
-        onClose={() => {
-          setShowCreate(false);
-          handleModalClose();
-        }}
+        onClose={handleCreateClose}
       />
 
       {editingGoal && (
@@ -201,11 +183,8 @@ export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGr
           goal={editingGoal}
           dictionary={dictionary}
           locale={locale}
-          isOpen={!!editingGoal}
-          onClose={() => {
-            setEditingGoal(null);
-            handleModalClose();
-          }}
+          isOpen
+          onClose={handleEditClose}
         />
       )}
 
@@ -214,25 +193,19 @@ export function SavingsGoalsGrid({ dictionary, locale }: Readonly<SavingsGoalsGr
           goalId={contributingGoalId}
           dictionary={dictionary}
           locale={locale}
-          isOpen={!!contributingGoalId}
-          onClose={() => {
-            setContributingGoalId(null);
-            handleModalClose();
-          }}
+          isOpen
+          onClose={handleContributeClose}
         />
       )}
 
-      {deletingGoalId && (
+      {deletingGoal && (
         <DeleteGoalModal
-          goalId={deletingGoalId}
-          goalName={deletingGoalName}
-          hasContributions={deletingHasContributions}
+          goalId={deletingGoal.id}
+          goalName={deletingGoal.name}
+          hasContributions={deletingGoal.hasContributions}
           dictionary={dictionary}
-          isOpen={!!deletingGoalId}
-          onClose={() => {
-            setDeletingGoalId(null);
-            handleModalClose();
-          }}
+          isOpen
+          onClose={handleDeleteClose}
         />
       )}
     </>

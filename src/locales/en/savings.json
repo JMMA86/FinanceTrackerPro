@@ -34,6 +34,7 @@
   "sourceAccount": "Source account",
   "confirmContribute": "Confirm Contribution",
   "progress": "Progress",
+  "currentProgress": "Current progress",
   "target": "Target",
   "saved": "Saved",
   "remaining": "Remaining",
@@ -46,7 +47,8 @@
   "totalSaved": "Total Saved",
   "totalTargets": "Total Targets",
   "overallProgress": "Overall Progress",
-  "activeGoals": "Active Goals",
+  "activeGoal": "active goal",
+  "activeGoals": "active goals",
   "completedGoals": "Completed",
   "thisMonth": "This Month",
   "maxSpendable": "Available to Spend",
@@ -63,7 +65,20 @@
   "retry": "Retry",
   "goal": "goal",
   "goals": "goals",
-  "status": "Status",
+  "status": {
+    "label": "Status",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "colorNames": {
+    "violet": "Violet",
+    "blue": "Blue",
+    "emerald": "Emerald",
+    "amber": "Amber",
+    "red": "Red",
+    "pink": "Pink"
+  },
   "recentContributions": "Recent contributions",
   "overdraftWarning": "Your expenses and savings commitments exceed your income this month.",
   "deadlineToday": "Today",
@@ -80,5 +95,6 @@
     "contributeFailed": "Could not process contribution",
     "sessionInvalid": "Your session expired. Please sign in again.",
     "sourceAccountRequired": "Select a source account"
-  }
+  },
+  "metaDescription": "Set savings goals and track your financial progress."
 }

@@ -12,13 +12,19 @@ import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 
 const CURRENCIES = ['COP', 'USD', 'EUR'] as const;
 const GOAL_TYPES = ['ANNUAL', 'SHORT_TERM', 'EMERGENCY', 'CUSTOM'] as const;
-const COLOR_PRESETS = [
-  'from-violet-500 to-purple-500',
-  'from-blue-500 to-cyan-500',
-  'from-emerald-500 to-teal-500',
-  'from-amber-500 to-orange-500',
-  'from-red-500 to-rose-500',
-  'from-pink-500 to-fuchsia-500',
+
+interface ColorPreset {
+  value: string;
+  labelKey: string;
+}
+
+const COLOR_PRESETS: ColorPreset[] = [
+  { value: 'from-violet-500 to-purple-500', labelKey: 'colorNames.violet' },
+  { value: 'from-blue-500 to-cyan-500', labelKey: 'colorNames.blue' },
+  { value: 'from-emerald-500 to-teal-500', labelKey: 'colorNames.emerald' },
+  { value: 'from-amber-500 to-orange-500', labelKey: 'colorNames.amber' },
+  { value: 'from-red-500 to-rose-500', labelKey: 'colorNames.red' },
+  { value: 'from-pink-500 to-fuchsia-500', labelKey: 'colorNames.pink' },
 ];
 
 interface CreateSavingsGoalModalProps {
@@ -30,7 +36,7 @@ interface CreateSavingsGoalModalProps {
 
 export function CreateSavingsGoalModal({
   dictionary,
-  locale: _locale,
+  locale,
   isOpen,
   onClose,
 }: Readonly<CreateSavingsGoalModalProps>) {
@@ -61,6 +67,10 @@ export function CreateSavingsGoalModal({
     if (!dialog) return;
     if (isOpen) {
       dialog.showModal();
+      // Native showModal focuses the FIRST focusable element, which is the
+      // (now aria-hidden) backdrop. Move focus to the dialog heading instead so
+      // keyboard/screen-reader users land inside the panel.
+      dialog.querySelector<HTMLElement>('[data-modal-heading]')?.focus();
     } else if (dialog.open) {
       setIsVisible(false);
       setTimeout(() => {
@@ -140,9 +150,11 @@ export function CreateSavingsGoalModal({
       aria-labelledby="create-savings-goal-title"
       className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
     >
-      <button
-        type="button"
-        aria-label="Close"
+      {/* Non-focusable backdrop: click-to-close only (X, Cancel and Esc remain).
+          aria-hidden keeps it out of the accessibility tree and the tab order
+          (WCAG 2.2 — no phantom focus / double "Close" announcement). */}
+      <div
+        aria-hidden="true"
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -159,14 +171,19 @@ export function CreateSavingsGoalModal({
         }}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 sticky top-0 bg-slate-900 z-10">
-          <h2 id="create-savings-goal-title" className="text-base font-semibold text-white">
+          <h2
+            id="create-savings-goal-title"
+            data-modal-heading
+            tabIndex={-1}
+            className="text-base font-semibold text-white focus:outline-none"
+          >
             {get(dictionary, 'createGoal')}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            aria-label="Close"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
+            aria-label={get(dictionary, 'close')}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
           >
             <X className="w-4 h-4" />
           </button>
@@ -245,6 +262,7 @@ export function CreateSavingsGoalModal({
                 setTargetCents(v);
                 setValue('targetAmountCents', v);
               }}
+              locale={locale}
               aria-invalid={!!errors.targetAmountCents}
               aria-describedby={errors.targetAmountCents ? 'savings-target-error' : undefined}
               className={`${inputCls} font-mono tabular-nums`}
@@ -285,6 +303,7 @@ export function CreateSavingsGoalModal({
                 setMonthlyCents(v);
                 setValue('monthlyContributionCents', v || undefined);
               }}
+              locale={locale}
               className={`${inputCls} font-mono tabular-nums`}
             />
           </div>
@@ -311,15 +330,15 @@ export function CreateSavingsGoalModal({
             <div className="flex items-center gap-2 flex-wrap">
               {COLOR_PRESETS.map((preset) => (
                 <button
-                  key={preset}
+                  key={preset.value}
                   type="button"
-                  aria-label={preset}
+                  aria-label={get(dictionary, preset.labelKey)}
                   onClick={() => {
-                    setSelectedColor(preset);
-                    setValue('color', preset);
+                    setSelectedColor(preset.value);
+                    setValue('color', preset.value);
                   }}
-                  className={`w-7 h-7 rounded-full bg-gradient-to-r ${preset} transition-all ${
-                    selectedColor === preset
+                  className={`w-7 h-7 rounded-full bg-gradient-to-r ${preset.value} transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:ring-violet-400 ${
+                    selectedColor === preset.value
                       ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'
                       : 'opacity-70 hover:opacity-100 hover:scale-105'
                   }`}
@@ -327,8 +346,8 @@ export function CreateSavingsGoalModal({
               ))}
               <label
                 aria-label={get(dictionary, 'customColor')}
-                className={`relative w-7 h-7 rounded-full overflow-hidden cursor-pointer transition-all ${
-                  selectedColor && !COLOR_PRESETS.includes(selectedColor)
+                className={`relative w-7 h-7 rounded-full overflow-hidden cursor-pointer transition-all has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-slate-900 has-[:focus-visible]:ring-violet-400 ${
+                  selectedColor && !COLOR_PRESETS.some((p) => p.value === selectedColor)
                     ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-violet-400 scale-110'
                     : 'opacity-70 hover:opacity-100 hover:scale-105'
                 }`}
@@ -342,7 +361,7 @@ export function CreateSavingsGoalModal({
                     setSelectedColor(e.target.value);
                     setValue('color', e.target.value);
                   }}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer focus-visible:outline-none"
                 />
               </label>
             </div>

@@ -5,6 +5,7 @@ interface FormattedNumericInputProps {
   onChange: (value: number) => void;
   suffix?: string;
   maxValue?: number;
+  locale?: string;
   id?: string;
   className?: string;
   'aria-invalid'?: boolean | 'true' | 'false';
@@ -17,12 +18,13 @@ export function FormattedNumericInput({
   onChange,
   suffix,
   maxValue = 9_999_999_999_999,
+  locale = 'es-CO',
   id,
   className,
   ...ariaProps
 }: Readonly<FormattedNumericInputProps>) {
   function format(v: number): string {
-    const formatted = (v / 100).toLocaleString('es-CO', {
+    const formatted = (v / 100).toLocaleString(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

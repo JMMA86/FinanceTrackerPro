@@ -155,8 +155,8 @@ describe('CreateSavingsGoalModal', () => {
       />
     );
 
-    // Preset colors are rendered as gradient swatch buttons (aria-label matches Tailwind gradient class)
-    const colorSwatchButtons = container.querySelectorAll('button[aria-label^="from-"]');
+    // Preset colors are rendered as gradient swatch buttons
+    const colorSwatchButtons = container.querySelectorAll('button[class*="bg-gradient-to-r"]');
     expect(colorSwatchButtons.length).toBeGreaterThanOrEqual(6);
 
     // A native color picker input is also present for custom hex colors
@@ -261,5 +261,160 @@ describe('CreateSavingsGoalModal', () => {
     );
 
     expect(screen.getByText('Cancelar')).toBeInTheDocument();
+  });
+
+  it('should submit valid data and call createSavingsGoal then onClose', async () => {
+    const { createSavingsGoal } = await import('@/actions/savings.actions');
+    (createSavingsGoal as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: { id: 'new-goal' },
+    });
+
+    const { container } = render(
+      <CreateSavingsGoalModal
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    // Wait for the open-effect rAF so a late reset cannot clobber state.
+    await waitFor(() => {
+      const content = container.querySelector('div[class*="max-w-lg"]') as HTMLElement | null;
+      expect(content?.style.opacity).toBe('1');
+    });
+
+    fireEvent.change(screen.getByLabelText('Nombre de la meta'), {
+      target: { value: 'Fondo de Emergencia' },
+    });
+    const targetInput = screen.getByTestId('numeric-input-savings-target');
+    fireEvent.change(targetInput, { target: { value: '250000' } });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSavingsGoal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Fondo de Emergencia',
+          targetAmountCents: 250000,
+          currency: 'COP',
+          type: 'CUSTOM',
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  it('should show a client-side error when the target amount is 0', async () => {
+    const { container } = render(
+      <CreateSavingsGoalModal
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nombre de la meta'), {
+      target: { value: 'Meta sin monto' },
+    });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Target amount must be positive')).toBeInTheDocument();
+    });
+    const { createSavingsGoal } = await import('@/actions/savings.actions');
+    expect(createSavingsGoal).not.toHaveBeenCalled();
+  });
+
+  it('should show a client-side error when the target amount is negative', async () => {
+    const { container } = render(
+      <CreateSavingsGoalModal
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nombre de la meta'), {
+      target: { value: 'Meta negativa' },
+    });
+    const targetInput = screen.getByTestId('numeric-input-savings-target');
+    fireEvent.change(targetInput, { target: { value: '-1000' } });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Target amount must be positive')).toBeInTheDocument();
+    });
+    const { createSavingsGoal } = await import('@/actions/savings.actions');
+    expect(createSavingsGoal).not.toHaveBeenCalled();
+  });
+
+  it('should allow filling the monthly contribution field', async () => {
+    render(
+      <CreateSavingsGoalModal
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    const monthlyInput = screen.getByTestId('numeric-input-savings-monthly');
+    fireEvent.change(monthlyInput, { target: { value: '50000' } });
+    expect(monthlyInput).toHaveValue(50000);
+  });
+
+  it('should submit with the custom color when the native color picker is used', async () => {
+    const { createSavingsGoal } = await import('@/actions/savings.actions');
+    (createSavingsGoal as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      data: { id: 'new-goal' },
+    });
+
+    const { container } = render(
+      <CreateSavingsGoalModal
+        dictionary={defaultDictionary}
+        locale="es-CO"
+        isOpen={true}
+        onClose={mockOnClose}
+      />
+    );
+
+    await waitFor(() => {
+      const content = container.querySelector('div[class*="max-w-lg"]') as HTMLElement | null;
+      expect(content?.style.opacity).toBe('1');
+    });
+
+    fireEvent.change(screen.getByLabelText('Nombre de la meta'), {
+      target: { value: 'Meta con color' },
+    });
+    const targetInput = screen.getByTestId('numeric-input-savings-target');
+    fireEvent.change(targetInput, { target: { value: '100000' } });
+
+    // Native color input path (line ~356-362).
+    const colorInput = container.querySelector('input[type="color"]') as HTMLInputElement;
+    fireEvent.change(colorInput, { target: { value: '#ff0000' } });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSavingsGoal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Meta con color',
+          color: '#ff0000',
+        })
+      );
+    });
   });
 });

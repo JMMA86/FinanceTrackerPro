@@ -235,6 +235,19 @@ describe('UpdateSavingsGoalSchema', () => {
       UpdateSavingsGoalSchema.parse({ ...validInput, monthlyContributionCents: -1 })
     ).toThrow('Monthly contribution must be positive');
   });
+
+  it('should accept explicit null for monthlyContributionCents to clear the plan', () => {
+    const result = UpdateSavingsGoalSchema.parse({
+      ...validInput,
+      monthlyContributionCents: null,
+    });
+    expect(result.monthlyContributionCents).toBeNull();
+  });
+
+  it('should leave monthlyContributionCents undefined when the field is absent', () => {
+    const result = UpdateSavingsGoalSchema.parse(validInput);
+    expect(result.monthlyContributionCents).toBeUndefined();
+  });
 });
 
 // ============================================================================

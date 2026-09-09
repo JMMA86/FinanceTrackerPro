@@ -27,6 +27,7 @@ import {
   ValidationError,
   NegativeBalanceError,
   CreditLimitExceededError,
+  TransactionLinkedToSavingsError,
 } from '@/lib/errors/api-errors';
 import {
   GetAllTransactionsSchema,
@@ -273,7 +274,7 @@ async function deleteTransactionInternal(input: unknown) {
   const { transactionId } = DeleteTransactionSchema.parse(input);
 
   // Rate limiting (Rule 10)
-  const { ipAddress } = await getClientInfo();
+  const { ipAddress, userAgent } = await getClientInfo();
   const rateLimit = await checkApiRateLimit(session.userId, 'TRANSACTION_DELETE' as ApiAction);
   if (!rateLimit.allowed) {
     log.warn(
@@ -298,6 +299,115 @@ async function deleteTransactionInternal(input: unknown) {
     if (!transaction?.isActive) throw new NotFoundError('Transaction', transactionId);
     if (transaction.userId !== session.userId)
       throw new UnauthorizedError('Transaction does not belong to user');
+
+    // M2: a transaction that funds an active savings contribution is the
+    // source of truth for the goal cache. Deleting it cascades atomically:
+    // the linked contribution is soft-deleted and the goal cache is
+    // decremented, keeping the ledger (transactions + contributions) the
+    // single source of truth (Rule 11/13).
+    const activeLinkedContributions = await tx.savingsContribution.findMany({
+      where: { transactionId, isActive: true },
+      select: { id: true, goalId: true, amountCents: true },
+    });
+
+    for (const contribution of activeLinkedContributions) {
+      const contributionAmount = Number(contribution.amountCents);
+
+      // 1. Soft-delete the contribution (Rule 6) with audit trail (Rule 14)
+      await tx.savingsContribution.update({
+        where: { id: contribution.id },
+        data: {
+          isActive: false,
+          deletedAt: new Date(),
+          lastModifiedBy: session.userId,
+          ipAddress,
+          userAgent,
+        },
+      });
+
+      // 2. Ownership guard (defense in depth, Rule 7): the linked goal must
+      //    belong to the session user. A corrupt contribution pointing at
+      //    another user's goal must never decrement or revert that goal — skip
+      //    the cache writes and leave reconciliation to correct the ledger.
+      const goal = await tx.savingsGoal.findFirst({
+        where: { id: contribution.goalId, userId: session.userId },
+        select: {
+          id: true,
+          targetAmountCents: true,
+        },
+      });
+
+      if (!goal) {
+        log.warn(
+          {
+            contributionId: contribution.id,
+            goalId: contribution.goalId,
+          },
+          '[SAVINGS] Cascade skipped — goal not found or not owned by user'
+        );
+        continue;
+      }
+
+      // 3. Revert the goal cache atomically with a CONDITIONAL update so the
+      //    cache is never forced negative. If the goal has drifted below the
+      //    contribution amount (0 rows matched), we do NOT force a negative
+      //    value — the DB CHECK and reconcileGoalBalances on the next read
+      //    will correct it from the ledger (source of truth).
+      const revertResult = await tx.savingsGoal.updateMany({
+        where: {
+          id: contribution.goalId,
+          userId: session.userId,
+          currentAmountCents: { gte: contributionAmount },
+        },
+        data: {
+          currentAmountCents: { decrement: contributionAmount },
+          lastModifiedBy: session.userId,
+          ipAddress,
+          userAgent,
+        },
+      });
+
+      if (revertResult.count === 0) {
+        log.warn(
+          {
+            contributionId: contribution.id,
+            goalId: contribution.goalId,
+            amountCents: contributionAmount,
+          },
+          '[SAVINGS] Goal cache drift on cascade delete — left for reconciliation'
+        );
+      }
+
+      // 4. If the goal was auto-completed and the reverted cache drops it below
+      //    target, restore it to ACTIVE. This is a CONDITIONAL updateMany: the
+      //    WHERE clause re-evaluates the live cache against the target, so a
+      //    concurrent contribution that re-completed the goal between our read
+      //    and this write is never overwritten back to ACTIVE (the WHERE no
+      //    longer matches when currentAmountCents >= targetAmountCents).
+      await tx.savingsGoal.updateMany({
+        where: {
+          id: contribution.goalId,
+          userId: session.userId,
+          status: 'COMPLETED',
+          currentAmountCents: { lt: goal.targetAmountCents },
+        },
+        data: {
+          status: 'ACTIVE',
+          lastModifiedBy: session.userId,
+          ipAddress,
+          userAgent,
+        },
+      });
+
+      log.info(
+        {
+          contributionId: contribution.id,
+          goalId: contribution.goalId,
+          amountCents: contributionAmount,
+        },
+        '[SAVINGS] Contribution cascade-deleted with transaction'
+      );
+    }
 
     const account = await tx.account.findUnique({
       where: { id: transaction.accountId },
@@ -364,6 +474,7 @@ async function deleteTransactionInternal(input: unknown) {
   revalidatePath('/[lang]/transactions', 'page');
   revalidatePath('/[lang]/dashboard', 'page');
   revalidatePath('/[lang]/accounts', 'page');
+  revalidatePath('/[lang]/savings', 'page');
 }
 
 export const deleteTransaction = safeAction(deleteTransactionInternal);
@@ -456,6 +567,28 @@ function computeBalanceAdjustment(
 // updateTransaction — Edit description, amount, date, or category atomically
 // ============================================================================
 
+/**
+ * M2 guard: a transaction that funds an active savings contribution is the
+ * source of truth for the goal cache. Editing its amount/date would
+ * desynchronize the contribution ledger (amount no longer matches the cached
+ * balance, or the monthly window shifts) — reject those fields. Non-monetary
+ * edits (e.g. description, category) are safe and allowed.
+ */
+async function assertNoActiveLinkedSavingsContribution(
+  tx: Prisma.TransactionClient,
+  transactionId: string,
+  changesMonetaryFields: boolean
+): Promise<void> {
+  if (!changesMonetaryFields) return;
+  const activeLinkedContribution = await tx.savingsContribution.findFirst({
+    where: { transactionId, isActive: true },
+    select: { id: true },
+  });
+  if (activeLinkedContribution) {
+    throw new TransactionLinkedToSavingsError();
+  }
+}
+
 async function updateTransactionInternal(input: unknown) {
   const session = await getSession();
   if (!session?.userId) throw new UnauthorizedError();
@@ -490,6 +623,19 @@ async function updateTransactionInternal(input: unknown) {
     if (transaction.userId !== session.userId) {
       throw new UnauthorizedError('Transaction does not belong to user');
     }
+
+    // M2: a transaction that funds an active savings contribution is the source
+    // of truth for the goal cache. Editing its amount/date would desynchronize
+    // the contribution ledger (amount no longer matches the cached balance, or
+    // the monthly window shifts) — reject those fields. Non-monetary edits
+    // (e.g. description, category) are safe and allowed.
+    const changesMonetaryFields =
+      validated.amountCents !== undefined || validated.date !== undefined;
+    await assertNoActiveLinkedSavingsContribution(
+      tx,
+      validated.transactionId,
+      changesMonetaryFields
+    );
 
     const account = await tx.account.findUnique({
       where: { id: transaction.accountId },

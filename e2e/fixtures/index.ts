@@ -38,6 +38,17 @@ export const SAVINGS_TEST_USER = {
 };
 
 /**
+ * Isolated user for savings.feature @empty scenarios — this user has NO goals
+ * and NO accounts, so the savings page must render the empty state. Never reuse
+ * another feature's user (the old empty-state test coupled to the auth user).
+ */
+export const SAVINGS_EMPTY_USER = {
+  email: process.env.E2E_SAVINGS_EMPTY_USER ?? 'savings-empty@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Empty Savings E2E User',
+};
+
+/**
  * Isolated user for credit-cards.feature — seeded with two bank accounts (funding
  * source + transfer pair) and two deterministic credit cards ("Visa E2E" with
  * debt, "Mastercard E2E" without debt). Consumption/payment/delete scenarios

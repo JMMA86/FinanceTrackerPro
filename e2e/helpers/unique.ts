@@ -28,6 +28,12 @@ export const UNIQUE_CARD_NAME_KEY = '__e2eUniqueCardName';
 /** localStorage key where the unique EDITED card name is stored (post-edit scenario). */
 export const UNIQUE_EDITED_CARD_NAME_KEY = '__e2eUniqueEditedCardName';
 
+/** localStorage key where the unique savings-goal name is stored for the current scenario. */
+export const UNIQUE_GOAL_NAME_KEY = '__e2eUniqueGoalName';
+
+/** localStorage key where the unique EDITED savings-goal name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_GOAL_NAME_KEY = '__e2eUniqueEditedGoalName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -110,5 +116,33 @@ export async function storeUniqueEditedCardName(page: Page, prefix: string): Pro
 export async function getStoredEditedCardName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_EDITED_CARD_NAME_KEY);
   if (!name) throw new Error('No unique edited credit-card name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped savings-goal name, stores it and returns it. */
+export async function storeUniqueGoalName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_GOAL_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique savings-goal name stored by the create/edit-goal step. */
+export async function getStoredGoalName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_GOAL_NAME_KEY);
+  if (!name) throw new Error('No unique savings-goal name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED savings-goal name, stores it and returns it. */
+export async function storeUniqueEditedGoalName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_GOAL_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED savings-goal name stored by the edit-goal step. */
+export async function getStoredEditedGoalName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_GOAL_NAME_KEY);
+  if (!name) throw new Error('No unique edited savings-goal name stored on the page');
   return name;
 }

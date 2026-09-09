@@ -1,65 +1,15 @@
-import { Suspense } from 'react';
 import { unstable_noStore } from 'next/cache';
 import type { Metadata } from 'next';
 import type { Locale } from '@/lib/i18n';
-import { getDictionary } from '@/lib/i18n';
+import { getDictionary, get, localeToBCP47 } from '@/lib/i18n';
 import { PiggyBank } from 'lucide-react';
 import { SavingsSummaryCards } from '@/components/savings/SavingsSummaryCards';
 import { SavingsGoalsGrid } from '@/components/savings/SavingsGoalsGrid';
 import { MaxSpendableCard } from '@/components/savings/MaxSpendableCard';
+import { getSavingsPageData } from './data';
 
 interface SavingsPageProps {
   params: Promise<{ lang: Locale }>;
-}
-
-const LOCALE_MAP: Record<string, string> = {
-  es: 'es-CO',
-  en: 'en-US',
-};
-
-function SummaryCardsSkeleton() {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="app-shell rounded-2xl p-5 animate-pulse">
-          <div className="h-4 w-20 bg-white/5 rounded mb-3" />
-          <div className="h-7 w-28 bg-white/5 rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function GoalsGridSkeleton() {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="app-shell rounded-2xl p-5 animate-pulse space-y-4">
-          <div className="h-1.5 bg-white/5 rounded-full" />
-          <div className="h-5 w-32 bg-white/5 rounded" />
-          <div className="h-2.5 bg-white/5 rounded-full" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="h-8 bg-white/5 rounded" />
-            <div className="h-8 bg-white/5 rounded" />
-          </div>
-          <div className="h-4 w-24 bg-white/5 rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MaxSpendableSkeleton() {
-  return (
-    <div className="app-shell rounded-2xl p-5 animate-pulse">
-      <div className="h-4 w-36 bg-white/5 rounded mb-4" />
-      <div className="space-y-3">
-        {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="h-8 bg-white/5 rounded" />
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export async function generateMetadata({ params }: Readonly<SavingsPageProps>): Promise<Metadata> {
@@ -67,10 +17,7 @@ export async function generateMetadata({ params }: Readonly<SavingsPageProps>): 
   const dict = await getDictionary(lang, 'savings');
 
   const title = `${dict.title as string} | FinanceTrackerPro`;
-  const description =
-    lang === 'es'
-      ? 'Define metas de ahorro y sigue tu progreso financiero.'
-      : 'Set savings goals and track your financial progress.';
+  const description = get(dict, 'metaDescription');
 
   return {
     title,
@@ -83,6 +30,15 @@ export async function generateMetadata({ params }: Readonly<SavingsPageProps>): 
       locale: lang === 'es' ? 'es_CO' : 'en_US',
       type: 'website',
     },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
   };
 }
 
@@ -91,10 +47,34 @@ export default async function SavingsPage({ params }: Readonly<SavingsPageProps>
   const { lang } = await params;
 
   const dictionary = await getDictionary(lang, 'savings');
-  const locale = LOCALE_MAP[lang] ?? 'es-CO';
+  const locale = localeToBCP47(lang);
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
+
+  // M4 (audit): all financial data is fetched ONCE on the server via a
+  // server-only data module (NOT 'use server' actions) and passed down as
+  // serializable props. Client components never call read actions; after a
+  // mutation they `router.refresh()` so this module re-runs.
+  //
+  // NOTE: the previous inline <Suspense fallback={<SavingsSkeleton />}> was
+  // removed on purpose. All reads above are top-level awaits, so the boundary
+  // never suspended and a resolved Suspense boundary around the whole page
+  // interfered with router.refresh() RSC reconciliation (payload fresh but the
+  // boundary subtree intermittently not patched). Route-level loading.tsx
+  // still provides the skeleton during navigation.
+  const {
+    goals,
+    summaryBuckets,
+    maxSpendableBuckets,
+    goalsError,
+    summaryError,
+    maxSpendableError,
+  } = await getSavingsPageData(month, year);
+
+  const goalsErrorMessage = goalsError ? get(dictionary, 'errors.loadFailed') : null;
+  const summaryErrorMessage = summaryError ? get(dictionary, 'errors.loadFailed') : null;
+  const maxSpendableErrorMessage = maxSpendableError ? get(dictionary, 'errors.loadFailed') : null;
 
   return (
     <div className="space-y-6">
@@ -109,26 +89,38 @@ export default async function SavingsPage({ params }: Readonly<SavingsPageProps>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <Suspense fallback={<SummaryCardsSkeleton />}>
-        <SavingsSummaryCards dictionary={dictionary} locale={locale} />
-      </Suspense>
+      {/* Summary cards — one 4-card row per currency bucket (never mixed) */}
+      <SavingsSummaryCards
+        buckets={summaryBuckets}
+        error={summaryErrorMessage}
+        dictionary={dictionary}
+        locale={locale}
+      />
 
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Goals grid (2/3 width) */}
         <div className="lg:col-span-2 space-y-4">
-          <Suspense fallback={<GoalsGridSkeleton />}>
-            <SavingsGoalsGrid dictionary={dictionary} locale={locale} />
-          </Suspense>
+          <SavingsGoalsGrid
+            goals={goals}
+            loadError={goalsErrorMessage}
+            dictionary={dictionary}
+            locale={locale}
+          />
         </div>
 
-        {/* Sidebar (1/3 width) */}
-        <div className="space-y-4">
-          <Suspense fallback={<MaxSpendableSkeleton />}>
-            <MaxSpendableCard dictionary={dictionary} locale={locale} month={month} year={year} />
-          </Suspense>
-        </div>
+        {/* Sidebar (1/3 width) — per-currency max spendable breakdown */}
+        {(!maxSpendableErrorMessage && maxSpendableBuckets.length > 0) ||
+        maxSpendableErrorMessage ? (
+          <aside aria-label={get(dictionary, 'maxSpendable')} className="space-y-4">
+            <MaxSpendableCard
+              buckets={maxSpendableBuckets}
+              error={maxSpendableErrorMessage}
+              dictionary={dictionary}
+              locale={locale}
+            />
+          </aside>
+        ) : null}
       </div>
     </div>
   );

@@ -93,7 +93,7 @@ describe('InvestmentTransactionsList', () => {
     render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Unexpected error loading transactions')).toBeInTheDocument();
+      expect(screen.getByText('unexpectedErrorLoading')).toBeInTheDocument();
     });
   });
 
@@ -144,6 +144,42 @@ describe('InvestmentTransactionsList', () => {
     await waitFor(() => {
       expect(screen.getByText('Bought 5 AAPL')).toBeInTheDocument();
       expect(screen.queryByText('buyLabel')).not.toBeInTheDocument();
+    });
+  });
+
+  it('should render depositLabel for TRANSFER_IN and withdrawalLabel for TRANSFER_OUT', async () => {
+    const transferIn = {
+      id: 't6',
+      type: 'TRANSFER_IN',
+      amountCents: 250000,
+      currency: 'USD',
+      description: null,
+      date: new Date('2024-03-05T09:00:00'),
+    };
+    const transferOut = {
+      id: 't7',
+      type: 'TRANSFER_OUT',
+      amountCents: -100000,
+      currency: 'USD',
+      description: null,
+      date: new Date('2024-03-06T09:00:00'),
+    };
+    mockGetInvestmentTransactions.mockResolvedValue({
+      success: true,
+      data: {
+        transactions: [transferIn, transferOut],
+        totalPages: 1,
+        total: 2,
+        page: 1,
+        pageSize: 20,
+      },
+    });
+
+    render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('depositLabel')).toBeInTheDocument();
+      expect(screen.getByText('withdrawalLabel')).toBeInTheDocument();
     });
   });
 

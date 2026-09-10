@@ -200,7 +200,7 @@ describe('CreateInvestmentModal', () => {
     await userEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockAddNotification).toHaveBeenCalledWith('success', 'Investment account created');
+      expect(mockAddNotification).toHaveBeenCalledWith('success', 'accountCreated');
     });
 
     expect(mockCloseModal).toHaveBeenCalled();

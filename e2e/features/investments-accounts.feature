@@ -45,11 +45,28 @@ Feature: Gestión de Cuentas de Inversión — Transacciones
     And abre el modal de depósito de inversión
     And selecciona la cuenta bancaria COP en el depósito
     And ingresa "500000" en el monto COP de depósito
-    And ingresa "4000" como tasa de cambio
+    And usa la tasa de cambio actual
     Then debe ver el estimado de recibo en el modal
     When envía el formulario de depósito
     Then el modal de depósito debe cerrarse
     And la tarjeta de inversión debe mostrar balance actualizado
+
+  # ============================================================================
+  # RETIRO
+  # ============================================================================
+
+  @investments @modal @withdraw
+  Scenario: Modal de retiro se abre con datos correctos
+    Given que el usuario de inversiones ha iniciado sesión
+    Given que existe una cuenta de inversión con saldo
+    When navega a la página de inversiones
+    And selecciona la cuenta de inversión "Mi Inversión USA"
+    And hace clic en "Retirar" en la página de inversiones
+    Then debe ver el modal de retiro con título "Retirar de Inversión"
+    And debe ver el campo "Cuenta de Destino" en el modal
+    And debe ver el campo "Cuenta de Origen (COP)" en el modal
+    And debe ver el campo "Monto a retirar" en el modal
+    And debe ver el campo "Tasa de Cambio" en el modal
 
   # ============================================================================
   # COMPRA DE ACTIVO

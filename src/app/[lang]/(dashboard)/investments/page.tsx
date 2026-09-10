@@ -55,11 +55,7 @@ export default async function InvestmentsPage({ params }: Readonly<InvestmentsPa
   return (
     <div className="space-y-6">
       <Suspense fallback={<InvestmentsLoading />}>
-        <InvestmentDashboard
-          accounts={accounts as Array<Record<string, unknown>>}
-          dictionary={dictionary}
-          locale={locale}
-        />
+        <InvestmentDashboard accounts={accounts} dictionary={dictionary} locale={locale} />
       </Suspense>
     </div>
   );

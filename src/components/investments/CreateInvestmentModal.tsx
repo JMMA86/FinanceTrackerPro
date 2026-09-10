@@ -26,6 +26,7 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
   const isOpen = activeModal === 'create-investment';
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [balanceCents, setBalanceCents] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -49,6 +50,9 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (isOpen) {
+      // Save the element that had focus before opening for restoration on close
+      const active = document.activeElement;
+      previousFocusRef.current = active instanceof HTMLElement ? active : null;
       dialog.showModal();
     } else if (dialog.open) {
       setIsVisible(false);
@@ -84,13 +88,20 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
 
   const handleDialogClose = () => {
     closeModal();
+    // Best-effort focus restoration (WCAG 2.2 AA): restore focus to the
+    // element that opened the modal if it is still connected to the document.
+    const prev = previousFocusRef.current;
+    if (prev && document.body.contains(prev)) {
+      prev.focus();
+    }
+    previousFocusRef.current = null;
   };
 
   async function onSubmit(data: CreateInvestmentAccountInput) {
     setSubmitError(null);
     const result = await createInvestmentAccount(data);
     if (result.success) {
-      addNotification('success', 'Investment account created');
+      addNotification('success', get(dictionary, 'accountCreated'));
       closeModal();
     } else {
       const msg =
@@ -111,12 +122,14 @@ export function CreateInvestmentModal({ dictionary }: Readonly<CreateInvestmentM
     <dialog
       ref={dialogRef}
       onClose={handleDialogClose}
+      aria-modal="true"
       aria-labelledby="create-investment-title"
       className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
     >
       <button
         type="button"
         aria-label="Close"
+        tabIndex={-1}
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}

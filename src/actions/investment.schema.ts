@@ -29,10 +29,11 @@ const InvestmentCurrencySchema = z.enum(['USD', 'EUR']);
 
 /**
  * Positive decimal string for quantities (supports fractional shares)
+ * Max 8 decimal places — aligned with Prisma's Decimal(20, 8) column
  */
 const DecimalQuantitySchema = z
   .string()
-  .regex(/^\d+(\.\d+)?$/, 'Must be a valid positive decimal number')
+  .regex(/^\d+(\.\d{1,8})?$/, 'Must be a valid positive decimal number (max 8 decimals)')
   .refine(
     (val) => {
       const num = Number.parseFloat(val);
@@ -71,7 +72,28 @@ export const DepositToInvestmentSchema = z.object({
   exchangeRate: z
     .number()
     .positive('Exchange rate must be positive')
-    .max(10000, 'Exchange rate seems unrealistic'),
+    .min(1000, 'Exchange rate seems unrealistic')
+    .max(6000, 'Exchange rate seems unrealistic'),
+  description: z.string().max(500).optional(),
+});
+
+/**
+ * Withdraw from investment account (USD/EUR) to bank account (COP) schema
+ */
+export const WithdrawFromInvestmentSchema = z.object({
+  idempotencyKey: UUIDv4Schema,
+  investmentAccountId: CUIDSchema,
+  toBankAccountId: CUIDSchema,
+  amountCents: z
+    .number()
+    .int('Amount must be an integer')
+    .min(1, 'Amount must be at least 1 cent')
+    .max(MAX_SAFE_CENTS, 'Amount exceeds maximum safe value'),
+  exchangeRate: z
+    .number()
+    .positive('Exchange rate must be positive')
+    .min(1000, 'Exchange rate seems unrealistic')
+    .max(6000, 'Exchange rate seems unrealistic'),
   description: z.string().max(500).optional(),
 });
 
@@ -135,14 +157,25 @@ export const GetStockPriceSchema = z.object({
   symbol: z.string().min(1).max(20).toUpperCase(),
 });
 
+/**
+ * Get current exchange rate schema
+ * `currency` is the foreign currency the COP rate is quoted against
+ * (defaults to USD); the returned rate is expressed in COP per foreign unit.
+ */
+export const GetExchangeRateSchema = z.object({
+  currency: z.enum(['USD', 'EUR']).optional().default('USD'),
+});
+
 // ============================================================================
 // Type Exports
 // ============================================================================
 
 export type CreateInvestmentAccountInput = z.infer<typeof CreateInvestmentAccountSchema>;
 export type DepositToInvestmentInput = z.infer<typeof DepositToInvestmentSchema>;
+export type WithdrawFromInvestmentInput = z.infer<typeof WithdrawFromInvestmentSchema>;
 export type BuyAssetInput = z.infer<typeof BuyAssetSchema>;
 export type SellAssetInput = z.infer<typeof SellAssetSchema>;
 export type UpdateAssetPriceInput = z.infer<typeof UpdateAssetPriceSchema>;
 export type GetInvestmentTransactionsInput = z.infer<typeof GetInvestmentTransactionsSchema>;
 export type GetStockPriceInput = z.infer<typeof GetStockPriceSchema>;
+export type GetExchangeRateInput = z.infer<typeof GetExchangeRateSchema>;

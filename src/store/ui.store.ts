@@ -24,6 +24,7 @@ type ModalId =
   | 'settings'
   | 'create-investment'
   | 'deposit-investment'
+  | 'withdraw-investment'
   | 'buy-asset'
   | 'sell-asset'
   | 'create-credit-card'

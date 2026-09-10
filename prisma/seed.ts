@@ -53,6 +53,35 @@ async function main() {
   // 2. Create 4 accounts
   console.log('Creating accounts...');
 
+  // Find-or-create guard for investment demo accounts: re-seeding must never
+  // duplicate an existing investment account (matched by name + userId).
+  const findOrCreateAccount = async (params: {
+    name: string;
+    type: 'INVESTMENT';
+    currency: 'USD' | 'EUR';
+    balanceCents: number;
+    interestRateEA?: Decimal;
+  }) => {
+    const existing = await prisma.account.findFirst({
+      where: { userId: user.id, name: params.name, isActive: true },
+    });
+    if (existing) {
+      console.log(`↩ ${params.name} already exists, skipping creation`);
+      return existing;
+    }
+    return prisma.account.create({
+      data: {
+        userId: user.id,
+        name: params.name,
+        type: params.type,
+        currency: params.currency,
+        balanceCents: params.balanceCents,
+        ...(params.interestRateEA != null ? { interestRateEA: params.interestRateEA } : {}),
+        createdBy: user.id,
+      },
+    });
+  };
+
   const efectivo = await prisma.account.create({
     data: {
       userId: user.id,
@@ -90,19 +119,40 @@ async function main() {
     },
   });
 
-  const binance = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: 'Binance (Inversión)',
-      type: 'INVESTMENT',
-      currency: 'USD',
-      balanceCents: 150000, // $1,500 USD
-      interestRateEA: new Decimal('8.2'), // 8.2% E.A.
-      createdBy: user.id,
-    },
+  const binance = await findOrCreateAccount({
+    name: 'Binance (Inversión)',
+    type: 'INVESTMENT',
+    currency: 'USD',
+    balanceCents: 2699, // coherent with seeded transactions (computed below)
+    interestRateEA: new Decimal('8.2'), // 8.2% E.A.
   });
 
-  console.log(`✓ Created 4 accounts`);
+  // 2b. Additional investment demo accounts (find-or-create by name + userId)
+  const portafolioUsa = await findOrCreateAccount({
+    name: 'Portafolio USA (USD)',
+    type: 'INVESTMENT',
+    currency: 'USD',
+    balanceCents: 8704, // coherent with seeded transactions (computed below)
+    interestRateEA: new Decimal('6.5'), // 6.5% E.A.
+  });
+
+  const portafolioEuropa = await findOrCreateAccount({
+    name: 'Portafolio Europa (EUR)',
+    type: 'INVESTMENT',
+    currency: 'EUR',
+    balanceCents: 7350, // coherent with seeded transactions (computed below)
+    interestRateEA: new Decimal('5.2'), // 5.2% E.A.
+  });
+
+  const portafolioGlobal = await findOrCreateAccount({
+    name: 'Portafolio Global (USD)',
+    type: 'INVESTMENT',
+    currency: 'USD',
+    balanceCents: 6413, // coherent with seeded transactions (computed below)
+    interestRateEA: new Decimal('5.8'), // 5.8% E.A.
+  });
+
+  console.log(`✓ Created/verified 7 accounts (4 base + 3 investment demo)`);
 
   // 3. Create 20 mixed transactions (Income, Expenses, Transfers)
   console.log('Creating transactions...');
@@ -403,6 +453,431 @@ async function main() {
     `✓ Created ${transactions.length} transactions (including transfers with double-entry)`
   );
 
+  // 3b. Investment demo data (2025-09 → 2026-02) so the performance chart has
+  //     a rich series per account. Deposits book a double-entry pair:
+  //     TRANSFER_OUT on Bancolombia ↔ TRANSFER_IN on the investment account.
+  //     Buys/sells use INVESTMENT (+/-) and income uses INCOME.
+  console.log('Creating investment demo transactions and holdings...');
+
+  let investmentTxCount = 0;
+
+  const createInvestmentDeposit = async (params: {
+    bankAccountId: string;
+    investmentAccountId: string;
+    amountCopCents: number;
+    exchangeRate: number; // COP per 1 foreign unit
+    description: string;
+    date: Date;
+    investmentCurrency: 'USD' | 'EUR';
+  }) => {
+    const transferId = crypto.randomUUID();
+    const convertedCents = new Decimal(params.amountCopCents)
+      .dividedBy(params.exchangeRate)
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN)
+      .toNumber();
+
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: params.bankAccountId,
+        type: 'TRANSFER_OUT',
+        amountCents: -params.amountCopCents,
+        currency: 'COP',
+        description: params.description,
+        date: params.date,
+        transferId,
+        transferToAccountId: params.investmentAccountId,
+        createdBy: user.id,
+      },
+    });
+    investmentTxCount++;
+
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: params.investmentAccountId,
+        type: 'TRANSFER_IN',
+        amountCents: convertedCents,
+        currency: params.investmentCurrency,
+        description: params.description,
+        date: params.date,
+        transferId,
+        transferFromAccountId: params.bankAccountId,
+        originalAmountCents: params.amountCopCents,
+        originalCurrency: 'COP',
+        exchangeRate: new Decimal(params.exchangeRate),
+        createdBy: user.id,
+      },
+    });
+    investmentTxCount++;
+
+    return convertedCents;
+  };
+
+  const createInvestmentBuy = async (params: {
+    accountId: string;
+    symbol: string;
+    name: string;
+    quantity: string;
+    pricePerShareCents: number;
+    currentPriceCents: number;
+    date: Date;
+    lastPriceUpdate: Date;
+    currency: 'USD' | 'EUR';
+  }) => {
+    const totalCostCents = new Decimal(params.quantity)
+      .times(params.pricePerShareCents)
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN)
+      .toNumber();
+
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: params.accountId,
+        type: 'INVESTMENT',
+        amountCents: -totalCostCents,
+        currency: params.currency,
+        description: `Compra ${params.quantity} ${params.symbol}`,
+        date: params.date,
+        createdBy: user.id,
+      },
+    });
+    investmentTxCount++;
+
+    await prisma.investmentAssetHolding.upsert({
+      where: { accountId_symbol: { accountId: params.accountId, symbol: params.symbol } },
+      update: {
+        currentPriceCents: params.currentPriceCents,
+        lastPriceUpdate: params.lastPriceUpdate,
+        lastModifiedBy: user.id,
+      },
+      create: {
+        accountId: params.accountId,
+        symbol: params.symbol,
+        name: params.name,
+        quantity: new Decimal(params.quantity),
+        avgCostCents: params.pricePerShareCents,
+        currency: params.currency,
+        currentPriceCents: params.currentPriceCents,
+        lastPriceUpdate: params.lastPriceUpdate,
+        createdBy: user.id,
+        lastModifiedBy: user.id,
+      },
+    });
+
+    return totalCostCents;
+  };
+
+  const createInvestmentSell = async (params: {
+    accountId: string;
+    symbol: string;
+    quantity: string;
+    pricePerShareCents: number;
+    date: Date;
+    currency: 'USD' | 'EUR';
+  }) => {
+    const proceedsCents = new Decimal(params.quantity)
+      .times(params.pricePerShareCents)
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN)
+      .toNumber();
+
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: params.accountId,
+        type: 'INVESTMENT',
+        amountCents: proceedsCents,
+        currency: params.currency,
+        description: `Venta ${params.quantity} ${params.symbol}`,
+        date: params.date,
+        createdBy: user.id,
+      },
+    });
+    investmentTxCount++;
+
+    const holding = await prisma.investmentAssetHolding.findUniqueOrThrow({
+      where: { accountId_symbol: { accountId: params.accountId, symbol: params.symbol } },
+    });
+    const remainingQty = new Decimal(holding.quantity.toString()).minus(params.quantity);
+    await prisma.investmentAssetHolding.update({
+      where: { id: holding.id },
+      data: {
+        quantity: remainingQty,
+        currentPriceCents: params.pricePerShareCents,
+        lastPriceUpdate: params.date,
+        lastModifiedBy: user.id,
+      },
+    });
+
+    return proceedsCents;
+  };
+
+  const createInvestmentIncome = async (params: {
+    accountId: string;
+    amountCents: number;
+    currency: 'USD' | 'EUR';
+    description: string;
+    date: Date;
+  }) => {
+    await prisma.transaction.create({
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        userId: user.id,
+        accountId: params.accountId,
+        type: 'INCOME',
+        amountCents: params.amountCents,
+        currency: params.currency,
+        description: params.description,
+        date: params.date,
+        createdBy: user.id,
+      },
+    });
+    investmentTxCount++;
+  };
+
+  const priceAsOf = new Date('2026-02-10');
+
+  // --- Portafolio USA (USD) ---
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioUsa.id,
+    amountCopCents: 80000000, // $800,000 COP
+    exchangeRate: 4100, // → 19,512 USD-cents
+    description: 'Aporte Portafolio USA (sept)',
+    date: new Date('2025-09-15'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioUsa.id,
+    symbol: 'AAPL',
+    name: 'Apple Inc.',
+    quantity: '0.4',
+    pricePerShareCents: 18000,
+    currentPriceCents: 18600,
+    date: new Date('2025-09-20'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioUsa.id,
+    amountCopCents: 50000000, // $500,000 COP
+    exchangeRate: 4200, // → 11,905 USD-cents
+    description: 'Aporte Portafolio USA (oct)',
+    date: new Date('2025-10-10'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioUsa.id,
+    symbol: 'TSLA',
+    name: 'Tesla Inc.',
+    quantity: '0.2',
+    pricePerShareCents: 25000,
+    currentPriceCents: 26200,
+    date: new Date('2025-10-20'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioUsa.id,
+    symbol: 'MSFT',
+    name: 'Microsoft Corp.',
+    quantity: '0.3',
+    pricePerShareCents: 42000,
+    currentPriceCents: 43100,
+    date: new Date('2025-11-05'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  // Partial sell (reduces TSLA 0.2 → 0.15, keeps cash inside the account)
+  await createInvestmentSell({
+    accountId: portafolioUsa.id,
+    symbol: 'TSLA',
+    quantity: '0.05',
+    pricePerShareCents: 26200,
+    date: new Date('2025-11-20'),
+    currency: 'USD',
+  });
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioUsa.id,
+    amountCopCents: 30000000, // $300,000 COP
+    exchangeRate: 4300, // → 6,977 USD-cents
+    description: 'Aporte Portafolio USA (dic)',
+    date: new Date('2025-12-05'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioUsa.id,
+    symbol: 'VOO',
+    name: 'Vanguard S&P 500 ETF',
+    quantity: '0.15',
+    pricePerShareCents: 48000,
+    currentPriceCents: 48700,
+    date: new Date('2025-12-10'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentIncome({
+    accountId: portafolioUsa.id,
+    amountCents: 1000,
+    currency: 'USD',
+    description: 'Rendimientos',
+    date: new Date('2026-02-01'),
+  });
+
+  // --- Portafolio Europa (EUR) ---
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioEuropa.id,
+    amountCopCents: 40000000, // $400,000 COP
+    exchangeRate: 4700, // → 8,511 EUR-cents
+    description: 'Aporte Portafolio Europa (dic)',
+    date: new Date('2025-12-08'),
+    investmentCurrency: 'EUR',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioEuropa.id,
+    symbol: 'VWRA',
+    name: 'Vanguard FTSE All-World UCITS ETF',
+    quantity: '0.3',
+    pricePerShareCents: 29000,
+    currentPriceCents: 29500,
+    date: new Date('2025-12-15'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'EUR',
+  });
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioEuropa.id,
+    amountCopCents: 35000000, // $350,000 COP
+    exchangeRate: 4600, // → 7,609 EUR-cents
+    description: 'Aporte Portafolio Europa (ene)',
+    date: new Date('2026-01-12'),
+    investmentCurrency: 'EUR',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioEuropa.id,
+    symbol: 'SGGD',
+    name: 'iShares Core S&P 500 UCITS ETF',
+    quantity: '0.5',
+    pricePerShareCents: 840,
+    currentPriceCents: 860,
+    date: new Date('2026-01-15'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'EUR',
+  });
+  await createInvestmentIncome({
+    accountId: portafolioEuropa.id,
+    amountCents: 350,
+    currency: 'EUR',
+    description: 'Rendimientos',
+    date: new Date('2026-02-05'),
+  });
+
+  // --- Portafolio Global (USD) ---
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: portafolioGlobal.id,
+    amountCopCents: 60000000, // $600,000 COP
+    exchangeRate: 4300, // → 13,953 USD-cents
+    description: 'Aporte Portafolio Global (ene)',
+    date: new Date('2026-01-20'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioGlobal.id,
+    symbol: 'SPY',
+    name: 'SPDR S&P 500 ETF Trust',
+    quantity: '0.1',
+    pricePerShareCents: 55000,
+    currentPriceCents: 55800,
+    date: new Date('2026-01-25'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: portafolioGlobal.id,
+    symbol: 'VTI',
+    name: 'Vanguard Total Stock Market ETF',
+    quantity: '0.08',
+    pricePerShareCents: 28000,
+    currentPriceCents: 28400,
+    date: new Date('2026-01-28'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentIncome({
+    accountId: portafolioGlobal.id,
+    amountCents: 200,
+    currency: 'USD',
+    description: 'Rendimientos',
+    date: new Date('2026-02-08'),
+  });
+
+  // --- Binance (Inversión, USD) — crypto holdings ---
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: binance.id,
+    amountCopCents: 60000000, // $600,000 COP
+    exchangeRate: 4100, // → 14,634 USD-cents
+    description: 'Aporte Binance (sept)',
+    date: new Date('2025-09-10'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: binance.id,
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    quantity: '0.002',
+    pricePerShareCents: 9500000, // $95,000 BTC
+    currentPriceCents: 9700000, // $97,000 BTC
+    date: new Date('2025-09-25'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+  await createInvestmentDeposit({
+    bankAccountId: bancolombia.id,
+    investmentAccountId: binance.id,
+    amountCopCents: 50000000, // $500,000 COP
+    exchangeRate: 4250, // → 11,765 USD-cents
+    description: 'Aporte Binance (nov)',
+    date: new Date('2025-11-15'),
+    investmentCurrency: 'USD',
+  });
+  await createInvestmentBuy({
+    accountId: binance.id,
+    symbol: 'ETH',
+    name: 'Ethereum',
+    quantity: '0.04',
+    pricePerShareCents: 380000, // $3,800 ETH
+    currentPriceCents: 390000, // $3,900 ETH
+    date: new Date('2025-11-30'),
+    lastPriceUpdate: priceAsOf,
+    currency: 'USD',
+  });
+
+  // Extra salary so Bancolombia stays funded after the investment outflows
+  await prisma.transaction.create({
+    data: {
+      idempotencyKey: crypto.randomUUID(),
+      userId: user.id,
+      accountId: bancolombia.id,
+      type: 'INCOME',
+      amountCents: 500000000, // $5,000,000 COP
+      currency: 'COP',
+      description: 'Salario Febrero 2026',
+      date: new Date('2026-02-05'),
+      createdBy: user.id,
+    },
+  });
+
+  console.log(`✓ Created ${investmentTxCount} investment demo transactions + holdings`);
+
   // Update account balances (reconciliation)
   console.log('Updating account balances...');
   await prisma.account.update({
@@ -411,7 +886,11 @@ async function main() {
   });
   await prisma.account.update({
     where: { id: bancolombia.id },
-    data: { balanceCents: 250000000, lastReconciled: new Date() },
+    // Deterministic ledger: Jan salary (+500M) + Feb salary (+500M) − rent
+    // (−120M) − Efectivo transfer (−30M) − Binance transfer (−40M) − card
+    // payment (−5M) − investment outflows (−405M) = 400M (minus ~0.2M of
+    // random expenses seeded above, which are non-deterministic)
+    data: { balanceCents: 400000000, lastReconciled: new Date() },
   });
   await prisma.account.update({
     where: { id: nubank.id },
@@ -421,7 +900,27 @@ async function main() {
   });
   await prisma.account.update({
     where: { id: binance.id },
-    data: { balanceCents: 150000, lastReconciled: new Date() },
+    // Ledger: deposits (14,634 + 11,765 + 10,000) + income (500) − buys
+    // (−19,000 −15,200) = 2,699 USD-cents
+    data: { balanceCents: 2699, lastReconciled: new Date() },
+  });
+  await prisma.account.update({
+    where: { id: portafolioUsa.id },
+    // Ledger: deposits (19,512 + 11,905 + 6,977) + income (1,000) − buys
+    // (−7,200 −5,000 −12,600 −7,200) + sell (1,310) = 8,704 USD-cents
+    data: { balanceCents: 8704, lastReconciled: new Date() },
+  });
+  await prisma.account.update({
+    where: { id: portafolioEuropa.id },
+    // Ledger: deposits (8,511 + 7,609) + income (350) − buys (−8,700 −420)
+    // = 7,350 EUR-cents
+    data: { balanceCents: 7350, lastReconciled: new Date() },
+  });
+  await prisma.account.update({
+    where: { id: portafolioGlobal.id },
+    // Ledger: deposit (13,953) + income (200) − buys (−5,500 −2,240)
+    // = 6,413 USD-cents
+    data: { balanceCents: 6413, lastReconciled: new Date() },
   });
 
   console.log('✓ Account balances updated');

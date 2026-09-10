@@ -28,12 +28,16 @@ vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_d: Record<string, unknown>, key: string) => key),
 }));
 
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
-  }),
-}));
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
+    }),
+  };
+});
 
 // Stub child modals / lists to isolate dashboard logic
 vi.mock('@/components/investments/CreateInvestmentModal', () => ({
@@ -41,6 +45,14 @@ vi.mock('@/components/investments/CreateInvestmentModal', () => ({
 }));
 vi.mock('@/components/investments/DepositModal', () => ({
   DepositModal: () => <div data-testid="deposit-modal" />,
+}));
+// WithdrawModal imports `toAccountBrief` from DepositModal; stubbing it here
+// avoids coupling the dashboard tests to the deposit/withdraw internals.
+vi.mock('@/components/investments/WithdrawModal', () => ({
+  WithdrawModal: () => <div data-testid="withdraw-modal" />,
+}));
+vi.mock('@/components/investments/PortfolioPerformanceChart', () => ({
+  PortfolioPerformanceChart: () => <div data-testid="performance-chart" />,
 }));
 vi.mock('@/components/investments/AssetSearchModal', () => ({
   AssetSearchModal: ({ account }: { account: { id: string } | null }) => (
@@ -138,21 +150,48 @@ describe('InvestmentDashboard', () => {
     expect(screen.getByText('totalInvested')).toBeInTheDocument();
     expect(screen.getByText('totalMarketValue')).toBeInTheDocument();
     expect(screen.getByText('holdings')).toBeInTheDocument();
+    expect(screen.getByText('performance')).toBeInTheDocument();
 
     // Balance appears in both the summary card and the account card
     expect(screen.getAllByText('$2000.00 USD').length).toBeGreaterThanOrEqual(1);
+    // Invested: 2*15000 + 5*20000 = 130000 cents
+    expect(screen.getAllByText('$1300.00 USD').length).toBeGreaterThanOrEqual(1);
     // Market value: 2*16000 + 5*22000 = 142000 cents
     expect(screen.getAllByText('$1420.00 USD').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('2 positions')).toBeInTheDocument();
+    // Return: 142000 - 130000 = 12000 cents → +9.23%
+    // (the +% span is a child element, so match on textContent)
+    expect(
+      screen.getAllByText(
+        (_c: string, el: Element | null) => el !== null && el.textContent === '+$120.00 USD(+9.23%)'
+      ).length
+    ).toBeGreaterThanOrEqual(1);
+    // Holdings count (summary card + account card)
+    expect(screen.getAllByText('2 positions').length).toBeGreaterThanOrEqual(1);
 
     // Account card rendered with real InvestmentAccountCard
     expect(screen.getByText('Tech Stocks')).toBeInTheDocument();
   });
 
-  it('should show mixedCurrencies label when accounts have different currencies', () => {
+  it('should render per-currency summary values when accounts have different currencies', () => {
     render(<InvestmentDashboard accounts={mixedAccounts} dictionary={dictionary} />);
 
-    expect(screen.getAllByText('mixedCurrencies').length).toBeGreaterThanOrEqual(2);
+    // USD bucket (2 holdings) — invested, market value and return
+    expect(screen.getAllByText('$1300.00 USD').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('$1420.00 USD').length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText(
+        (_c: string, el: Element | null) => el !== null && el.textContent === '+$120.00 USD(+9.23%)'
+      ).length
+    ).toBeGreaterThanOrEqual(1);
+    // EUR bucket has no holdings → zeroed values
+    expect(screen.getAllByText('$0.00 EUR').length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText(
+        (_c: string, el: Element | null) => el !== null && el.textContent === '+$0.00 EUR(+0.00%)'
+      ).length
+    ).toBeGreaterThanOrEqual(1);
+    // The old "mixed currencies" fallback label is no longer rendered
+    expect(screen.queryByText('mixedCurrencies')).not.toBeInTheDocument();
   });
 
   it('should render plural/singular holdings label correctly', () => {
@@ -161,7 +200,7 @@ describe('InvestmentDashboard', () => {
       assetHoldings: [singleAccount.assetHoldings![0]],
     };
     render(<InvestmentDashboard accounts={[singleHoldingAccount]} dictionary={dictionary} />);
-    expect(screen.getByText('1 position')).toBeInTheDocument();
+    expect(screen.getAllByText('1 position').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show account details when an account card is selected', async () => {
@@ -213,9 +252,9 @@ describe('InvestmentDashboard', () => {
 
     await waitFor(() => {
       expect(mockUpdateAllAssetPrices).toHaveBeenCalled();
-      expect(
-        useUIStore.getState().notifications.some((n) => n.message === 'Updated 2 price(s)')
-      ).toBe(true);
+      expect(useUIStore.getState().notifications.some((n) => n.message === 'pricesUpdated')).toBe(
+        true
+      );
     });
     expect(mockRefresh).toHaveBeenCalled();
   });
@@ -228,7 +267,7 @@ describe('InvestmentDashboard', () => {
 
     await waitFor(() => {
       expect(
-        useUIStore.getState().notifications.some((n) => n.message === 'No holdings to update')
+        useUIStore.getState().notifications.some((n) => n.message === 'noHoldingsToUpdate')
       ).toBe(true);
     });
   });
@@ -252,7 +291,7 @@ describe('InvestmentDashboard', () => {
 
     await waitFor(() => {
       expect(
-        useUIStore.getState().notifications.some((n) => n.message === 'Failed to update prices')
+        useUIStore.getState().notifications.some((n) => n.message === 'pricesUpdateFailed')
       ).toBe(true);
     });
   });

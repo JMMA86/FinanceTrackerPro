@@ -55,6 +55,20 @@ export class InsufficientFundsError extends AppError {
 }
 
 /**
+ * 400 - Insufficient Quantity
+ * Thrown when a sell quantity exceeds the available holding quantity
+ */
+export class InsufficientQuantityError extends AppError {
+  constructor(required: number, available: number) {
+    super(
+      `Insufficient quantity: available ${available}, required ${required}`,
+      400,
+      'INSUFFICIENT_QUANTITY'
+    );
+  }
+}
+
+/**
  * 404 - Not Found
  * Thrown when requested resource doesn't exist
  */

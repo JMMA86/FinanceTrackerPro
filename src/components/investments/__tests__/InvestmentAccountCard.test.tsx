@@ -6,13 +6,18 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { InvestmentAccountCard } from '../InvestmentAccountCard';
 import type { InvestmentAccountSummary } from '../InvestmentAccountCard';
 
-// Mock formatMoney to return a predictable value
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const amount = (cents / 100).toFixed(2);
-    return `$${amount} ${currency}`;
-  }),
-}));
+// Mock formatMoney to return a predictable value, keep the real multiplyCents
+// (Decimal.js) so the market-value math stays exact.
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const amount = (cents / 100).toFixed(2);
+      return `$${amount} ${currency}`;
+    }),
+  };
+});
 
 describe('InvestmentAccountCard', () => {
   const mockAccount: InvestmentAccountSummary = {
@@ -56,7 +61,8 @@ describe('InvestmentAccountCard', () => {
 
   const defaultDictionary = {
     noHoldings: 'No positions',
-    holdingCount: '{count} positions',
+    position: 'position',
+    positions: 'positions',
   };
 
   it('should render the account name', () => {
@@ -200,7 +206,7 @@ describe('InvestmentAccountCard', () => {
         onSelect={mockOnSelect}
       />
     );
-    expect(screen.getByText('1 positions')).toBeInTheDocument();
+    expect(screen.getByText('1 position')).toBeInTheDocument();
   });
 
   it('should not crash with undefined assetHoldings', () => {

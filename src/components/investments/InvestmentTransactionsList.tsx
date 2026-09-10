@@ -52,10 +52,10 @@ export function InvestmentTransactionsList({
           setTransactions(res.data.transactions ?? []);
           setTotalPages(res.data.totalPages ?? 1);
         } else {
-          setError(res.error ?? 'Failed to load transactions');
+          setError(res.error ?? get(dictionary, 'failedToLoadTransactions'));
         }
       } catch {
-        if (!cancelled) setError('Unexpected error loading transactions');
+        if (!cancelled) setError(get(dictionary, 'unexpectedErrorLoading'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -65,9 +65,17 @@ export function InvestmentTransactionsList({
     return () => {
       cancelled = true;
     };
-  }, [accountId, page]);
+  }, [accountId, dictionary, page]);
 
   const getTypeIcon = (type: string, amountCents: number) => {
+    if (type === 'TRANSFER_OUT') {
+      // Withdrawal from investment → bank: negative outflow.
+      return { icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-500/15' };
+    }
+    if (type === 'TRANSFER_IN') {
+      // Deposit from bank → investment: positive inflow.
+      return { icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/15' };
+    }
     if (type === 'INVESTMENT' && amountCents < 0) {
       return { icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-500/15' };
     }
@@ -78,6 +86,8 @@ export function InvestmentTransactionsList({
   };
 
   const getTypeLabel = (tx: Transaction): string => {
+    if (tx.type === 'TRANSFER_IN') return get(dictionary, 'depositLabel');
+    if (tx.type === 'TRANSFER_OUT') return get(dictionary, 'withdrawalLabel');
     if (tx.type === 'INVESTMENT' && tx.amountCents < 0) return get(dictionary, 'buyLabel');
     if (tx.type === 'INVESTMENT' && tx.amountCents > 0) return get(dictionary, 'sellLabel');
     return tx.type;

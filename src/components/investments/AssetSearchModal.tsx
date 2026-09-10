@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Search, Loader2, TrendingUp, Plus, AlertCircle } from 'lucide-react';
+import { Decimal } from 'decimal.js';
 import { useUIStore } from '@/store/ui.store';
 import { getStockPrice, buyAsset, searchStocksAction } from '@/actions/investment.actions';
 import { get } from '@/lib/i18n';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, multiplyCents } from '@/lib/money';
 import type { InvestmentAccountSummary } from './InvestmentAccountCard';
 
 interface AssetSearchModalProps {
@@ -24,6 +25,26 @@ interface PricedStock extends StockMatch {
   currency: string;
 }
 
+type BuyMode = 'quantity' | 'amount';
+
+/** Map a buy asset server error code to a localized message. */
+function getBuyError(code: string | undefined, dictionary: Record<string, unknown>): string {
+  switch (code) {
+    case 'SESSION_INVALID':
+      return get(dictionary, 'errors.sessionInvalid');
+    case 'INSUFFICIENT_FUNDS':
+      return get(dictionary, 'errors.insufficientFunds');
+    case 'PRICE_MISMATCH':
+      return get(dictionary, 'errors.priceMismatch');
+    case 'PRICE_UNAVAILABLE':
+      return get(dictionary, 'errors.priceUnavailable');
+    case 'RATE_LIMITED':
+      return get(dictionary, 'errors.rateLimited');
+    default:
+      return get(dictionary, 'errors.buyFailed');
+  }
+}
+
 export function AssetSearchModal({
   account,
   dictionary,
@@ -36,6 +57,7 @@ export function AssetSearchModal({
   const isOpen = activeModal === 'buy-asset';
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -51,7 +73,10 @@ export function AssetSearchModal({
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Buy form state
+  const [buyMode, setBuyMode] = useState<BuyMode>('quantity');
   const [quantity, setQuantity] = useState('');
+  // Amount to invest in the account currency (major units, e.g. USD dollars).
+  const [amountToInvest, setAmountToInvest] = useState('');
   const [pricePerShareCents, setPricePerShareCents] = useState(0);
   const [buying, setBuying] = useState(false);
 
@@ -59,6 +84,9 @@ export function AssetSearchModal({
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (isOpen) {
+      // Save the element that had focus before opening for restoration on close
+      const active = document.activeElement;
+      previousFocusRef.current = active instanceof HTMLElement ? active : null;
       dialog.showModal();
       setTimeout(() => searchInputRef.current?.focus(), 300);
     } else if (dialog.open) {
@@ -79,6 +107,8 @@ export function AssetSearchModal({
       setSearchError(null);
       setSubmitError(null);
       setQuantity('');
+      setAmountToInvest('');
+      setBuyMode('quantity');
       setPricePerShareCents(0);
       setBuying(false);
       setIsVisible(true);
@@ -97,6 +127,13 @@ export function AssetSearchModal({
 
   const handleDialogClose = () => {
     closeModal();
+    // Best-effort focus restoration (WCAG 2.2 AA): restore focus to the
+    // element that opened the modal if it is still connected to the document.
+    const prev = previousFocusRef.current;
+    if (prev && document.body.contains(prev)) {
+      prev.focus();
+    }
+    previousFocusRef.current = null;
   };
 
   // Phase 1: search symbols via autocomplete
@@ -175,14 +212,48 @@ export function AssetSearchModal({
     }
   }
 
+  // Quantity derived from the amount input (Rule 1: Decimal.js with Banker's rounding).
+  // amount is in major currency units (e.g. $150), so ×100 gives cents before
+  // dividing by the per-share price in cents → fractional shares with 4 decimals.
+  const computedQuantity =
+    buyMode === 'amount' && amountToInvest && pricePerShareCents > 0
+      ? new Decimal(amountToInvest)
+          .times(100)
+          .dividedBy(pricePerShareCents)
+          .toDecimalPlaces(4, Decimal.ROUND_HALF_EVEN)
+          .toString()
+      : quantity;
+
+  const qtyNum = Number.parseFloat(computedQuantity) || 0;
+  const totalCostCents =
+    qtyNum > 0 && pricePerShareCents > 0 ? multiplyCents(pricePerShareCents, qtyNum) : 0;
+
+  // Amount mode: the user-entered amount in cents (major units × 100).
+  const amountCents =
+    buyMode === 'amount' && amountToInvest
+      ? new Decimal(amountToInvest)
+          .times(100)
+          .toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN)
+          .toNumber()
+      : 0;
+
+  const insufficientFunds =
+    !!account && (totalCostCents > account.balanceCents || amountCents > account.balanceCents);
+
   async function handleBuy() {
     if (!account || !pricedStock) return;
     setBuying(true);
     setSubmitError(null);
 
-    const qty = quantity.trim();
+    const qty = computedQuantity.trim();
     if (!qty || Number.parseFloat(qty) <= 0) {
       setSubmitError(get(dictionary, 'errors.buyFailed'));
+      setBuying(false);
+      return;
+    }
+
+    if (insufficientFunds) {
+      setSubmitError(get(dictionary, 'errors.insufficientFunds'));
       setBuying(false);
       return;
     }
@@ -198,14 +269,15 @@ export function AssetSearchModal({
       });
 
       if (res.success) {
-        addNotification('success', `Bought ${qty} ${pricedStock.symbol}`);
+        addNotification(
+          'success',
+          get(dictionary, 'boughtAsset')
+            .replace('{qty}', qty)
+            .replace('{symbol}', pricedStock.symbol)
+        );
         closeModal();
       } else {
-        const msg =
-          res.code === 'SESSION_INVALID'
-            ? get(dictionary, 'errors.sessionInvalid')
-            : get(dictionary, 'errors.buyFailed');
-        setSubmitError(msg);
+        setSubmitError(getBuyError(res.code, dictionary));
       }
     } catch {
       setSubmitError(get(dictionary, 'errors.buyFailed'));
@@ -213,10 +285,6 @@ export function AssetSearchModal({
       setBuying(false);
     }
   }
-
-  const qtyNum = Number.parseFloat(quantity) || 0;
-  const totalCostCents =
-    qtyNum > 0 && pricePerShareCents > 0 ? Math.round(qtyNum * pricePerShareCents) : 0;
 
   const inputCls =
     'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
@@ -226,12 +294,14 @@ export function AssetSearchModal({
     <dialog
       ref={dialogRef}
       onClose={handleDialogClose}
+      aria-modal="true"
       aria-labelledby="buy-asset-title"
       className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
     >
       <button
         type="button"
         aria-label="Close"
+        tabIndex={-1}
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -394,24 +464,71 @@ export function AssetSearchModal({
                 </p>
               </div>
 
+              {/* Buy mode toggle */}
+              <fieldset className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10 min-w-0">
+                <button
+                  type="button"
+                  aria-pressed={buyMode === 'quantity'}
+                  onClick={() => setBuyMode('quantity')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    buyMode === 'quantity'
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {get(dictionary, 'byQuantity')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={buyMode === 'amount'}
+                  onClick={() => setBuyMode('amount')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    buyMode === 'amount'
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {get(dictionary, 'byAmount')}
+                </button>
+              </fieldset>
+
               {/* Buy form */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="buy-qty" className={labelCls}>
-                    {get(dictionary, 'quantity')}
-                  </label>
-                  <input
-                    id="buy-qty"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.0001"
-                    min="0"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="0.0000"
-                    className={`${inputCls} font-mono tabular-nums`}
-                  />
-                </div>
+                {buyMode === 'quantity' ? (
+                  <div>
+                    <label htmlFor="buy-qty" className={labelCls}>
+                      {get(dictionary, 'quantity')}
+                    </label>
+                    <input
+                      id="buy-qty"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.0001"
+                      min="0"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      placeholder="0.0000"
+                      className={`${inputCls} font-mono tabular-nums`}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="buy-amount" className={labelCls}>
+                      {get(dictionary, 'amountToInvest')}
+                    </label>
+                    <input
+                      id="buy-amount"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={amountToInvest}
+                      onChange={(e) => setAmountToInvest(e.target.value)}
+                      placeholder="0.00"
+                      className={`${inputCls} font-mono tabular-nums`}
+                    />
+                  </div>
+                )}
                 <div>
                   <label htmlFor="buy-price" className={labelCls}>
                     {get(dictionary, 'pricePerShare')}
@@ -431,8 +548,25 @@ export function AssetSearchModal({
                 </div>
               </div>
 
+              {/* Approx shares derived from amount */}
+              {buyMode === 'amount' && computedQuantity && qtyNum > 0 && (
+                <p className="text-xs text-slate-400">
+                  {get(dictionary, 'approxShares').replace('{quantity}', computedQuantity)}
+                </p>
+              )}
+
+              {/* Insufficient funds inline warning */}
+              {insufficientFunds && (
+                <div
+                  role="alert"
+                  className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
+                >
+                  {get(dictionary, 'errors.insufficientFunds')}
+                </div>
+              )}
+
               {/* Total cost */}
-              {totalCostCents > 0 && (
+              {totalCostCents > 0 && !insufficientFunds && (
                 <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
                   <span className="text-xs text-violet-300">{get(dictionary, 'totalCost')}</span>
                   <span className="text-base font-bold text-white tabular-nums">
@@ -445,7 +579,7 @@ export function AssetSearchModal({
               <button
                 type="button"
                 onClick={handleBuy}
-                disabled={buying || !quantity || qtyNum <= 0}
+                disabled={buying || !computedQuantity || qtyNum <= 0 || insufficientFunds}
                 className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
               >
                 {buying ? (

@@ -5,14 +5,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PortfolioHoldingsTable } from '../PortfolioHoldingsTable';
 
-// Mock formatMoney
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, _currency: string) => {
-    const amount = Math.abs(cents) / 100;
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${amount.toFixed(2)}`;
-  }),
-}));
+// Mock formatMoney but keep the real multiplyCents (Decimal.js) so the
+// table's monetary math (market value, gain/loss) stays exact.
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, _currency: string) => {
+      const amount = Math.abs(cents) / 100;
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${amount.toFixed(2)}`;
+    }),
+  };
+});
 
 // Mock i18n get
 vi.mock('@/lib/i18n', () => ({

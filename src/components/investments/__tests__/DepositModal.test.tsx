@@ -3,8 +3,11 @@
  *
  * Modal opened via `useUIStore.getState().openModal('deposit-investment')`.
  * Uses the real Zustand store; actions are mocked:
- *   - getInvestmentAccounts, depositToInvestment (investment.actions)
+ *   - getInvestmentAccounts, depositToInvestment, getCurrentExchangeRate (investment.actions)
  *   - getBankAccounts (account.actions)
+ *
+ * The account pickers are the shared AccountSelect combobox (WAI-ARIA APG:
+ * button role="combobox" + listbox/option), not native <select> elements.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -18,10 +21,12 @@ import { useUIStore } from '@/store/ui.store';
 const mockDepositToInvestment = vi.fn();
 const mockGetInvestmentAccounts = vi.fn();
 const mockGetBankAccounts = vi.fn();
+const mockGetCurrentExchangeRate = vi.fn();
 
 vi.mock('@/actions/investment.actions', () => ({
   depositToInvestment: (...args: unknown[]) => mockDepositToInvestment(...args),
   getInvestmentAccounts: (...args: unknown[]) => mockGetInvestmentAccounts(...args),
+  getCurrentExchangeRate: (...args: unknown[]) => mockGetCurrentExchangeRate(...args),
 }));
 
 vi.mock('@/actions/account.actions', () => ({
@@ -32,12 +37,18 @@ vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_d: Record<string, unknown>, key: string) => key),
 }));
 
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
-  }),
-}));
+// Keep the real Decimal.js helpers (divideCents) so the estimated receive and
+// the modal math stay exact; only formatMoney is stubbed.
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
+    }),
+  };
+});
 
 vi.mock('@/components/ui/FormattedNumericInput', () => ({
   FormattedNumericInput: ({
@@ -66,8 +77,8 @@ vi.mock('@/components/ui/FormattedNumericInput', () => ({
 }));
 
 // Wait for any pending requestAnimationFrame callback to run. The DepositModal
-// schedules a rAF callback on open that resets amount/exchange rate/submitError,
-// so interactions must wait for it to avoid race conditions.
+// schedules a rAF callback on open that resets amount/exchange rate/submitError
+// and the FX auto-prefill effect also runs via rAF.
 const flushRaf = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 describe('DepositModal', () => {
@@ -132,6 +143,10 @@ describe('DepositModal', () => {
     });
     mockGetInvestmentAccounts.mockResolvedValue({ success: true, data: investmentAccounts });
     mockGetBankAccounts.mockResolvedValue({ success: true, data: bankAccounts });
+    mockGetCurrentExchangeRate.mockResolvedValue({
+      success: true,
+      data: { rate: 4000, currency: 'USD', source: 'live' },
+    });
   });
 
   it('should render a closed dialog when the modal is not active', () => {
@@ -158,10 +173,10 @@ describe('DepositModal', () => {
     mockGetBankAccounts.mockImplementation(() => new Promise(() => {}));
 
     render(<DepositModal dictionary={dictionary} />);
-    expect(screen.getByText('Loading accounts...')).toBeInTheDocument();
+    expect(screen.getByText('loadingAccounts')).toBeInTheDocument();
   });
 
-  it('should load bank and investment accounts into the selects', async () => {
+  it('should load bank and investment accounts into the comboboxes', async () => {
     useUIStore.getState().openModal('deposit-investment');
     render(<DepositModal dictionary={dictionary} />);
 
@@ -170,18 +185,33 @@ describe('DepositModal', () => {
       expect(mockGetBankAccounts).toHaveBeenCalled();
     });
 
+    // Let the modalSession rAF remount settle before interacting with the
+    // comboboxes (avoids a race where the click lands on a stale button).
+    await flushRaf();
+
+    // Both pickers auto-select the first account of each group.
     await waitFor(() => {
-      expect(screen.getByText('Checking COP — $10000.00 COP')).toBeInTheDocument();
-      expect(screen.getByText('Savings COP — $20000.00 COP')).toBeInTheDocument();
-      expect(screen.getByText('USD Growth (USD)')).toBeInTheDocument();
-      expect(screen.getByText('EUR Value (EUR)')).toBeInTheDocument();
+      expect(screen.getByLabelText('fromAccount')).toHaveTextContent('Checking COP');
+      expect(screen.getByLabelText('toAccount')).toHaveTextContent('USD Growth');
     });
 
-    // First accounts auto-selected
-    const fromSelect = screen.getByLabelText('fromAccount') as HTMLSelectElement;
-    const toSelect = screen.getByLabelText('toAccount') as HTMLSelectElement;
-    expect(fromSelect.value).toBe('bank-1');
-    expect(toSelect.value).toBe('inv-1');
+    // Open the bank combobox and verify both options are listed.
+    fireEvent.click(screen.getByLabelText('fromAccount'));
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      const labels = options.map((o) => o.textContent ?? '');
+      expect(labels.some((t) => t.includes('Checking COP'))).toBe(true);
+      expect(labels.some((t) => t.includes('Savings COP'))).toBe(true);
+    });
+
+    // Open the investment combobox and verify both options are listed.
+    fireEvent.click(screen.getByLabelText('toAccount'));
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      const labels = options.map((o) => o.textContent ?? '');
+      expect(labels.some((t) => t.includes('USD Growth'))).toBe(true);
+      expect(labels.some((t) => t.includes('EUR Value'))).toBe(true);
+    });
   });
 
   it('should show a message when no COP bank accounts are available', async () => {
@@ -194,7 +224,7 @@ describe('DepositModal', () => {
     render(<DepositModal dictionary={dictionary} />);
 
     await waitFor(() => {
-      expect(screen.getByText('No bank accounts available in COP.')).toBeInTheDocument();
+      expect(screen.getByText('noBankAccountsCOP')).toBeInTheDocument();
     });
   });
 
@@ -206,9 +236,9 @@ describe('DepositModal', () => {
     render(<DepositModal dictionary={dictionary} />);
 
     await waitFor(() => {
-      expect(screen.getByText('No bank accounts available in COP.')).toBeInTheDocument();
+      expect(screen.getByText('noBankAccountsCOP')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Loading accounts...')).not.toBeInTheDocument();
+    expect(screen.queryByText('loadingAccounts')).not.toBeInTheDocument();
   });
 
   it('should prefill the investment account from modalData.accountId', async () => {
@@ -216,8 +246,7 @@ describe('DepositModal', () => {
     render(<DepositModal dictionary={dictionary} />);
 
     await waitFor(() => {
-      const toSelect = screen.getByLabelText('toAccount') as HTMLSelectElement;
-      expect(toSelect.value).toBe('inv-2');
+      expect(screen.getByLabelText('toAccount')).toHaveTextContent('EUR Value');
     });
   });
 
@@ -234,7 +263,7 @@ describe('DepositModal', () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(screen.getByText('Amount must be greater than 0.')).toBeInTheDocument();
+      expect(screen.getByText('amountPositive')).toBeInTheDocument();
     });
   });
 
@@ -245,7 +274,10 @@ describe('DepositModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
     });
-    await flushRaf();
+    // Wait for the live-rate auto-prefill so we can reliably override it.
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
 
     fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
       target: { value: '3900000' },
@@ -256,8 +288,22 @@ describe('DepositModal', () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(screen.getByText('Exchange rate must be positive.')).toBeInTheDocument();
+      expect(screen.getByText('ratePositive')).toBeInTheDocument();
     });
+  });
+
+  it('should prefill the exchange rate from the live FX service', async () => {
+    useUIStore.getState().openModal('deposit-investment');
+    render(<DepositModal dictionary={dictionary} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
+    expect(mockGetCurrentExchangeRate).toHaveBeenCalledWith({ currency: 'USD' });
+    expect(screen.getByText('liveRate')).toBeInTheDocument();
   });
 
   it('should show the estimated receive amount when amount and rate are set', async () => {
@@ -267,15 +313,17 @@ describe('DepositModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
     });
-    await flushRaf();
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
 
     fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
-      target: { value: '3900000' },
+      target: { value: '4000000' },
     });
 
     await waitFor(() => {
       expect(screen.getByText('estimatedReceive')).toBeInTheDocument();
-      // 3900000 COP / 3900 = 1000 cents USD
+      // 4000000 COP / 4000 = 1000 cents USD
       expect(screen.getByText('$10.00 USD')).toBeInTheDocument();
     });
   });
@@ -289,10 +337,12 @@ describe('DepositModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
     });
-    await flushRaf();
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
 
     fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
-      target: { value: '3900000' },
+      target: { value: '4000000' },
     });
 
     const form = container.querySelector('form')!;
@@ -303,17 +353,15 @@ describe('DepositModal', () => {
         expect.objectContaining({
           investmentAccountId: 'inv-1',
           fromBankAccountId: 'bank-1',
-          amountCents: 3900000,
-          exchangeRate: 3900,
+          amountCents: 4000000,
+          exchangeRate: 4000,
         })
       );
     });
 
     await waitFor(() => {
       expect(
-        useUIStore
-          .getState()
-          .notifications.some((n) => n.message === 'Deposit completed successfully')
+        useUIStore.getState().notifications.some((n) => n.message === 'depositCompleted')
       ).toBe(true);
       expect(useUIStore.getState().activeModal).toBeNull();
     });
@@ -332,9 +380,11 @@ describe('DepositModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
     });
-    await flushRaf();
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
     fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
-      target: { value: '3900000' },
+      target: { value: '4000000' },
     });
 
     const form = container.querySelector('form')!;
@@ -342,6 +392,62 @@ describe('DepositModal', () => {
 
     await waitFor(() => {
       expect(screen.getByText('errors.sessionInvalid')).toBeInTheDocument();
+    });
+  });
+
+  it('should map RATE_MISMATCH errors to errors.rateMismatch', async () => {
+    useUIStore.getState().openModal('deposit-investment');
+    mockDepositToInvestment.mockResolvedValue({
+      success: false,
+      code: 'RATE_MISMATCH',
+      error: 'Exchange rate has moved significantly.',
+    });
+
+    const { container } = render(<DepositModal dictionary={dictionary} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
+    fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
+      target: { value: '4000000' },
+    });
+
+    const form = container.querySelector('form')!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(screen.getByText('errors.rateMismatch')).toBeInTheDocument();
+    });
+  });
+
+  it('should map INSUFFICIENT_FUNDS errors to errors.insufficientFunds', async () => {
+    useUIStore.getState().openModal('deposit-investment');
+    mockDepositToInvestment.mockResolvedValue({
+      success: false,
+      code: 'INSUFFICIENT_FUNDS',
+      error: 'Insufficient funds',
+    });
+
+    const { container } = render(<DepositModal dictionary={dictionary} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
+    fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
+      target: { value: '4000000' },
+    });
+
+    const form = container.querySelector('form')!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(screen.getByText('errors.insufficientFunds')).toBeInTheDocument();
     });
   });
 
@@ -358,9 +464,11 @@ describe('DepositModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('numeric-input-dep-amount')).toBeInTheDocument();
     });
-    await flushRaf();
+    await waitFor(() => {
+      expect(screen.getByLabelText('exchangeRate')).toHaveValue(4000);
+    });
     fireEvent.change(screen.getByTestId('numeric-input-dep-amount'), {
-      target: { value: '3900000' },
+      target: { value: '4000000' },
     });
 
     const form = container.querySelector('form')!;

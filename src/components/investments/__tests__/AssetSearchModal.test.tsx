@@ -33,12 +33,16 @@ vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_d: Record<string, unknown>, key: string) => key),
 }));
 
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
-  }),
-}));
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
+    }),
+  };
+});
 
 describe('AssetSearchModal', () => {
   const account: InvestmentAccountSummary = {
@@ -215,6 +219,73 @@ describe('AssetSearchModal', () => {
     expect(screen.queryByLabelText('quantity')).not.toBeInTheDocument();
   });
 
+  it('should toggle between "Por cantidad" and "Por monto" buy modes', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    // Default mode is quantity
+    expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
+    expect(screen.getByText('byQuantity')).toBeInTheDocument();
+    expect(screen.getByText('byAmount')).toBeInTheDocument();
+
+    // Switch to amount mode → amount input appears, quantity disappears
+    fireEvent.click(screen.getByText('byAmount'));
+    await waitFor(() => {
+      expect(screen.getByLabelText('amountToInvest')).toBeInTheDocument();
+      expect(screen.queryByLabelText('quantity')).not.toBeInTheDocument();
+    });
+
+    // Approximate shares label is derived from the entered amount
+    fireEvent.change(screen.getByLabelText('amountToInvest'), { target: { value: '300' } });
+    await waitFor(() => {
+      // 300 USD / $150.00 = 2 shares
+      expect(screen.getByText('approxShares')).toBeInTheDocument();
+    });
+  });
+
+  it('should disable the buy button when funds are insufficient', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+    const lowFundsAccount = { ...account, balanceCents: 10000 }; // only $100 available
+
+    render(<AssetSearchModal account={lowFundsAccount} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    // 10 shares @ $150 = $1500 > $100 balance
+    const qtyInput = await screen.findByLabelText('quantity');
+    fireEvent.change(qtyInput, { target: { value: '10' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('errors.insufficientFunds')).toBeInTheDocument();
+    });
+    const buyButton = screen.getByText('confirmBuy').closest('button')!;
+    expect(buyButton).toBeDisabled();
+  });
+
   it('should show total cost once quantity and price are present', async () => {
     useUIStore.getState().openModal('buy-asset');
     mockSearchStocksAction.mockResolvedValue({
@@ -283,7 +354,7 @@ describe('AssetSearchModal', () => {
     });
 
     await waitFor(() => {
-      expect(useUIStore.getState().notifications.some((n) => n.message === 'Bought 2 AAPL')).toBe(
+      expect(useUIStore.getState().notifications.some((n) => n.message === 'boughtAsset')).toBe(
         true
       );
       expect(useUIStore.getState().activeModal).toBeNull();

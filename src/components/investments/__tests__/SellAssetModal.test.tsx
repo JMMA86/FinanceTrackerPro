@@ -27,12 +27,16 @@ vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_d: Record<string, unknown>, key: string) => key),
 }));
 
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
-  }),
-}));
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
+    }),
+  };
+});
 
 // Wait for any pending requestAnimationFrame callback to run
 const flushRaf = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -106,7 +110,7 @@ describe('SellAssetModal', () => {
     fireEvent.click(screen.getByText('confirmSell'));
 
     await waitFor(() => {
-      expect(screen.getByText('You only have 10.0000 shares to sell.')).toBeInTheDocument();
+      expect(screen.getByText('maxQuantity')).toBeInTheDocument();
     });
   });
 
@@ -119,7 +123,7 @@ describe('SellAssetModal', () => {
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Total proceeds')).toBeInTheDocument();
+      expect(screen.getByText('totalProceeds')).toBeInTheDocument();
       // 2 * 15000 = 30000 cents
       expect(screen.getByText('$300.00 USD')).toBeInTheDocument();
     });
@@ -149,9 +153,7 @@ describe('SellAssetModal', () => {
     });
 
     await waitFor(() => {
-      expect(useUIStore.getState().notifications.some((n) => n.message === 'Sold 2 AAPL')).toBe(
-        true
-      );
+      expect(useUIStore.getState().notifications.some((n) => n.message === 'soldAsset')).toBe(true);
       expect(useUIStore.getState().activeModal).toBeNull();
     });
   });
@@ -200,7 +202,7 @@ describe('SellAssetModal', () => {
     fireEvent.click(screen.getByText('confirmSell'));
 
     await waitFor(() => {
-      expect(screen.getByText('Unexpected error')).toBeInTheDocument();
+      expect(screen.getByText('unexpectedError')).toBeInTheDocument();
     });
   });
 

@@ -5,20 +5,11 @@ import { X, TrendingDown, Loader2 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { sellAsset } from '@/actions/investment.actions';
 import { get } from '@/lib/i18n';
-import { formatMoney } from '@/lib/money';
-
-interface Holding {
-  id: string;
-  symbol: string;
-  name: string;
-  quantity: number;
-  avgCostCents: number;
-  currentPriceCents: number;
-  currency: string;
-}
+import { formatMoney, multiplyCents } from '@/lib/money';
+import type { InvestmentHoldingSummary } from '@/types/investments';
 
 interface SellAssetModalProps {
-  holding: Holding | null;
+  holding: InvestmentHoldingSummary | null;
   currency: string;
   dictionary: Record<string, unknown>;
   locale?: string;
@@ -37,6 +28,7 @@ export function SellAssetModal({
   const isOpen = activeModal === 'sell-asset';
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('');
@@ -47,6 +39,9 @@ export function SellAssetModal({
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (isOpen) {
+      // Save the element that had focus before opening for restoration on close
+      const active = document.activeElement;
+      previousFocusRef.current = active instanceof HTMLElement ? active : null;
       dialog.showModal();
     } else if (dialog.open) {
       setIsVisible(false);
@@ -79,6 +74,13 @@ export function SellAssetModal({
 
   const handleDialogClose = () => {
     closeModal();
+    // Best-effort focus restoration (WCAG 2.2 AA): restore focus to the
+    // element that opened the modal if it is still connected to the document.
+    const prev = previousFocusRef.current;
+    if (prev && document.body.contains(prev)) {
+      prev.focus();
+    }
+    previousFocusRef.current = null;
   };
 
   async function handleSell() {
@@ -88,13 +90,15 @@ export function SellAssetModal({
 
     const qty = quantity.trim();
     if (!qty || Number.parseFloat(qty) <= 0) {
-      setSubmitError('Quantity must be positive.');
+      setSubmitError(get(dictionary, 'quantityPositive'));
       setSelling(false);
       return;
     }
 
     if (Number.parseFloat(qty) > holding.quantity) {
-      setSubmitError(`You only have ${holding.quantity.toFixed(4)} shares to sell.`);
+      setSubmitError(
+        get(dictionary, 'maxQuantity').replace('{quantity}', holding.quantity.toFixed(4))
+      );
       setSelling(false);
       return;
     }
@@ -108,7 +112,10 @@ export function SellAssetModal({
       });
 
       if (res.success) {
-        addNotification('success', `Sold ${qty} ${holding.symbol}`);
+        addNotification(
+          'success',
+          get(dictionary, 'soldAsset').replace('{qty}', qty).replace('{symbol}', holding.symbol)
+        );
         closeModal();
       } else {
         const msg =
@@ -118,7 +125,7 @@ export function SellAssetModal({
         setSubmitError(msg);
       }
     } catch {
-      setSubmitError('Unexpected error');
+      setSubmitError(get(dictionary, 'unexpectedError'));
     } finally {
       setSelling(false);
     }
@@ -126,7 +133,7 @@ export function SellAssetModal({
 
   const qtyNum = Number.parseFloat(quantity) || 0;
   const totalProceedsCents =
-    qtyNum > 0 && pricePerShareCents > 0 ? Math.round(qtyNum * pricePerShareCents) : 0;
+    qtyNum > 0 && pricePerShareCents > 0 ? multiplyCents(pricePerShareCents, qtyNum) : 0;
 
   const inputCls =
     'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-transparent transition-all';
@@ -138,12 +145,14 @@ export function SellAssetModal({
     <dialog
       ref={dialogRef}
       onClose={handleDialogClose}
+      aria-modal="true"
       aria-labelledby="sell-asset-title"
       className="bg-transparent border-none m-0 h-full w-full max-w-full max-h-full backdrop:bg-transparent open:flex items-center justify-center p-4"
     >
       <button
         type="button"
         aria-label="Close"
+        tabIndex={-1}
         onClick={handleClose}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 220ms ease' }}
@@ -216,7 +225,10 @@ export function SellAssetModal({
               className={`${inputCls} font-mono tabular-nums`}
             />
             <p className="mt-1 text-xs text-slate-500">
-              Available: {holding.quantity.toFixed(4)} shares
+              {get(dictionary, 'availableShares').replace(
+                '{quantity}',
+                holding.quantity.toFixed(4)
+              )}
             </p>
           </div>
 
@@ -242,7 +254,7 @@ export function SellAssetModal({
           {/* Total proceeds */}
           {totalProceedsCents > 0 && (
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
-              <span className="text-xs text-emerald-300">Total proceeds</span>
+              <span className="text-xs text-emerald-300">{get(dictionary, 'totalProceeds')}</span>
               <span className="text-base font-bold text-white tabular-nums">
                 {formatMoney(totalProceedsCents, currency, locale)}
               </span>
@@ -266,7 +278,8 @@ export function SellAssetModal({
             >
               {selling ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Selling...
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />{' '}
+                  {get(dictionary, 'selling')}
                 </>
               ) : (
                 <>{get(dictionary, 'confirmSell')}</>

@@ -257,17 +257,19 @@ When('abre el modal de depósito de inversión', async ({ page }) => {
 
 When('selecciona la cuenta bancaria COP en el depósito', async ({ page }) => {
   const dialog = getOpenDialog(page);
-  const fromSelect = dialog.locator('select#dep-from');
-  // Wait for the options to load via the server action
-  await page.waitForTimeout(1000);
-  // Select the first available option (the COP bank account seeded for this user)
-  const options = await fromSelect.locator('option').all();
-  if (options.length > 0) {
-    const value = await options[0].getAttribute('value');
-    if (value) {
-      await fromSelect.selectOption(value);
-    }
-  }
+  // The source picker is the shared WAI-ARIA AccountSelect (combobox + listbox),
+  // NOT a native <select>. Click the combobox trigger, wait for the options
+  // loaded by the server action, then pick the first COP bank account.
+  const combo = dialog.locator('#dep-from');
+  await expect(combo).toBeVisible({ timeout: 10000 });
+  await combo.click();
+
+  const listbox = dialog.locator('#dep-from-listbox');
+  await expect(listbox).toBeVisible({ timeout: 10000 });
+  const firstOption = listbox.getByRole('option').first();
+  await expect(firstOption).toBeVisible({ timeout: 10000 });
+  await firstOption.click();
+  await expect(listbox).not.toBeVisible({ timeout: 5000 });
 });
 
 When('ingresa {string} en el monto COP de depósito', async ({ page }, amount: string) => {
@@ -284,12 +286,28 @@ When('ingresa {string} en el monto COP de depósito', async ({ page }, amount: s
   }
 });
 
-When('ingresa {string} como tasa de cambio', async ({ page }, rate: string) => {
+When('usa la tasa de cambio actual', async ({ page }) => {
   const dialog = getOpenDialog(page);
   const rateInput = dialog.locator('#dep-rate');
-  await rateInput.click();
-  await rateInput.fill('');
-  await rateInput.fill(rate);
+  await expect(rateInput).toBeVisible({ timeout: 10000 });
+
+  // The modal auto-prefills the live FX rate asynchronously on open (the
+  // default 3900 is replaced by the real rate). Wait for that prefill to land
+  // instead of forcing a fixed value — the server validates the submitted rate
+  // against the live rate with a ±5% tolerance, so a hardcoded "4000" fails
+  // whenever the real COP/USD rate differs. If the FX provider is unavailable
+  // the fetch times out (~5s) and the editable default remains; 8s covers both
+  // cases without depending on the exact live value.
+  await expect(rateInput)
+    .not.toHaveValue('3900', { timeout: 8000 })
+    .catch(() => {});
+
+  const rate = await rateInput.inputValue();
+  const numericRate = Number(rate);
+  // The value must still satisfy the server-side schema range (1000–6000).
+  expect(Number.isFinite(numericRate)).toBe(true);
+  expect(numericRate).toBeGreaterThanOrEqual(1000);
+  expect(numericRate).toBeLessThanOrEqual(6000);
 });
 
 When('envía el formulario de depósito', async ({ page }) => {
@@ -321,8 +339,11 @@ When('selecciona la cuenta de inversión {string}', async ({ page }, accountName
   const card = page.locator(`button[aria-label="${accountName}"]`).first();
   await card.waitFor({ state: 'visible', timeout: 5000 });
   await card.click();
-  // Wait for the selected account detail panel to appear
-  await page.waitForTimeout(500);
+  // The selected-account detail panel renders the "Comprar Activo" action only
+  // once the selection state settles — poll for it instead of a fixed sleep.
+  await expect(page.getByRole('button', { name: /comprar activo/i })).toBeVisible({
+    timeout: 10000,
+  });
 });
 
 // ============================================================================
@@ -414,6 +435,12 @@ Then('debe ver el modal de depósito con título {string}', async ({ page }, tit
   await expect(dialog.locator('h2')).toHaveText(title);
 });
 
+Then('debe ver el modal de retiro con título {string}', async ({ page }, title: string) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await expect(dialog.locator('h2')).toHaveText(title);
+});
+
 Then('debe ver el estimado de recibo en el modal', async ({ page }) => {
   const dialog = getOpenDialog(page);
   await expect(dialog.getByText(/recibirás aproximadamente/i).first()).toBeVisible({
@@ -467,22 +494,16 @@ Then('debe ver el saldo disponible de la cuenta', async ({ page }) => {
 
 Then('debe ver resultados de búsqueda o mensaje de error', async ({ page }) => {
   const dialog = getOpenDialog(page);
-  // Try to wait for either search results or an error message
+  // The redesigned modal renders matches in the #stock-results dropdown (plain
+  // buttons, no listbox role) and shows a localized "no encontrada" block on
+  // failure. The search hits an external provider, so if neither appears we log
+  // without failing (pre-existing contract).
+  const results = dialog.locator('#stock-results');
+  const notFound = dialog.getByText(/no encontrada|no encontrado/i).first();
   try {
-    // First check if results list appears
-    await expect(dialog.locator('ul[role="listbox"]').first()).toBeVisible({ timeout: 8000 });
+    await expect(results.or(notFound)).toBeVisible({ timeout: 10000 });
   } catch {
-    // Fallback: check if an error message appeared
-    try {
-      await expect(dialog.getByText(/no encontrada|no encontrado/i).first()).toBeVisible({
-        timeout: 3000,
-      });
-    } catch {
-      // If neither, log it but don't fail - the search depends on external API
-      console.log(
-        'No search results or error message appeared. External API may not be available.'
-      );
-    }
+    console.log('No search results or error message appeared. External API may not be available.');
   }
 });
 

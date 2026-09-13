@@ -61,6 +61,27 @@ export const CREDIT_CARDS_TEST_USER = {
   name: 'Credit Cards E2E User',
 };
 
+/**
+ * Isolated user for fixed-expenses.feature — seeded with a funded CHECKING/COP
+ * account and four deterministic monthly templates (paid / pending / overdue).
+ */
+export const FIXED_EXPENSES_TEST_USER = {
+  email: process.env.E2E_FIXED_EXPENSES_USER ?? 'fixed-expenses@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Fixed Expenses E2E User',
+};
+
+/**
+ * Isolated user for fixed-expenses.feature @empty — has NO fixed expenses (and
+ * no accounts) so the page renders the empty state.
+ */
+export const FIXED_EXPENSES_EMPTY_USER = {
+  email:
+    process.env.E2E_FIXED_EXPENSES_EMPTY_USER ?? 'fixed-expenses-empty@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Empty Fixed Expenses E2E User',
+};
+
 export const INVALID_CREDENTIALS = {
   email: 'nonexistent@test.com',
   password: 'WrongPass123',

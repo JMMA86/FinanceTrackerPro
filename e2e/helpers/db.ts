@@ -179,6 +179,30 @@ export async function getActiveAccountIdByEmail(email: string, name: string): Pr
 }
 
 /**
+ * Returns the cached balanceCents of an ACTIVE account for the given user email
+ * + exact account name. Used by the fixed-expenses pay scenario to assert the
+ * balance delta after a payment reduces the cached account balance.
+ */
+export async function getAccountBalanceByEmail(
+  email: string,
+  accountName: string
+): Promise<number> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getAccountBalanceByEmail: user ${email} not found`);
+  }
+  const account = await db.account.findFirst({
+    where: { userId: user.id, name: accountName, isActive: true },
+    select: { balanceCents: true },
+  });
+  if (!account) {
+    throw new Error(`getAccountBalanceByEmail: active account "${accountName}" not found`);
+  }
+  return Number(account.balanceCents);
+}
+
+/**
  * Returns the currentAmountCents of the ACTIVE savings goal matching the given
  * user email + exact goal name.
  *

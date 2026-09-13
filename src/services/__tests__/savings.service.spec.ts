@@ -312,10 +312,11 @@ describe('savings.service (unit)', () => {
           { id: 'tx-var-usd', amountCents: -7000, currency: 'USD' },
         ]);
 
-      // fixed expense payments: grouped by the FIXED EXPENSE currency
+      // fixed expense payments: grouped by the PAYMENT currency snapshot
+      // (immutable at materialization time), NOT the template's current currency.
       mockPrisma.fixedExpensePayment.findMany.mockResolvedValue([
-        { expectedAmountCents: 200000, fixedExpense: { currency: 'COP' } },
-        { expectedAmountCents: 10000, fixedExpense: { currency: 'USD' } },
+        { expectedAmountCents: 200000, currency: 'COP' },
+        { expectedAmountCents: 10000, currency: 'USD' },
       ]);
 
       // active goals
@@ -356,6 +357,32 @@ describe('savings.service (unit)', () => {
       expect(usd.totalSavingsCommitmentsCents).toBe(5800);
       expect(usd.totalVariableExpensesCents).toBe(7000);
       expect(usd.maxSpendableCents).toBe(77200);
+    });
+
+    it('REGRESSION (FIX-1): groups a payment by its own currency snapshot even when the template currency differs', async () => {
+      mockPrisma.transaction.findMany
+        .mockResolvedValueOnce([{ amountCents: 1000000, currency: 'COP' }])
+        .mockResolvedValueOnce([]);
+      // The template's CURRENT currency is COP, but the materialized payment
+      // snapshotted USD. The bucket MUST follow the payment snapshot: reading
+      // `payment.fixedExpense.currency` instead would wrongly re-classify it as
+      // COP (the regression this test locks).
+      mockPrisma.fixedExpensePayment.findMany.mockResolvedValue([
+        { expectedAmountCents: 50000, currency: 'USD', fixedExpense: { currency: 'COP' } },
+      ]);
+      mockPrisma.savingsGoal.findMany.mockResolvedValue([]);
+      mockPrisma.savingsContribution.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const result = await getMaxSpendable('user-1', 9, 2026);
+
+      const usd = result.byCurrency.find((b) => b.currency === 'USD')!;
+      const cop = result.byCurrency.find((b) => b.currency === 'COP')!;
+      expect(usd.totalFixedExpensesCents).toBe(50000);
+      expect(cop.totalFixedExpensesCents).toBe(0); // NOT re-classified into COP
+
+      // The query must select the payment's own currency snapshot.
+      const fixedQuery = mockPrisma.fixedExpensePayment.findMany.mock.calls[0][0];
+      expect(fixedQuery.select).toMatchObject({ currency: true });
     });
 
     it('excludes fixed-expense and contribution-linked EXPENSE transactions from the variable bucket at query level', async () => {

@@ -34,6 +34,9 @@ export const UNIQUE_GOAL_NAME_KEY = '__e2eUniqueGoalName';
 /** localStorage key where the unique EDITED savings-goal name is stored (post-edit scenario). */
 export const UNIQUE_EDITED_GOAL_NAME_KEY = '__e2eUniqueEditedGoalName';
 
+/** localStorage key where the unique fixed-expense name is stored for the current scenario. */
+export const UNIQUE_FIXED_EXPENSE_NAME_KEY = '__e2eUniqueFixedExpenseName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -144,5 +147,19 @@ export async function storeUniqueEditedGoalName(page: Page, prefix: string): Pro
 export async function getStoredEditedGoalName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_EDITED_GOAL_NAME_KEY);
   if (!name) throw new Error('No unique edited savings-goal name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped fixed-expense name, stores it and returns it. */
+export async function storeUniqueFixedExpenseName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_FIXED_EXPENSE_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique fixed-expense name stored by the create-fixed-expense step. */
+export async function getStoredFixedExpenseName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_FIXED_EXPENSE_NAME_KEY);
+  if (!name) throw new Error('No unique fixed-expense name stored on the page');
   return name;
 }

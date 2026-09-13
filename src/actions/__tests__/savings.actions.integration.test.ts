@@ -302,6 +302,16 @@ async function cleanupUserData(userId: string) {
   await prisma.transaction.deleteMany({
     where: { userId },
   });
+  // FixedExpensePayment.fixedExpenseId is ON DELETE RESTRICT (Rule 6, soft
+  // delete only): payments must be removed before their templates so the user
+  // cascade (User -> FixedExpense) never trips the FK. The calculateMaxSpendable
+  // fixtures below create fixed expense rows directly.
+  await prisma.fixedExpensePayment.deleteMany({
+    where: { fixedExpense: { userId } },
+  });
+  await prisma.fixedExpense.deleteMany({
+    where: { userId },
+  });
   await prisma.account.deleteMany({
     where: { userId },
   });

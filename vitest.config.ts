@@ -33,6 +33,7 @@ export default defineConfig({
         'src/services/__tests__/**',
         'src/components/transactions/__tests__/**',
         'src/components/savings/__tests__/**',
+        'src/components/fixed-expenses/__tests__/**',
         'src/components/investments/__tests__/**',
         'src/components/accounts/__tests__/**',
         'src/components/auth/__tests__/**',

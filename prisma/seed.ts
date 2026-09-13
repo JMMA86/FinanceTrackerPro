@@ -15,12 +15,90 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { Decimal } from 'decimal.js';
+import {
+  computeDueDates,
+  getMaterializationHorizon,
+  startOfDay,
+} from '@/lib/fixed-expense-recurrence';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const DEMO_PASSWORD = 'Demo123@';
+
+/**
+ * Ensure an account's ledger matches its target cached balance (Rule 13).
+ *
+ * Transactions are the source of truth; `Account.balanceCents` is only a cache.
+ * The seed historically wrote the cache without a backing opening transaction,
+ * so funds checks (getTrueBalanceFromTx) saw a lower ledger and failed with
+ * INSUFFICIENT_FUNDS. This helper:
+ *   1. sums the account's active transactions with Decimal,
+ *   2. computes `diff = target - ledger`,
+ *   3. upserts a deterministic opening transaction for the difference,
+ *   4. only then sets the cache to the target so ledger === cache.
+ *
+ * Idempotent: the opening transaction is keyed by
+ * `seed-opening-balance-<accountId>` and updated (not duplicated) on re-runs.
+ */
+async function reconcileSeedAccountLedger(
+  accountId: string,
+  targetBalanceCents: number,
+  currency: 'COP' | 'USD' | 'EUR',
+  userId: string,
+  date: Date = new Date('2025-01-01')
+): Promise<void> {
+  const accountTransactions = await prisma.transaction.findMany({
+    where: { accountId, isActive: true },
+    select: { amountCents: true },
+  });
+
+  let ledger = new Decimal(0);
+  for (const transaction of accountTransactions) {
+    ledger = ledger.plus(transaction.amountCents.toString());
+  }
+
+  const diff = new Decimal(targetBalanceCents).minus(ledger).toNumber();
+
+  if (diff !== 0) {
+    const type = diff > 0 ? 'INCOME' : 'EXPENSE';
+    await prisma.transaction.upsert({
+      where: { idempotencyKey: `seed-opening-balance-${accountId}` },
+      update: {
+        type,
+        amountCents: BigInt(diff),
+        currency,
+        description: 'Saldo inicial',
+        openingBalance: true,
+        isActive: true,
+        lastModifiedBy: userId,
+      },
+      create: {
+        idempotencyKey: `seed-opening-balance-${accountId}`,
+        userId,
+        accountId,
+        type,
+        amountCents: BigInt(diff),
+        currency,
+        description: 'Saldo inicial',
+        date,
+        openingBalance: true,
+        createdBy: userId,
+        lastModifiedBy: userId,
+      },
+    });
+  }
+
+  await prisma.account.update({
+    where: { id: accountId },
+    data: { balanceCents: targetBalanceCents, lastReconciled: new Date() },
+  });
+
+  console.log(
+    `  ${diff === 0 ? '✓' : '➕'} ledger ${ledger.toString()} → cache ${targetBalanceCents} (opening ${diff})`
+  );
+}
 
 async function main() {
   console.log('🌱 Starting database seed...');
@@ -878,52 +956,42 @@ async function main() {
 
   console.log(`✓ Created ${investmentTxCount} investment demo transactions + holdings`);
 
-  // Update account balances (reconciliation)
-  console.log('Updating account balances...');
-  await prisma.account.update({
-    where: { id: efectivo.id },
-    data: { balanceCents: 50000000, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: bancolombia.id },
-    // Deterministic ledger: Jan salary (+500M) + Feb salary (+500M) − rent
-    // (−120M) − Efectivo transfer (−30M) − Binance transfer (−40M) − card
-    // payment (−5M) − investment outflows (−405M) = 400M (minus ~0.2M of
-    // random expenses seeded above, which are non-deterministic)
-    data: { balanceCents: 400000000, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: nubank.id },
-    // Deterministic sum of card transactions: Netflix/Spotify (-45k) + Restaurante
-    // (-68k) + Amazon (-20k) + Éxito (-15k) + Pago tarjeta (+50k) = -98k COP
-    data: { balanceCents: -9800000, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: binance.id },
-    // Ledger: deposits (14,634 + 11,765 + 10,000) + income (500) − buys
-    // (−19,000 −15,200) = 2,699 USD-cents
-    data: { balanceCents: 2699, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: portafolioUsa.id },
-    // Ledger: deposits (19,512 + 11,905 + 6,977) + income (1,000) − buys
-    // (−7,200 −5,000 −12,600 −7,200) + sell (1,310) = 8,704 USD-cents
-    data: { balanceCents: 8704, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: portafolioEuropa.id },
-    // Ledger: deposits (8,511 + 7,609) + income (350) − buys (−8,700 −420)
-    // = 7,350 EUR-cents
-    data: { balanceCents: 7350, lastReconciled: new Date() },
-  });
-  await prisma.account.update({
-    where: { id: portafolioGlobal.id },
-    // Ledger: deposit (13,953) + income (200) − buys (−5,500 −2,240)
-    // = 6,413 USD-cents
-    data: { balanceCents: 6413, lastReconciled: new Date() },
-  });
+  // Update account balances (reconciliation). Each call reconciles the ledger
+  // first (inserting a deterministic opening transaction when needed) and only
+  // then sets the cache, so `ledger === balanceCents` after the seed (Rule 13).
+  console.log('Reconciling account balances (ledger + cache)...');
 
-  console.log('✓ Account balances updated');
+  // Efectivo: target $500,000 COP, backed by an opening transaction.
+  await reconcileSeedAccountLedger(efectivo.id, 50000000, 'COP', user.id);
+
+  // Bancolombia (Ahorros): deterministic ledger = Jan salary (+500M) + Feb
+  // salary (+500M) − rent (−120M) − Efectivo transfer (−30M) − Binance transfer
+  // (−40M) − card payment (−5M) − investment outflows (−405M) = ~400M (minus
+  // the non-deterministic random expenses above); the opening transaction
+  // absorbs the remainder so the cache stays at $4,000,000 COP.
+  await reconcileSeedAccountLedger(bancolombia.id, 400000000, 'COP', user.id);
+
+  // NuBank: deterministic card ledger = Netflix/Spotify (−45k) + Restaurante
+  // (−68k) + Amazon (−20k) + Éxito (−15k) + Pago tarjeta (+50k) = −98k COP.
+  await reconcileSeedAccountLedger(nubank.id, -9800000, 'COP', user.id);
+
+  // Binance: deposits (14,634 + 11,765 + 10,000) + income (500) − buys
+  // (−19,000 −15,200) = 2,699 USD-cents.
+  await reconcileSeedAccountLedger(binance.id, 2699, 'USD', user.id);
+
+  // Portafolio USA: deposits (19,512 + 11,905 + 6,977) + income (1,000) − buys
+  // (−7,200 −5,000 −12,600 −7,200) + sell (1,310) = 8,704 USD-cents.
+  await reconcileSeedAccountLedger(portafolioUsa.id, 8704, 'USD', user.id);
+
+  // Portafolio Europa: deposits (8,511 + 7,609) + income (350) − buys
+  // (−8,700 −420) = 7,350 EUR-cents.
+  await reconcileSeedAccountLedger(portafolioEuropa.id, 7350, 'EUR', user.id);
+
+  // Portafolio Global: deposit (13,953) + income (200) − buys (−5,500 −2,240)
+  // = 6,413 USD-cents.
+  await reconcileSeedAccountLedger(portafolioGlobal.id, 6413, 'USD', user.id);
+
+  console.log('✓ Account balances reconciled (ledger === cache)');
 
   // 4. Seed system categories (shared, userId: null)
   console.log('Seeding system categories...');
@@ -1112,6 +1180,195 @@ async function main() {
   }
 
   console.log(`✓ Created ${goalsData.length} savings goals with contributions`);
+
+  // Fixed expenses (recurring templates + coherent materialized payments).
+  // No linked Transaction rows are created on purpose: the account balances are
+  // set deterministically above, and the source-of-truth reconciliation would
+  // otherwise drift the documented demo balances.
+  console.log('Creating fixed expenses...');
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const today = startOfDay(now);
+
+  // Shared recurrence engine (the same pure module the service uses) so every
+  // seeded payment is a genuine occurrence of the template series. Otherwise the
+  // first `ensureUpcomingPayments` materializes the true series and the seeded
+  // rows become ghost/duplicate payments double-counted in the summaries.
+  const { from: horizonStart, to: horizonEnd } = getMaterializationHorizon(now);
+
+  interface SeedFixedExpense {
+    name: string;
+    description: string;
+    amountCents: number;
+    currency: 'COP';
+    frequency: 'MONTHLY' | 'BIWEEKLY' | 'YEARLY';
+    dayOfPayment: number | null;
+    startDate: Date;
+    color: string;
+    icon: string;
+    /** Occurrences of the series to seed, by role (unpaid unless `paid`). */
+    plan: { paid?: boolean; pending?: boolean; overdue?: boolean };
+  }
+
+  const fixedExpenses: SeedFixedExpense[] = [
+    {
+      name: 'Arriendo',
+      description: 'Arriendo apartamento',
+      amountCents: 120000000, // $1,200,000 COP
+      currency: 'COP',
+      frequency: 'MONTHLY',
+      dayOfPayment: 5,
+      startDate: startOfDay(new Date(year - 1, 0, 1)),
+      color: '#EF4444',
+      icon: 'home',
+      plan: { paid: true, pending: true },
+    },
+    {
+      name: 'Netflix',
+      description: 'Suscripción mensual',
+      amountCents: 4500000, // $45,000 COP
+      currency: 'COP',
+      frequency: 'MONTHLY',
+      dayOfPayment: 15,
+      startDate: startOfDay(new Date(year - 1, 0, 1)),
+      color: '#DC2626',
+      icon: 'tv',
+      plan: { pending: true },
+    },
+    {
+      name: 'Internet',
+      description: 'Plan de fibra óptica',
+      amountCents: 12000000, // $120,000 COP
+      currency: 'COP',
+      frequency: 'MONTHLY',
+      dayOfPayment: 10,
+      startDate: startOfDay(new Date(year - 1, 0, 1)),
+      color: '#3B82F6',
+      icon: 'wifi',
+      plan: { overdue: true },
+    },
+    {
+      name: 'Gimnasio',
+      description: 'Mensualidad gimnasio',
+      amountCents: 8000000, // $80,000 COP
+      currency: 'COP',
+      frequency: 'BIWEEKLY',
+      dayOfPayment: null,
+      startDate: startOfDay(new Date(2025, 0, 1)),
+      color: '#10B981',
+      icon: 'dumbbell',
+      plan: { paid: true, pending: true },
+    },
+    {
+      name: 'Seguro Anual',
+      description: 'Seguro todo riesgo',
+      amountCents: 90000000, // $900,000 COP
+      currency: 'COP',
+      frequency: 'YEARLY',
+      dayOfPayment: 1,
+      startDate: startOfDay(new Date(year - 1, 0, 1)),
+      color: '#8B5CF6',
+      icon: 'shield',
+      plan: { pending: true },
+    },
+  ];
+
+  let fixedExpensePaymentCount = 0;
+  for (const expenseData of fixedExpenses) {
+    const existing = await prisma.fixedExpense.findFirst({
+      where: { userId: user.id, name: expenseData.name, isActive: true },
+    });
+
+    const expense =
+      existing ??
+      (await prisma.fixedExpense.create({
+        data: {
+          userId: user.id,
+          name: expenseData.name,
+          description: expenseData.description,
+          amountCents: expenseData.amountCents,
+          currency: expenseData.currency,
+          frequency: expenseData.frequency,
+          dayOfPayment: expenseData.dayOfPayment,
+          startDate: expenseData.startDate,
+          color: expenseData.color,
+          icon: expenseData.icon,
+          createdBy: user.id,
+          lastModifiedBy: user.id,
+        },
+      }));
+
+    // Derive from the persisted template's own schedule so dates always align
+    // with what the service will materialize (even when re-seeding).
+    const occurrences = computeDueDates(expense, horizonStart, horizonEnd);
+    const pastOccurrences = occurrences.filter((date) => date < today);
+    const futureOccurrences = occurrences.filter((date) => date >= today);
+
+    const payments: Array<{
+      dueDate: Date;
+      paidDate?: Date;
+      paidAmountCents?: number;
+      notes?: string;
+    }> = [];
+    const usedDueDates = new Set<number>();
+
+    if (expenseData.plan.paid && pastOccurrences.length > 0) {
+      const paidDueDate = pastOccurrences[pastOccurrences.length - 1];
+      usedDueDates.add(paidDueDate.getTime());
+      payments.push({
+        dueDate: paidDueDate,
+        paidDate: paidDueDate,
+        paidAmountCents: expenseData.amountCents,
+        notes: 'Pagado',
+      });
+    }
+
+    if (expenseData.plan.overdue && pastOccurrences.length > 0) {
+      const overdueDueDate = [...pastOccurrences]
+        .reverse()
+        .find((date) => !usedDueDates.has(date.getTime()));
+      if (overdueDueDate) {
+        usedDueDates.add(overdueDueDate.getTime());
+        payments.push({ dueDate: overdueDueDate, notes: 'Vencido' });
+      }
+    }
+
+    if (expenseData.plan.pending && futureOccurrences.length > 0) {
+      const pendingDueDate = futureOccurrences[0];
+      usedDueDates.add(pendingDueDate.getTime());
+      payments.push({ dueDate: pendingDueDate, notes: 'Pendiente' });
+    }
+
+    for (const payment of payments) {
+      await prisma.fixedExpensePayment.upsert({
+        where: {
+          fixedExpenseId_dueDate: {
+            fixedExpenseId: expense.id,
+            dueDate: payment.dueDate,
+          },
+        },
+        update: {},
+        create: {
+          fixedExpenseId: expense.id,
+          dueDate: payment.dueDate,
+          paidDate: payment.paidDate ?? null,
+          expectedAmountCents: expenseData.amountCents,
+          paidAmountCents: payment.paidAmountCents ?? null,
+          currency: expenseData.currency,
+          notes: payment.notes ?? null,
+          idempotencyKey: crypto.randomUUID(),
+          createdBy: user.id,
+          lastModifiedBy: user.id,
+        },
+      });
+      fixedExpensePaymentCount++;
+    }
+  }
+
+  console.log(
+    `✓ Created ${fixedExpenses.length} fixed expenses with ${fixedExpensePaymentCount} payments`
+  );
   console.log('✅ Seed completed successfully!');
 }
 

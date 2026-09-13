@@ -738,6 +738,193 @@ async function main() {
   );
 
   // ============================================================================
+  // Fixed expenses E2E user (fixed-expenses.feature)
+  // Isolated so recurring-expense scenarios never collide with other features.
+  //   - CHECKING/COP account with a funded ledger (Rule 13) to pay from.
+  //   - Templates with a paid, a pending and an overdue payment.
+  // ============================================================================
+  const fixedExpensesUserEmail =
+    process.env.E2E_FIXED_EXPENSES_USER || 'fixed-expenses@e2e.financetrackerpro.com';
+  const fixedExpensesUser = await upsertUserAndGet(
+    fixedExpensesUserEmail,
+    'Fixed Expenses E2E User'
+  );
+
+  const fixedExpensesAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-fixed-expenses-bank-account' },
+    create: {
+      idempotencyKey: 'e2e-fixed-expenses-bank-account',
+      userId: fixedExpensesUser.id,
+      name: 'Cuenta Corriente',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 50000000, // $500,000 COP
+      createdBy: fixedExpensesUser.id,
+      lastModifiedBy: fixedExpensesUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Rule 13: the CHECKING balance MUST be backed by the ledger, otherwise paying
+  // a fixed expense from it fails the getTrueBalanceFromTx funds check. Upsert
+  // the deterministic opening transaction so seed re-runs stay idempotent.
+  await prisma.transaction.upsert({
+    where: { idempotencyKey: 'e2e-fixed-expenses-bank-initial' },
+    update: {
+      openingBalance: true,
+      description: 'Saldo inicial',
+      isActive: true,
+      lastModifiedBy: fixedExpensesUser.id,
+    },
+    create: {
+      idempotencyKey: 'e2e-fixed-expenses-bank-initial',
+      userId: fixedExpensesUser.id,
+      accountId: fixedExpensesAccount.id,
+      type: 'INCOME',
+      amountCents: 50000000,
+      currency: 'COP',
+      description: 'Saldo inicial',
+      date: new Date('2025-01-01'),
+      openingBalance: true,
+      createdBy: fixedExpensesUser.id,
+      lastModifiedBy: fixedExpensesUser.id,
+      isActive: true,
+    },
+  });
+
+  const feNow = new Date();
+  const feYear = feNow.getFullYear();
+  const feMonth = feNow.getMonth();
+  const feLocalMidnight = (y: number, m: number, d: number): Date => new Date(y, m, d, 0, 0, 0, 0);
+
+  interface E2eFixedExpense {
+    name: string;
+    frequency: 'MONTHLY';
+    dayOfPayment: number;
+    amountCents: number;
+    startDate: Date;
+    payments: Array<{ dueDate: Date; paidDate?: Date; paidAmountCents?: number; notes?: string }>;
+  }
+
+  // Every template starts on the FIRST day of the CURRENT month so the 3-month
+  // overdue lookback in generatePayments() cannot materialize older occurrences.
+  // This keeps the calendar window and the "upcoming payments" horizon
+  // deterministic while still producing the four statuses the UI supports:
+  //   - Arriendo: current-month occurrence (day 5) PAID      -> "Pagado"
+  //   - Internet: current-month occurrence (last day) unpaid -> "Pendiente"
+  //   - Gimnasio: current-month occurrence (day 1) unpaid     -> "Vencido"
+  //   - Netflix:  current-month occurrence (day 1) unpaid     -> paid by the pay
+  //               scenario through the card, becoming "Pagado"
+  // Day 1 is always <= today within the month; day 31 clamps to the last day of
+  // the month and is therefore always >= today -> a stable "Pendiente".
+  const feStartOfMonth = feLocalMidnight(feYear, feMonth, 1);
+  const feClampedDay = (day: number): Date => {
+    const lastDay = new Date(feYear, feMonth + 1, 0).getDate();
+    return feLocalMidnight(feYear, feMonth, Math.min(day, lastDay));
+  };
+
+  const e2eFixedExpenses: E2eFixedExpense[] = [
+    {
+      name: 'Arriendo E2E',
+      frequency: 'MONTHLY',
+      dayOfPayment: 5,
+      amountCents: 120000000,
+      startDate: feStartOfMonth,
+      payments: [
+        {
+          dueDate: feClampedDay(5),
+          paidDate: feClampedDay(5),
+          paidAmountCents: 120000000,
+          notes: 'Pagado este mes',
+        },
+      ],
+    },
+    {
+      name: 'Internet E2E',
+      frequency: 'MONTHLY',
+      dayOfPayment: 31,
+      amountCents: 12000000,
+      startDate: feStartOfMonth,
+      payments: [],
+    },
+    {
+      name: 'Gimnasio E2E',
+      frequency: 'MONTHLY',
+      dayOfPayment: 1,
+      amountCents: 8000000,
+      startDate: feStartOfMonth,
+      payments: [],
+    },
+    {
+      name: 'Netflix E2E',
+      frequency: 'MONTHLY',
+      dayOfPayment: 1,
+      amountCents: 4500000,
+      startDate: feStartOfMonth,
+      payments: [],
+    },
+  ];
+
+  for (const expenseData of e2eFixedExpenses) {
+    const existing = await prisma.fixedExpense.findFirst({
+      where: { userId: fixedExpensesUser.id, name: expenseData.name, isActive: true },
+    });
+
+    const expense =
+      existing ??
+      (await prisma.fixedExpense.create({
+        data: {
+          userId: fixedExpensesUser.id,
+          name: expenseData.name,
+          description: `Gasto fijo E2E: ${expenseData.name}`,
+          amountCents: expenseData.amountCents,
+          currency: 'COP',
+          frequency: expenseData.frequency,
+          dayOfPayment: expenseData.dayOfPayment,
+          startDate: expenseData.startDate,
+          color: '#3B82F6',
+          icon: 'receipt',
+          createdBy: fixedExpensesUser.id,
+          lastModifiedBy: fixedExpensesUser.id,
+        },
+      }));
+
+    for (const payment of expenseData.payments) {
+      await prisma.fixedExpensePayment.upsert({
+        where: {
+          fixedExpenseId_dueDate: {
+            fixedExpenseId: expense.id,
+            dueDate: payment.dueDate,
+          },
+        },
+        update: {},
+        create: {
+          fixedExpenseId: expense.id,
+          dueDate: payment.dueDate,
+          paidDate: payment.paidDate ?? null,
+          expectedAmountCents: expenseData.amountCents,
+          paidAmountCents: payment.paidAmountCents ?? null,
+          currency: 'COP',
+          notes: payment.notes ?? null,
+          createdBy: fixedExpensesUser.id,
+          lastModifiedBy: fixedExpensesUser.id,
+        },
+      });
+    }
+  }
+
+  console.log('✓ Fixed expenses user seeded with COP account and templates (paid/pending/overdue)');
+
+  // Empty fixed-expenses user (fixed-expenses.feature @empty) — has NO fixed
+  // expenses so the page renders the empty state. Isolated from every other
+  // user so the empty-state scenario never couples to seeded data.
+  const fixedExpensesEmptyUserEmail =
+    process.env.E2E_FIXED_EXPENSES_EMPTY_USER || 'fixed-expenses-empty@e2e.financetrackerpro.com';
+  await upsertUserAndGet(fixedExpensesEmptyUserEmail, 'Empty Fixed Expenses E2E User');
+  console.log('✓ Empty fixed expenses user seeded with no expenses');
+
+  // ============================================================================
   // System categories (shared, userId: null)
   // ============================================================================
   const systemCategories = [

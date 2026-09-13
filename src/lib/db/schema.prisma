@@ -124,6 +124,7 @@ enum ApiAction {
   INVESTMENT_SELL
   SAVINGS_CONTRIBUTE
   CREDIT_CARD_PAYMENT
+  FIXED_EXPENSE_PAY
 }
 
 // ============================================================================
@@ -334,6 +335,7 @@ model FixedExpense {
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name            String                  // e.g., "Arriendo", "Netflix"
+  description     String?                 // Optional description
   amountCents     BigInt                  // Expected amount
   currency        Currency                @default(COP)
   frequency       FixedExpenseFrequency
@@ -341,6 +343,10 @@ model FixedExpense {
 
   startDate       DateTime
   endDate         DateTime?               // Null = indefinite
+
+  // UI
+  color           String?                 // Hex color for card
+  icon            String?                 // Icon name for display
 
   // Relations
   payments        FixedExpensePayment[]
@@ -352,6 +358,9 @@ model FixedExpense {
   deletedAt       DateTime?
   createdBy       String?
   lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
 
   @@index([userId])
   @@index([isActive])
@@ -362,7 +371,9 @@ model FixedExpense {
 model FixedExpensePayment {
   id              String        @id @default(cuid())
   fixedExpenseId  String
-  fixedExpense    FixedExpense  @relation(fields: [fixedExpenseId], references: [id], onDelete: Cascade)
+  // ON DELETE RESTRICT: a template must never be physically deleted (soft delete
+  // only, Rule 6); restricting the FK guarantees historical payments survive.
+  fixedExpense    FixedExpense  @relation(fields: [fixedExpenseId], references: [id], onDelete: Restrict)
 
   dueDate         DateTime      // Expected payment date
   paidDate        DateTime?     // Actual payment date (null = unpaid)
@@ -370,6 +381,10 @@ model FixedExpensePayment {
   expectedAmountCents BigInt
   paidAmountCents     BigInt?
   currency            Currency
+  notes               String?
+
+  // Idempotency (Rule 12): one payment per due date, keyed by UUID v4
+  idempotencyKey  String?       @unique
 
   // Link to actual transaction
   transaction     Transaction?
@@ -381,7 +396,12 @@ model FixedExpensePayment {
   deletedAt       DateTime?
   createdBy       String?
   lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
 
+  // One materialized payment per (template, due date) — makes generation idempotent
+  @@unique([fixedExpenseId, dueDate])
   @@index([fixedExpenseId])
   @@index([dueDate])
   @@index([isActive])

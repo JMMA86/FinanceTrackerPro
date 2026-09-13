@@ -362,6 +362,8 @@ function formatMetricsResult(
     monthlyExpenses: number;
     lastMonthExpenses: number;
     pendingFixedExpenses: number;
+    /** Currency of the pending fixed-expenses KPI (single currency, never mixed). */
+    pendingFixedExpensesCurrency: Currency;
     transactions: TransactionData[];
     dollarRate: number;
     investmentSparkline: number[];
@@ -468,8 +470,12 @@ function formatMetricsResult(
     },
     pendingFixedExpenses: {
       amount: metrics.pendingFixedExpenses,
-      formatted: formatMoney(metrics.pendingFixedExpenses, defaultCurrency, locale),
-      currency: defaultCurrency,
+      formatted: formatMoney(
+        metrics.pendingFixedExpenses,
+        metrics.pendingFixedExpensesCurrency,
+        locale
+      ),
+      currency: metrics.pendingFixedExpensesCurrency,
     },
 
     // Savings
@@ -597,13 +603,24 @@ export async function getDashboardMetricsByUser(
     return getEmptyMetrics();
   }
 
-  // Fetch pending fixed expenses
+  // The user's base currency drives every single-currency KPI below. Resolve it
+  // BEFORE the pending fixed-expenses query so this KPI never mixes currencies
+  // (Rule 2/4). `payment.currency` is the immutable snapshot taken at
+  // materialization time.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { baseCurrency: true },
+  });
+  const preferredCurrency: Currency = user?.baseCurrency ?? 'COP';
+
+  // Fetch pending fixed expenses in the user's base currency only.
   const pendingFixedExpenses = (
     await prisma.fixedExpensePayment.findMany({
       where: {
         fixedExpense: { userId, isActive: true },
         paidDate: null,
         dueDate: { lte: now },
+        currency: preferredCurrency,
       },
       select: { expectedAmountCents: true, currency: true },
     })
@@ -643,12 +660,6 @@ export async function getDashboardMetricsByUser(
   const pendingFixedExpensesTotal = calculatePendingFixedExpenses(pendingFixedExpenses);
 
   // Savings metrics (C1: per-currency buckets — never mix currencies)
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { baseCurrency: true },
-  });
-  const preferredCurrency: Currency = user?.baseCurrency ?? 'COP';
-
   const savingsSummary = await getSavingsSummary(userId);
   const maxSpendableBreakdown = await getMaxSpendable(
     userId,
@@ -675,6 +686,7 @@ export async function getDashboardMetricsByUser(
       monthlyExpenses: txMetrics.monthlyExpenses,
       lastMonthExpenses: txMetrics.lastMonthExpenses,
       pendingFixedExpenses: pendingFixedExpensesTotal,
+      pendingFixedExpensesCurrency: preferredCurrency,
       transactions: allTransactions,
       dollarRate,
       investmentSparkline,

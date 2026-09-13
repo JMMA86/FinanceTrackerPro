@@ -326,3 +326,26 @@ export class TransactionLinkedToSavingsError extends AppError {
     );
   }
 }
+
+/**
+ * 400 - Fixed Expense Already Paid
+ * Thrown when paying a materialized fixed expense payment that already has a
+ * paidDate. There is no payment reversal in v1. The message is generic and does
+ * not expose any IDs.
+ */
+export class FixedExpenseAlreadyPaidError extends AppError {
+  constructor() {
+    super('This fixed expense payment has already been paid', 400, 'FIXED_EXPENSE_ALREADY_PAID');
+  }
+}
+
+/**
+ * 400 - Payment Amount Invalid
+ * Thrown when the resolved payment amount (override or expected) is not a
+ * positive integer number of cents.
+ */
+export class PaymentAmountInvalidError extends AppError {
+  constructor() {
+    super('The payment amount must be greater than zero', 400, 'PAYMENT_AMOUNT_INVALID');
+  }
+}

@@ -145,6 +145,7 @@ const API_LIMITS: Record<ApiAction, number> = {
   INVESTMENT_SELL: 60,
   SAVINGS_CONTRIBUTE: 60,
   CREDIT_CARD_PAYMENT: 60,
+  FIXED_EXPENSE_PAY: 60,
 };
 
 /**

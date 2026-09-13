@@ -534,9 +534,10 @@ export async function getMaxSpendable(
     addToCurrencyBucket(incomeByCurrency, tx.currency, Number(tx.amountCents));
   }
 
-  // 2. Fixed Expenses: expected payments due in the month, per fixed expense
-  //    currency (NOT the payment row currency — the payment copies it but the
-  //    FixedExpense is the ownership record).
+  // 2. Fixed Expenses: expected payments due in the month, grouped by the
+  //    PAYMENT's immutable currency snapshot (NOT the template's current
+  //    currency) so a template currency change never re-classifies historical
+  //    payments into another bucket.
   const fixedByCurrency: MoneyByCurrency = {};
   const fixedExpensePayments = await prisma.fixedExpensePayment.findMany({
     where: {
@@ -546,16 +547,15 @@ export async function getMaxSpendable(
     },
     select: {
       expectedAmountCents: true,
-      fixedExpense: { select: { currency: true } },
+      // Use the payment's immutable currency snapshot (not the template's
+      // current currency) so a template currency change never re-classifies
+      // historical payments into another bucket.
+      currency: true,
     },
   });
 
   for (const payment of fixedExpensePayments) {
-    addToCurrencyBucket(
-      fixedByCurrency,
-      payment.fixedExpense.currency,
-      Number(payment.expectedAmountCents)
-    );
+    addToCurrencyBucket(fixedByCurrency, payment.currency, Number(payment.expectedAmountCents));
   }
 
   // 3. Savings Commitments: per ACTIVE goal, max(planned, realized this month)

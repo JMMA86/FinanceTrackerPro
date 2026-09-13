@@ -1,7 +1,7 @@
 ---
 description: Líder de Ciberseguridad y SecOps especializado en auditoría OWASP Top 10 y protección de datos financieros PII.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 permission:
   edit: deny

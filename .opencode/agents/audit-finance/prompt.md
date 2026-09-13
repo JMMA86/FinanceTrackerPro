@@ -1,7 +1,7 @@
 ---
 description: Especialista en auditoría de integridad transaccional y cumplimiento contable.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/deepseek-v4.1-flash
 temperature: 0.1
 permission:
   edit: deny

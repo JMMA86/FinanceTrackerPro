@@ -1,7 +1,7 @@
 ---
 description: Desarrollador Backend Senior especializado en Server Actions, operaciones de base de datos Prisma y seguridad financiera.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/deepseek-v4.1-flash
 tools:
   write: true
   edit: true

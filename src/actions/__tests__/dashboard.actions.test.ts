@@ -112,6 +112,8 @@ function makeLoanRow(overrides: Record<string, unknown> = {}) {
     id: 'loan-1',
     name: 'Test Loan',
     balanceCents: 500_000,
+    direction: 'PAYABLE',
+    status: 'ACTIVE',
     ...overrides,
   } as unknown as Awaited<ReturnType<typeof prisma.loan.findMany>>[number];
 }

@@ -62,8 +62,12 @@ export async function getTrueBalance(
     // - TRANSFER_IN: positive
     // - TRANSFER_OUT: negative
     // - INVESTMENT: negative
-    // - LOAN_PAYMENT: negative
+    // - LOAN_PAYMENT: negative (outflow paying a PAYABLE installment)
+    // - LOAN_RECEIPT: positive (inflow collecting a RECEIVABLE installment)
     // - CREDIT_PAYMENT: positive on the card (reduces debt; balance becomes less negative)
+    //
+    // Every amount already carries its sign, so the ledger balance is a plain
+    // signed sum (this is why LOAN_RECEIPT needs no special casing).
     balance = addCents(balance, Number(tx.amountCents));
   }
 

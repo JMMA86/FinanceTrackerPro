@@ -40,6 +40,7 @@ function getTypeIcon(type: string) {
     case 'INVESTMENT':
       return TrendingUp;
     case 'LOAN_PAYMENT':
+    case 'LOAN_RECEIPT':
     case 'CREDIT_PAYMENT':
       return CreditCard;
     default:
@@ -61,6 +62,8 @@ function getTypeBadgeStyles(type: string): string {
       return 'bg-violet-500/10 text-violet-400 border-violet-500/20';
     case 'LOAN_PAYMENT':
       return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+    case 'LOAN_RECEIPT':
+      return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
     case 'CREDIT_PAYMENT':
       return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
     default:
@@ -76,6 +79,7 @@ function getTypeLabel(type: string, dictionary: Record<string, unknown>): string
     TRANSFER_OUT: 'transferOut',
     INVESTMENT: 'investment',
     LOAN_PAYMENT: 'loanPayment',
+    LOAN_RECEIPT: 'loanReceipt',
     CREDIT_PAYMENT: 'creditPayment',
   };
   return get(dictionary, keyMap[type] ?? type);
@@ -84,10 +88,16 @@ function getTypeLabel(type: string, dictionary: Record<string, unknown>): string
 /**
  * Transaction types displayed with a positive (+) amount and green color.
  * INCOME and TRANSFER_IN are stored positive; CREDIT_PAYMENT is stored
- * positive on the card (a payment reduces debt) so it must render as +$X.
+ * positive on the card (a payment reduces debt) and LOAN_RECEIPT is the
+ * collection of a loan the user granted, so both render as +$X.
  */
 function isPositiveAmountType(type: string): boolean {
-  return type === 'INCOME' || type === 'TRANSFER_IN' || type === 'CREDIT_PAYMENT';
+  return (
+    type === 'INCOME' ||
+    type === 'TRANSFER_IN' ||
+    type === 'CREDIT_PAYMENT' ||
+    type === 'LOAN_RECEIPT'
+  );
 }
 
 function formatDate(date: string | Date, locale: string): string {

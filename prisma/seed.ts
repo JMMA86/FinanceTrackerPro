@@ -20,6 +20,8 @@ import {
   getMaterializationHorizon,
   startOfDay,
 } from '@/lib/fixed-expense-recurrence';
+import { addMonths } from 'date-fns';
+import { buildAmortizationSchedule, computeLoanSummary } from '@/lib/loans/interest';
 import { seedVariableExpenses } from './seed-variable-expenses';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -50,25 +52,38 @@ async function reconcileSeedAccountLedger(
   userId: string,
   date: Date = new Date('2025-01-01')
 ): Promise<void> {
+  const openingKey = `seed-opening-balance-${accountId}`;
   const accountTransactions = await prisma.transaction.findMany({
     where: { accountId, isActive: true },
-    select: { amountCents: true },
+    select: { amountCents: true, idempotencyKey: true },
   });
 
+  // The opening transaction is EXCLUDED from the ledger sum: it is the absorber,
+  // so the required opening is `target - ledgerWithoutOpening`. Including it
+  // (the previous behavior) made the helper non-idempotent — a second call
+  // replaced the opening with the whole difference and drifted the cache.
   let ledger = new Decimal(0);
+  let existingOpening = new Decimal(0);
   for (const transaction of accountTransactions) {
-    ledger = ledger.plus(transaction.amountCents.toString());
+    const amount = new Decimal(transaction.amountCents.toString());
+    if (transaction.idempotencyKey === openingKey) {
+      existingOpening = amount;
+      continue;
+    }
+    ledger = ledger.plus(amount);
   }
 
-  const diff = new Decimal(targetBalanceCents).minus(ledger).toNumber();
+  const requiredOpening = new Decimal(targetBalanceCents).minus(ledger);
+  const changed = !requiredOpening.equals(existingOpening);
 
-  if (diff !== 0) {
-    const type = diff > 0 ? 'INCOME' : 'EXPENSE';
+  if (changed) {
+    const openingCents = requiredOpening.toNumber();
+    const type = requiredOpening.isNegative() ? 'EXPENSE' : 'INCOME';
     await prisma.transaction.upsert({
-      where: { idempotencyKey: `seed-opening-balance-${accountId}` },
+      where: { idempotencyKey: openingKey },
       update: {
         type,
-        amountCents: BigInt(diff),
+        amountCents: BigInt(openingCents),
         currency,
         description: 'Saldo inicial',
         openingBalance: true,
@@ -76,11 +91,11 @@ async function reconcileSeedAccountLedger(
         lastModifiedBy: userId,
       },
       create: {
-        idempotencyKey: `seed-opening-balance-${accountId}`,
+        idempotencyKey: openingKey,
         userId,
         accountId,
         type,
-        amountCents: BigInt(diff),
+        amountCents: BigInt(openingCents),
         currency,
         description: 'Saldo inicial',
         date,
@@ -97,7 +112,7 @@ async function reconcileSeedAccountLedger(
   });
 
   console.log(
-    `  ${diff === 0 ? '✓' : '➕'} ledger ${ledger.toString()} → cache ${targetBalanceCents} (opening ${diff})`
+    `  ${changed ? '➕' : '✓'} ledger ${ledger.toString()} → cache ${targetBalanceCents} (opening ${requiredOpening.toString()})`
   );
 }
 
@@ -132,20 +147,28 @@ async function main() {
   // 2. Create 4 accounts
   console.log('Creating accounts...');
 
-  // Find-or-create guard for investment demo accounts: re-seeding must never
-  // duplicate an existing investment account (matched by name + userId).
+  // Find-or-create guard for demo accounts: re-seeding must never duplicate an
+  // account. Matching is idempotent by `{ userId, name, type }`; when copies
+  // already exist we reuse the oldest one (`orderBy: createdAt asc`) instead of
+  // piling up new duplicates. Newly created rows carry a deterministic
+  // `idempotencyKey` (`seed-account-<slug>`) as a database-level guard.
   const findOrCreateAccount = async (params: {
+    slug: string;
     name: string;
-    type: 'INVESTMENT';
-    currency: 'USD' | 'EUR';
+    type: 'CHECKING' | 'CASH' | 'SAVINGS' | 'POCKET' | 'INVESTMENT' | 'CREDIT_CARD';
+    currency: 'COP' | 'USD' | 'EUR';
     balanceCents: number;
     interestRateEA?: Decimal;
+    creditLimitCents?: number;
+    cutoffDay?: number;
+    paymentDueDay?: number;
   }) => {
     const existing = await prisma.account.findFirst({
-      where: { userId: user.id, name: params.name, isActive: true },
+      where: { userId: user.id, name: params.name, type: params.type, isActive: true },
+      orderBy: { createdAt: 'asc' },
     });
     if (existing) {
-      console.log(`↩ ${params.name} already exists, skipping creation`);
+      console.log(`↩ ${params.name} already exists, reusing oldest copy`);
       return existing;
     }
     return prisma.account.create({
@@ -156,49 +179,45 @@ async function main() {
         currency: params.currency,
         balanceCents: params.balanceCents,
         ...(params.interestRateEA != null ? { interestRateEA: params.interestRateEA } : {}),
+        ...(params.creditLimitCents != null ? { creditLimitCents: params.creditLimitCents } : {}),
+        ...(params.cutoffDay != null ? { cutoffDay: params.cutoffDay } : {}),
+        ...(params.paymentDueDay != null ? { paymentDueDay: params.paymentDueDay } : {}),
+        idempotencyKey: `seed-account-${params.slug}`,
         createdBy: user.id,
       },
     });
   };
 
-  const efectivo = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: 'Efectivo',
-      type: 'SAVINGS',
-      currency: 'COP',
-      balanceCents: 50000000, // $500,000 COP
-      createdBy: user.id,
-    },
+  const efectivo = await findOrCreateAccount({
+    slug: 'efectivo',
+    name: 'Efectivo',
+    type: 'SAVINGS',
+    currency: 'COP',
+    balanceCents: 50000000, // $500,000 COP
   });
 
-  const bancolombia = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: 'Bancolombia (Ahorros)',
-      type: 'SAVINGS',
-      currency: 'COP',
-      balanceCents: 250000000, // $2,500,000 COP
-      interestRateEA: new Decimal('4.5'), // 4.5% E.A.
-      createdBy: user.id,
-    },
+  const bancolombia = await findOrCreateAccount({
+    slug: 'bancolombia-ahorros',
+    name: 'Bancolombia (Ahorros)',
+    type: 'SAVINGS',
+    currency: 'COP',
+    balanceCents: 250000000, // $2,500,000 COP
+    interestRateEA: new Decimal('4.5'), // 4.5% E.A.
   });
 
-  const nubank = await prisma.account.create({
-    data: {
-      userId: user.id,
-      name: 'NuBank (Crédito)',
-      type: 'CREDIT_CARD',
-      currency: 'COP',
-      balanceCents: -15000000, // -$150,000 COP (deuda)
-      creditLimitCents: 300000000, // $3,000,000 COP
-      cutoffDay: 15,
-      paymentDueDay: 25,
-      createdBy: user.id,
-    },
+  const nubank = await findOrCreateAccount({
+    slug: 'nubank-credito',
+    name: 'NuBank (Crédito)',
+    type: 'CREDIT_CARD',
+    currency: 'COP',
+    balanceCents: -15000000, // -$150,000 COP (deuda)
+    creditLimitCents: 300000000, // $3,000,000 COP
+    cutoffDay: 15,
+    paymentDueDay: 25,
   });
 
   const binance = await findOrCreateAccount({
+    slug: 'binance-inversion',
     name: 'Binance (Inversión)',
     type: 'INVESTMENT',
     currency: 'USD',
@@ -206,8 +225,9 @@ async function main() {
     interestRateEA: new Decimal('8.2'), // 8.2% E.A.
   });
 
-  // 2b. Additional investment demo accounts (find-or-create by name + userId)
+  // 2b. Additional investment demo accounts (find-or-create by name + type + userId)
   const portafolioUsa = await findOrCreateAccount({
+    slug: 'portafolio-usa',
     name: 'Portafolio USA (USD)',
     type: 'INVESTMENT',
     currency: 'USD',
@@ -216,6 +236,7 @@ async function main() {
   });
 
   const portafolioEuropa = await findOrCreateAccount({
+    slug: 'portafolio-europa',
     name: 'Portafolio Europa (EUR)',
     type: 'INVESTMENT',
     currency: 'EUR',
@@ -224,6 +245,7 @@ async function main() {
   });
 
   const portafolioGlobal = await findOrCreateAccount({
+    slug: 'portafolio-global',
     name: 'Portafolio Global (USD)',
     type: 'INVESTMENT',
     currency: 'USD',
@@ -1383,6 +1405,281 @@ async function main() {
   await reconcileSeedAccountLedger(efectivo.id, 50000000, 'COP', user.id);
   await reconcileSeedAccountLedger(bancolombia.id, 400000000, 'COP', user.id);
   await reconcileSeedAccountLedger(nubank.id, -9800000, 'COP', user.id);
+
+  // 7. Loans (Módulo de Préstamos — Fase B).
+  //
+  // 2–3 realistic loans so the module is visible end-to-end: RECEIVABLE and
+  // PAYABLE, COP and USD, FRENCH and GERMAN (with an interest-only period).
+  // The amortization schedule is produced by the SAME pure engine the service
+  // uses (never hardcoded). Everything is idempotent: loans are upserted by a
+  // deterministic `idempotencyKey`, installments by UNIQUE(loanId,
+  // installmentNumber) and payments by deterministic idempotency keys.
+  console.log('Creating loans...');
+
+  const loanStartDate = new Date(now.getFullYear(), now.getMonth() - 3, 10);
+  const loanFirstPaymentDate = addMonths(loanStartDate, 1);
+
+  interface SeedLoanDefinition {
+    slug: string;
+    name: string;
+    direction: 'RECEIVABLE' | 'PAYABLE';
+    notes: string;
+    principalCents: number;
+    currency: 'COP' | 'USD';
+    interestRateValue: number;
+    amortizationType: 'FRENCH' | 'GERMAN';
+    termCount: number;
+    interestOnlyInstallments?: number;
+    paidCount: number;
+    accountId: string;
+    color: string;
+    icon: string;
+  }
+
+  const seedLoans: SeedLoanDefinition[] = [
+    {
+      slug: 'carlos',
+      name: 'Préstamo a Carlos',
+      direction: 'RECEIVABLE',
+      notes: 'Préstamo personal acordado con Carlos',
+      principalCents: 300000000, // $3.000.000 COP
+      currency: 'COP',
+      interestRateValue: 24, // E.A.
+      amortizationType: 'FRENCH',
+      termCount: 12,
+      paidCount: 3,
+      accountId: bancolombia.id,
+      color: '#0EA5E9',
+      icon: 'hand-coins',
+    },
+    {
+      slug: 'bancolombia-credito',
+      name: 'Crédito Bancolombia',
+      direction: 'PAYABLE',
+      notes: 'Crédito personal con Bancolombia',
+      principalCents: 500000000, // $5.000.000 COP
+      currency: 'COP',
+      interestRateValue: 18, // E.A.
+      amortizationType: 'FRENCH',
+      termCount: 24,
+      paidCount: 2,
+      accountId: bancolombia.id,
+      color: '#F59E0B',
+      icon: 'landmark',
+    },
+    {
+      slug: 'ana-usd',
+      name: 'Préstamo a Ana',
+      direction: 'RECEIVABLE',
+      notes: 'Préstamo en dólares a Ana (1 cuota solo interés)',
+      principalCents: 100000, // USD 1.000
+      currency: 'USD',
+      interestRateValue: 12, // E.A.
+      amortizationType: 'GERMAN',
+      termCount: 6,
+      interestOnlyInstallments: 1,
+      paidCount: 2,
+      accountId: binance.id,
+      color: '#8B5CF6',
+      icon: 'hand-coins',
+    },
+  ];
+
+  let seededLoanCount = 0;
+  let seededInstallmentCount = 0;
+  let seededPaymentCount = 0;
+
+  for (const definition of seedLoans) {
+    const schedule = buildAmortizationSchedule({
+      principalCents: definition.principalCents,
+      rateType: 'EA',
+      interestRateValue: definition.interestRateValue,
+      interestMode: 'COMPOUND',
+      interestAccrual: 'PERIODIC',
+      dayCountBasis: 'ACTUAL_365',
+      amortizationType: definition.amortizationType,
+      paymentFrequency: 'MONTHLY',
+      termCount: definition.termCount,
+      interestOnlyInstallments: definition.interestOnlyInstallments ?? 0,
+      startDate: loanStartDate,
+      firstPaymentDate: loanFirstPaymentDate,
+    });
+    const summary = computeLoanSummary(schedule, definition.principalCents);
+    const loanKey = `seed-loan-${definition.slug}`;
+
+    const loan = await prisma.loan.upsert({
+      where: { idempotencyKey: loanKey },
+      update: { lastModifiedBy: user.id },
+      create: {
+        userId: user.id,
+        name: definition.name,
+        type: 'PERSONAL',
+        direction: definition.direction,
+        status: 'ACTIVE',
+        notes: definition.notes,
+        principalCents: definition.principalCents,
+        currency: definition.currency,
+        interestRateValue: new Decimal(definition.interestRateValue),
+        rateType: 'EA',
+        interestMode: 'COMPOUND',
+        interestAccrual: 'PERIODIC',
+        dayCountBasis: 'ACTUAL_365',
+        amortizationType: definition.amortizationType,
+        paymentFrequency: 'MONTHLY',
+        termCount: definition.termCount,
+        interestOnlyInstallments: definition.interestOnlyInstallments ?? 0,
+        totalInterestCents: summary.totalInterestCents,
+        totalPayableCents: summary.totalPayableCents,
+        effectiveYieldPct: new Decimal(summary.effectiveYieldPct),
+        startDate: loanStartDate,
+        firstPaymentDate: loanFirstPaymentDate,
+        balanceCents: definition.principalCents,
+        color: definition.color,
+        icon: definition.icon,
+        idempotencyKey: loanKey,
+        createdBy: user.id,
+        lastModifiedBy: user.id,
+      },
+    });
+    seededLoanCount++;
+
+    const paymentAccount = await prisma.account.findFirst({
+      where: {
+        id: definition.accountId,
+        userId: user.id,
+        isActive: true,
+        currency: definition.currency,
+      },
+      select: { id: true },
+    });
+
+    const isReceivable = definition.direction === 'RECEIVABLE';
+    let paidPrincipalTotal = 0;
+
+    for (const row of schedule) {
+      const installment = await prisma.loanInstallment.upsert({
+        where: {
+          loanId_installmentNumber: {
+            loanId: loan.id,
+            installmentNumber: row.installmentNumber,
+          },
+        },
+        update: {},
+        create: {
+          loanId: loan.id,
+          installmentNumber: row.installmentNumber,
+          dueDate: row.dueDate,
+          principalCents: row.principalCents,
+          interestCents: row.interestCents,
+          totalCents: row.totalCents,
+          balanceCents: row.balanceCents,
+          currency: definition.currency,
+          isCustomTotal: row.isCustomTotal,
+          isInterestOnly: row.isInterestOnly,
+          status: 'PENDING',
+          source: 'SCHEDULE',
+          idempotencyKey: `${loanKey}-inst-${row.installmentNumber}`,
+          createdBy: user.id,
+          lastModifiedBy: user.id,
+        },
+      });
+      seededInstallmentCount++;
+
+      if (row.installmentNumber > definition.paidCount) continue;
+
+      const paymentKey = `${loanKey}-pay-${row.installmentNumber}`;
+      const signedAmount = isReceivable ? row.totalCents : -row.totalCents;
+
+      let transactionId: string | null = null;
+      if (paymentAccount) {
+        const transaction = await prisma.transaction.upsert({
+          where: { idempotencyKey: `${paymentKey}-tx` },
+          update: { amountCents: BigInt(signedAmount) },
+          create: {
+            idempotencyKey: `${paymentKey}-tx`,
+            userId: user.id,
+            accountId: paymentAccount.id,
+            type: isReceivable ? 'LOAN_RECEIPT' : 'LOAN_PAYMENT',
+            amountCents: signedAmount,
+            currency: definition.currency,
+            description: `${isReceivable ? 'Recibo' : 'Pago'} cuota ${row.installmentNumber}: ${definition.name}`,
+            date: row.dueDate,
+            loanInstallmentId: installment.id,
+            createdBy: user.id,
+            lastModifiedBy: user.id,
+          },
+        });
+        transactionId = transaction.id;
+
+        await prisma.account.update({
+          where: { id: paymentAccount.id },
+          data: { balanceCents: { increment: signedAmount }, lastModifiedBy: user.id },
+        });
+      }
+
+      const existingPayment = await prisma.loanInstallmentPayment.findUnique({
+        where: { idempotencyKey: paymentKey },
+      });
+      if (!existingPayment) {
+        await prisma.loanInstallmentPayment.create({
+          data: {
+            installmentId: installment.id,
+            transactionId,
+            amountCents: row.totalCents,
+            principalCents: row.principalCents,
+            interestCents: row.interestCents,
+            currency: definition.currency,
+            paidAt: row.dueDate,
+            notes: 'Pagado (seed)',
+            idempotencyKey: paymentKey,
+            createdBy: user.id,
+            lastModifiedBy: user.id,
+          },
+        });
+        seededPaymentCount++;
+      }
+
+      await prisma.loanInstallment.update({
+        where: { id: installment.id },
+        data: {
+          status: 'PAID',
+          paidDate: row.dueDate,
+          paidAmountCents: row.totalCents,
+          paidPrincipalCents: row.principalCents,
+          paidInterestCents: row.interestCents,
+          lastModifiedBy: user.id,
+        },
+      });
+
+      paidPrincipalTotal += row.principalCents;
+    }
+
+    // Cache the outstanding balance (principal − paid principal). Adjustments
+    // are intentionally not seeded here, so the ledger formula simplifies.
+    await prisma.loan.update({
+      where: { id: loan.id },
+      data: {
+        balanceCents: definition.principalCents - paidPrincipalTotal,
+        lastReconciled: new Date(),
+      },
+    });
+
+    console.log(
+      `  ✓ ${definition.name} (${definition.direction} ${definition.currency}) — ${schedule.length} cuotas, ${definition.paidCount} pagadas`
+    );
+  }
+
+  console.log(
+    `✓ Created/verified ${seededLoanCount} loans with ${seededInstallmentCount} installments and ${seededPaymentCount} payments`
+  );
+
+  // Loan payments/receipts changed the ledger of the accounts they touched.
+  // Re-reconcile so `Account.balanceCents` (cache) still equals the ledger
+  // (Rule 13): the deterministic opening transaction absorbs the difference.
+  await reconcileSeedAccountLedger(efectivo.id, 50000000, 'COP', user.id);
+  await reconcileSeedAccountLedger(bancolombia.id, 400000000, 'COP', user.id);
+  await reconcileSeedAccountLedger(nubank.id, -9800000, 'COP', user.id);
+  await reconcileSeedAccountLedger(binance.id, 2699, 'USD', user.id);
 
   console.log('✅ Seed completed successfully!');
 }

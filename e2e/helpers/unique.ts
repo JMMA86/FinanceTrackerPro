@@ -43,6 +43,9 @@ export const UNIQUE_VARIABLE_EXPENSE_NAME_KEY = '__e2eUniqueVariableExpenseName'
 /** localStorage key where the unique variable-expense transaction note is stored. */
 export const UNIQUE_VARIABLE_TX_NOTE_KEY = '__e2eUniqueVariableTxNote';
 
+/** localStorage key where the unique loan name is stored for the current scenario. */
+export const UNIQUE_LOAN_NAME_KEY = '__e2eUniqueLoanName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -196,4 +199,18 @@ export async function getStoredVariableTxNote(page: Page): Promise<string> {
   const note = await getWindowValue(page, UNIQUE_VARIABLE_TX_NOTE_KEY);
   if (!note) throw new Error('No unique variable-expense transaction note stored on the page');
   return note;
+}
+
+/** Generates a timestamped loan name, stores it and returns it. */
+export async function storeUniqueLoanName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_LOAN_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique loan name stored by the create step. */
+export async function getStoredLoanName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_LOAN_NAME_KEY);
+  if (!name) throw new Error('No unique loan name stored on the page');
+  return name;
 }

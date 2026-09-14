@@ -17,6 +17,7 @@ const TRANSACTION_TYPES = [
   { value: 'TRANSFER_OUT', labelKey: 'transferOut' },
   { value: 'INVESTMENT', labelKey: 'investment' },
   { value: 'LOAN_PAYMENT', labelKey: 'loanPayment' },
+  { value: 'LOAN_RECEIPT', labelKey: 'loanReceipt' },
   { value: 'CREDIT_PAYMENT', labelKey: 'creditPayment' },
 ] as const;
 

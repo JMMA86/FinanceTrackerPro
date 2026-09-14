@@ -114,6 +114,7 @@
       "TRANSFER_IN": "Incoming transfer",
       "INVESTMENT": "Investment",
       "LOAN_PAYMENT": "Loan payment",
+      "LOAN_RECEIPT": "Loan receipt",
       "CREDIT_PAYMENT": "Card payment"
     }
   },
@@ -136,6 +137,7 @@
       "TRANSFER_IN": "Received",
       "INVESTMENT": "Investment",
       "LOAN_PAYMENT": "Payment",
+      "LOAN_RECEIPT": "Receipt",
       "CREDIT_PAYMENT": "Card payment"
     }
   }

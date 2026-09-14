@@ -83,7 +83,8 @@
       "TRANSFER_OUT": "Outgoing transfer",
       "TRANSFER_IN": "Incoming transfer",
       "INVESTMENT": "Investment",
-      "LOAN_PAYMENT": "Loan payment"
+      "LOAN_PAYMENT": "Loan payment",
+      "LOAN_RECEIPT": "Loan receipt"
     }
   },
   "pay": {

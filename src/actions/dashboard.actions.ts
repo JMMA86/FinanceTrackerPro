@@ -18,7 +18,7 @@ import {
 } from '@/lib/dashboard-metrics';
 import Decimal from 'decimal.js';
 import { getSession } from '@/lib/auth/session';
-import type { Currency } from '@prisma/client';
+import type { Currency, LoanDirection, LoanStatus } from '@prisma/client';
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 interface DistributionItem {
@@ -89,6 +89,15 @@ interface LoanData {
   id: string;
   name: string;
   balanceCents: number;
+  direction: LoanDirection;
+  status: LoanStatus;
+}
+
+interface LoanMetricsResult {
+  /** Outstanding external debt: PAYABLE loans only (Rule 11 — per currency). */
+  externalDebts: number;
+  /** Outstanding money the user lent out (RECEIVABLE loans). */
+  receivables: number;
 }
 
 interface FixedExpenseData {
@@ -251,16 +260,24 @@ function updateMaxInterestRate(rate: number | null, result: AccountMetricsResult
 }
 
 /**
- * Calculate external debts from loans
+ * Split loans into external debt (PAYABLE) and receivables (RECEIVABLE).
+ * Only positive outstanding balances count; currencies are kept in their own
+ * KPI buckets upstream (never mixed).
  */
-function calculateLoanMetrics(loans: LoanData[]): number {
+function calculateLoanMetrics(loans: LoanData[]): LoanMetricsResult {
   let externalDebts = 0;
+  let receivables = 0;
+
   for (const loan of loans) {
-    if (loan.balanceCents > 0) {
+    if (loan.balanceCents <= 0) continue;
+    if (loan.direction === 'PAYABLE') {
       externalDebts = addCents(externalDebts, loan.balanceCents);
+    } else {
+      receivables = addCents(receivables, loan.balanceCents);
     }
   }
-  return externalDebts;
+
+  return { externalDebts, receivables };
 }
 
 /**
@@ -357,6 +374,7 @@ function formatMetricsResult(
     creditLimitTotal: number;
     maxInterestRate: number;
     externalDebts: number;
+    receivables: number;
     distribution: Record<string, number>;
     monthlyIncome: number;
     monthlyExpenses: number;
@@ -425,8 +443,8 @@ function formatMetricsResult(
       currency: defaultCurrency,
     },
     receivables: {
-      amount: 0,
-      formatted: formatMoney(0, defaultCurrency, locale),
+      amount: metrics.receivables,
+      formatted: formatMoney(metrics.receivables, defaultCurrency, locale),
       currency: defaultCurrency,
     },
 
@@ -548,11 +566,17 @@ export async function getDashboardMetricsByUser(
     interestRateEA: a.interestRateEA == null ? null : Number(a.interestRateEA),
   }));
 
-  // Fetch loans
+  // Fetch loans (only ACTIVE ones feed the debt/receivable KPIs)
   const loans = (
     await prisma.loan.findMany({
-      where: { userId, isActive: true },
-      select: { id: true, name: true, balanceCents: true },
+      where: { userId, isActive: true, status: 'ACTIVE' },
+      select: {
+        id: true,
+        name: true,
+        balanceCents: true,
+        direction: true,
+        status: true,
+      },
     })
   ).map((l) => ({
     ...l,
@@ -649,7 +673,7 @@ export async function getDashboardMetricsByUser(
 
   // Calculate metrics via helper functions
   const accountMetrics = await calculateAccountMetrics(accounts, transactionRepo);
-  const externalDebts = calculateLoanMetrics(loans);
+  const loanMetrics = calculateLoanMetrics(loans);
   const txMetrics = calculateTransactionMetrics(
     allTransactions,
     startOfCurrentMonth,
@@ -681,7 +705,8 @@ export async function getDashboardMetricsByUser(
   return formatMetricsResult(
     {
       ...accountMetrics,
-      externalDebts,
+      externalDebts: loanMetrics.externalDebts,
+      receivables: loanMetrics.receivables,
       monthlyIncome: txMetrics.monthlyIncome,
       monthlyExpenses: txMetrics.monthlyExpenses,
       lastMonthExpenses: txMetrics.lastMonthExpenses,

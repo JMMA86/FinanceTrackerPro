@@ -37,6 +37,7 @@ export const TransactionTypeSchema = z.enum([
   'TRANSFER_IN',
   'INVESTMENT',
   'LOAN_PAYMENT',
+  'LOAN_RECEIPT',
   'CREDIT_PAYMENT',
 ]);
 

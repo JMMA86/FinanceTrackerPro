@@ -177,12 +177,14 @@ describe('money.ts', () => {
 
   describe('when calculating monthly payment', () => {
     it('should calculate correct payment with interest', () => {
-      // Given: $10,000 loan at 12% EA for 12 months → ~$888.49/month
+      // Given: $10,000 loan at 12% E.A. for 12 months.
+      // Correct periodic monthly rate: i = (1 + 12/100)^(1/12) - 1 = 0.0094887929345829741
+      // French payment: P*i*(1+i)^12 / ((1+i)^12 - 1) = 88562 cents = $885.62/month.
+      // (The previous expectation used the financial bug EA/12=1% → 88849 cents.)
       const result = calculateMonthlyPayment(1000000, 12, 12);
 
       // Then
-      expect(result).toBeGreaterThan(88800);
-      expect(result).toBeLessThan(88900);
+      expect(result).toBe(88562);
     });
 
     it('should divide principal evenly at zero interest', () => {

@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as argon2 from 'argon2';
+import { buildAmortizationSchedule, computeLoanSummary } from '../src/lib/loans/interest';
 
 // Load environment variables from .env.e2e
 import dotenv from 'dotenv';
@@ -1355,6 +1356,319 @@ async function main() {
     'variable-expenses-empty@e2e.financetrackerpro.com';
   await upsertUserAndGet(variableExpensesEmptyUserEmail, 'Empty Variable Expenses E2E User');
   console.log('✓ Empty variable expenses user seeded with no definitions');
+
+  // ============================================================================
+  // Loans E2E user (loans.feature)
+  // Isolated so loan list/create/validation scenarios never collide with others.
+  //
+  // Accounts (COP):
+  //   - "Bancolombia (Ahorros)" (SAVINGS) balance = opening + seeded receipts
+  //     − seeded payments, always derived from the ledger (Rule 13).
+  //   - "Efectivo" (CASH) balance = 50.000 ($50 COP) — deliberately small so the
+  //     create-loan modal can prove the "amount exceeds available balance" guard.
+  //
+  // Seeded loans (read-only, generated with the real amortization engine):
+  //   - RECEIVABLE "Préstamo E2E a Diego" (COP, $3.000.000, EA 24%, 12 cuotas,
+  //     FRENCH) with installments #1 and #2 PAID (LoanInstallmentPayment +
+  //     LOAN_RECEIPT transaction). #2 falls in the current month, so the
+  //     transactions modal reports "La cuota de este mes ya fue pagada".
+  //   - PAYABLE "Crédito E2E Banco" (COP, $5.000.000, EA 18%, 24 cuotas, FRENCH)
+  //     with installment #1 PAID (LoanInstallmentPayment + LOAN_PAYMENT
+  //     transaction). #2 is overdue, so the transactions modal reports
+  //     "Cuota vencida".
+  // ============================================================================
+  const loansUserEmail = process.env.E2E_LOANS_USER || 'loans@e2e.financetrackerpro.com';
+  const loansUser = await upsertUserAndGet(loansUserEmail, 'Loans E2E User');
+
+  const loansBank = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-loans-bank-account' },
+    create: {
+      idempotencyKey: 'e2e-loans-bank-account',
+      userId: loansUser.id,
+      name: 'Bancolombia (Ahorros)',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 200000000, // $2.000.000 COP (recomputed from the ledger below)
+      createdBy: loansUser.id,
+      lastModifiedBy: loansUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const loansCash = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-loans-cash-account' },
+    create: {
+      idempotencyKey: 'e2e-loans-cash-account',
+      userId: loansUser.id,
+      name: 'Efectivo',
+      type: 'CASH',
+      currency: 'COP',
+      balanceCents: 5000000, // $50.000 COP — small on purpose (balance guard)
+      createdBy: loansUser.id,
+      lastModifiedBy: loansUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Rule 13: every cache is backed by a deterministic opening INCOME row. The
+  // exact account balance is rewritten from the ledger aggregate after the loans
+  // are seeded, so a manual re-seed stays consistent.
+  const loanOpeningTxs: Array<{
+    idempotencyKey: string;
+    accountId: string;
+    amountCents: number;
+    description: string;
+  }> = [
+    {
+      idempotencyKey: 'e2e-loans-bank-initial',
+      accountId: loansBank.id,
+      amountCents: 200000000,
+      description: 'Saldo inicial Bancolombia Ahorros',
+    },
+    {
+      idempotencyKey: 'e2e-loans-cash-initial',
+      accountId: loansCash.id,
+      amountCents: 5000000,
+      description: 'Saldo inicial Efectivo',
+    },
+  ];
+
+  for (const tx of loanOpeningTxs) {
+    await prisma.transaction.upsert({
+      where: { idempotencyKey: tx.idempotencyKey },
+      update: {
+        openingBalance: true,
+        description: tx.description,
+        isActive: true,
+        deletedAt: null,
+        lastModifiedBy: loansUser.id,
+      },
+      create: {
+        idempotencyKey: tx.idempotencyKey,
+        userId: loansUser.id,
+        accountId: tx.accountId,
+        type: 'INCOME',
+        amountCents: tx.amountCents,
+        currency: 'COP',
+        description: tx.description,
+        date: new Date('2025-01-01'),
+        openingBalance: true,
+        createdBy: loansUser.id,
+        lastModifiedBy: loansUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  const loansNow = new Date();
+  const loanMonthStart = (offset: number): Date =>
+    new Date(loansNow.getFullYear(), loansNow.getMonth() + offset, 1, 0, 0, 0, 0);
+
+  interface SeedLoanSpec {
+    idempotencyKey: string;
+    name: string;
+    direction: 'RECEIVABLE' | 'PAYABLE';
+    principalCents: number;
+    interestRateValue: number;
+    termCount: number;
+    startDate: Date;
+    firstPaymentDate: Date;
+    color: string;
+    paidInstallments: number;
+  }
+
+  /**
+   * Seed one loan with the SAME amortization engine the app uses, marking the
+   * first `paidInstallments` rows PAID with their LoanInstallmentPayment bridge
+   * and the matching account money movement. Skips entirely when the loan already
+   * exists (idempotent manual re-seeds).
+   */
+  async function seedLoan(spec: SeedLoanSpec): Promise<void> {
+    const existing = await prisma.loan.findUnique({
+      where: { idempotencyKey: spec.idempotencyKey },
+      select: { id: true },
+    });
+    if (existing) {
+      console.log(`✓ Loan already exists: ${spec.name}`);
+      return;
+    }
+
+    const schedule = buildAmortizationSchedule({
+      principalCents: spec.principalCents,
+      rateType: 'EA',
+      interestRateValue: spec.interestRateValue,
+      interestMode: 'COMPOUND',
+      interestAccrual: 'PERIODIC',
+      dayCountBasis: 'ACTUAL_365',
+      amortizationType: 'FRENCH',
+      paymentFrequency: 'MONTHLY',
+      termCount: spec.termCount,
+      startDate: spec.startDate,
+      firstPaymentDate: spec.firstPaymentDate,
+    });
+    const summary = computeLoanSummary(schedule, spec.principalCents);
+
+    let paidPrincipalCents = 0;
+    for (const row of schedule) {
+      if (row.installmentNumber <= spec.paidInstallments) {
+        paidPrincipalCents += row.principalCents;
+      }
+    }
+    const balanceCents = spec.principalCents - paidPrincipalCents;
+    const isReceivable = spec.direction === 'RECEIVABLE';
+
+    await prisma.$transaction(async (tx) => {
+      const loan = await tx.loan.create({
+        data: {
+          userId: loansUser.id,
+          name: spec.name,
+          type: 'PERSONAL',
+          direction: spec.direction,
+          status: 'ACTIVE',
+          principalCents: spec.principalCents,
+          currency: 'COP',
+          interestRateValue: spec.interestRateValue,
+          rateType: 'EA',
+          interestMode: 'COMPOUND',
+          interestAccrual: 'PERIODIC',
+          dayCountBasis: 'ACTUAL_365',
+          amortizationType: 'FRENCH',
+          paymentFrequency: 'MONTHLY',
+          termCount: spec.termCount,
+          totalInterestCents: summary.totalInterestCents,
+          totalPayableCents: summary.totalPayableCents,
+          effectiveYieldPct: summary.effectiveYieldPct,
+          startDate: spec.startDate,
+          firstPaymentDate: spec.firstPaymentDate,
+          balanceCents,
+          color: spec.color,
+          idempotencyKey: spec.idempotencyKey,
+          createdBy: loansUser.id,
+          lastModifiedBy: loansUser.id,
+        },
+      });
+
+      for (const row of schedule) {
+        const isPaid = row.installmentNumber <= spec.paidInstallments;
+        const installment = await tx.loanInstallment.create({
+          data: {
+            loanId: loan.id,
+            installmentNumber: row.installmentNumber,
+            dueDate: row.dueDate,
+            principalCents: row.principalCents,
+            interestCents: row.interestCents,
+            totalCents: row.totalCents,
+            balanceCents: row.balanceCents,
+            currency: 'COP',
+            isCustomTotal: row.isCustomTotal,
+            isInterestOnly: row.isInterestOnly,
+            status: isPaid ? 'PAID' : 'PENDING',
+            source: 'SCHEDULE',
+            paidDate: isPaid ? row.dueDate : null,
+            paidAmountCents: isPaid ? row.totalCents : null,
+            paidPrincipalCents: isPaid ? row.principalCents : 0,
+            paidInterestCents: isPaid ? row.interestCents : 0,
+            idempotencyKey: `${spec.idempotencyKey}-installment-${row.installmentNumber}`,
+            createdBy: loansUser.id,
+            lastModifiedBy: loansUser.id,
+          },
+        });
+
+        if (!isPaid) continue;
+
+        // RECEIVABLE: the borrower repays us → account inflow (LOAN_RECEIPT).
+        // PAYABLE: we repay the lender → account outflow (LOAN_PAYMENT).
+        const signedTotalCents = isReceivable ? row.totalCents : -row.totalCents;
+        const booking = await tx.transaction.create({
+          data: {
+            idempotencyKey: `${spec.idempotencyKey}-booking-${row.installmentNumber}`,
+            userId: loansUser.id,
+            accountId: loansBank.id,
+            type: isReceivable ? 'LOAN_RECEIPT' : 'LOAN_PAYMENT',
+            amountCents: signedTotalCents,
+            currency: 'COP',
+            description: `${isReceivable ? 'Recibo' : 'Pago'} cuota ${
+              row.installmentNumber
+            }: ${spec.name}`,
+            date: row.dueDate,
+            loanInstallmentId: installment.id,
+            createdBy: loansUser.id,
+            lastModifiedBy: loansUser.id,
+          },
+        });
+
+        await tx.loanInstallmentPayment.create({
+          data: {
+            installmentId: installment.id,
+            transactionId: booking.id,
+            amountCents: row.totalCents,
+            principalCents: row.principalCents,
+            interestCents: row.interestCents,
+            currency: 'COP',
+            paidAt: row.dueDate,
+            idempotencyKey: `${spec.idempotencyKey}-payment-${row.installmentNumber}`,
+            createdBy: loansUser.id,
+            lastModifiedBy: loansUser.id,
+          },
+        });
+      }
+    });
+
+    console.log(`✓ Loan seeded: ${spec.name}`);
+  }
+
+  await seedLoan({
+    idempotencyKey: 'e2e-loan-receivable-diego',
+    name: 'Préstamo E2E a Diego',
+    direction: 'RECEIVABLE',
+    principalCents: 300000000, // $3.000.000 COP
+    interestRateValue: 24,
+    termCount: 12,
+    startDate: loanMonthStart(-3),
+    firstPaymentDate: loanMonthStart(-1), // #2 lands in the current month
+    color: 'from-emerald-500 to-teal-500',
+    paidInstallments: 2,
+  });
+
+  await seedLoan({
+    idempotencyKey: 'e2e-loan-payable-banco',
+    name: 'Crédito E2E Banco',
+    direction: 'PAYABLE',
+    principalCents: 500000000, // $5.000.000 COP
+    interestRateValue: 18,
+    termCount: 24,
+    startDate: loanMonthStart(-4),
+    firstPaymentDate: loanMonthStart(-2), // #2 is overdue, #3 is this month
+    color: 'from-amber-500 to-orange-500',
+    paidInstallments: 1,
+  });
+
+  // Rule 13: rewrite both caches from the ledger aggregate so re-seeding a
+  // partially-populated database converges to ledger === cache.
+  for (const account of [loansBank, loansCash]) {
+    const aggregate = await prisma.transaction.aggregate({
+      where: { accountId: account.id, isActive: true },
+      _sum: { amountCents: true },
+    });
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        balanceCents: aggregate._sum.amountCents ?? 0,
+        lastModifiedBy: loansUser.id,
+      },
+    });
+  }
+
+  console.log('✓ Loans user seeded with 2 accounts and 2 amortizing loans');
+
+  // Empty loans user (loans.feature @empty) — has NO loans (and no accounts) so
+  // the loans page renders the empty state. Isolated from every other user.
+  const loansEmptyUserEmail =
+    process.env.E2E_LOANS_EMPTY_USER || 'loans-empty@e2e.financetrackerpro.com';
+  await upsertUserAndGet(loansEmptyUserEmail, 'Empty Loans E2E User');
+  console.log('✓ Empty loans user seeded with no loans');
 
   console.log('✅ E2E seed completed successfully!');
 }

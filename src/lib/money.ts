@@ -95,19 +95,38 @@ export function decimalToCents(amount: number | Decimal): number {
  * @param rateEA Effective Annual Rate (e.g., 12.5 for 12.5%)
  * @param periods Number of compounding periods
  * @returns Final amount in cents
+ *
+ * All arithmetic is delegated to Decimal.js (Rule 1); no native float math is
+ * performed. Inputs are validated so callers fail fast instead of silently
+ * producing a financially wrong result.
  */
 export function compoundInterest(
   principalCents: number,
   rateEA: number | Decimal,
   periods: number
 ): number {
+  if (new Decimal(principalCents).isNegative()) {
+    throw new Error(`principalCents must not be negative, got ${principalCents}`);
+  }
+
+  if (!new Decimal(periods).isInteger() || new Decimal(periods).isNegative()) {
+    throw new Error(`periods must be a non-negative integer, got ${periods}`);
+  }
+
+  // Decimal exponent (periods validated as a non-negative integer above).
   const rate = new Decimal(rateEA).dividedBy(100);
-  const multiplier = rate.plus(1).pow(periods);
+  const multiplier = rate.plus(1).pow(new Decimal(periods));
   return multiplyCents(principalCents, multiplier);
 }
 
 /**
  * Calculate monthly payment for loan (amortization)
+ *
+ * The input rate is an EFFECTIVE ANNUAL rate (E.A.), so it CANNOT be divided
+ * naively by 12. The equivalent periodic monthly rate is:
+ *
+ *   i = (1 + EA/100)^(1/12) - 1
+ *
  * @param principalCents Loan principal in cents
  * @param rateEA Effective Annual Rate (e.g., 12.5 for 12.5%)
  * @param termMonths Number of months
@@ -118,7 +137,13 @@ export function calculateMonthlyPayment(
   rateEA: number | Decimal,
   termMonths: number
 ): number {
-  const monthlyRate = new Decimal(rateEA).dividedBy(12).dividedBy(100);
+  if (!new Decimal(termMonths).isInteger() || termMonths <= 0) {
+    throw new Error(`termMonths must be a positive integer, got ${termMonths}`);
+  }
+
+  // Convert E.A. → equivalent periodic monthly rate (Rule 1, Decimal.js).
+  const annualRate = new Decimal(rateEA).dividedBy(100);
+  const monthlyRate = annualRate.plus(1).pow(new Decimal(1).dividedBy(12)).minus(1);
 
   if (monthlyRate.isZero()) {
     // No interest: simple division

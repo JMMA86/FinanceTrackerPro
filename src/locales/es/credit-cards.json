@@ -83,7 +83,8 @@
       "TRANSFER_OUT": "Salida",
       "TRANSFER_IN": "Entrada",
       "INVESTMENT": "Inversión",
-      "LOAN_PAYMENT": "Cuota préstamo"
+      "LOAN_PAYMENT": "Cuota préstamo",
+      "LOAN_RECEIPT": "Recibo préstamo"
     }
   },
   "pay": {

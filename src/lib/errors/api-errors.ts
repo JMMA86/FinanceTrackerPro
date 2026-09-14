@@ -349,3 +349,83 @@ export class PaymentAmountInvalidError extends AppError {
     super('The payment amount must be greater than zero', 400, 'PAYMENT_AMOUNT_INVALID');
   }
 }
+
+/**
+ * 404 - Loan Not Found
+ * Thrown when a loan/installment does not exist, is soft-deleted or belongs to
+ * another user. The message is generic and never exposes any IDs.
+ */
+export class LoanNotFoundError extends AppError {
+  constructor() {
+    super('Loan not found', 404, 'LOAN_NOT_FOUND');
+  }
+}
+
+/**
+ * 400 - Loan Already Completed
+ * Thrown when mutating a loan that is already settled (balance zero and every
+ * installment paid). Generic message, no IDs.
+ */
+export class LoanAlreadyCompletedError extends AppError {
+  constructor() {
+    super('This loan is already completed', 400, 'LOAN_ALREADY_COMPLETED');
+  }
+}
+
+/**
+ * 400 - Loan Installment Already Paid
+ * Thrown when paying/receiving an installment that is already fully paid.
+ */
+export class LoanInstallmentAlreadyPaidError extends AppError {
+  constructor() {
+    super('This loan installment has already been paid', 400, 'LOAN_INSTALLMENT_ALREADY_PAID');
+  }
+}
+
+/**
+ * 400 - Loan Installment Not Payable
+ * Thrown when the target installment is not in a payable state (cancelled,
+ * waived, inactive or a completed loan). Generic message, no IDs.
+ */
+export class LoanInstallmentNotPayableError extends AppError {
+  constructor() {
+    super('This loan installment is not payable', 400, 'LOAN_INSTALLMENT_NOT_PAYABLE');
+  }
+}
+
+/**
+ * 400 - Loan Direction Mismatch
+ * Thrown when the money movement does not match the loan direction (e.g. trying
+ * to register a receipt against a PAYABLE loan).
+ */
+export class LoanDirectionMismatchError extends AppError {
+  constructor() {
+    super('The operation does not match the loan direction', 400, 'LOAN_DIRECTION_MISMATCH');
+  }
+}
+
+/**
+ * 400 - Loan Adjustment Not Allowed
+ * Thrown when an adjustment/operation is rejected by the loan's current state
+ * (unpaid schedule required, deleting a loan with payments, etc).
+ */
+export class LoanAdjustmentNotAllowedError extends AppError {
+  constructor() {
+    super(
+      'This operation is not allowed for the current loan state',
+      400,
+      'LOAN_ADJUSTMENT_NOT_ALLOWED'
+    );
+  }
+}
+
+/**
+ * 400 - Loan Overpayment
+ * Thrown when an EXTRA_PAYMENT exceeds the outstanding balance derived from the
+ * loan ledger. Generic message: never exposes amounts or IDs.
+ */
+export class LoanOverpaymentError extends AppError {
+  constructor() {
+    super('The extra payment exceeds the outstanding loan balance', 400, 'LOAN_OVERPAYMENT');
+  }
+}

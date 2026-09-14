@@ -28,6 +28,7 @@ const TX_TYPES = [
   'TRANSFER_IN',
   'INVESTMENT',
   'LOAN_PAYMENT',
+  'LOAN_RECEIPT',
   'CREDIT_PAYMENT',
 ];
 

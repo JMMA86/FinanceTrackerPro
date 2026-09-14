@@ -114,6 +114,7 @@
       "TRANSFER_IN": "Transferencia entrante",
       "INVESTMENT": "Inversión",
       "LOAN_PAYMENT": "Cuota préstamo",
+      "LOAN_RECEIPT": "Recibo préstamo",
       "CREDIT_PAYMENT": "Pago tarjeta"
     }
   },
@@ -136,6 +137,7 @@
       "TRANSFER_IN": "Entrada",
       "INVESTMENT": "Inversión",
       "LOAN_PAYMENT": "Cuota",
+      "LOAN_RECEIPT": "Recibo",
       "CREDIT_PAYMENT": "Pago tarjeta"
     }
   }

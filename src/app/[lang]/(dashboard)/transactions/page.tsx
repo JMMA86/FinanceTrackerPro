@@ -64,15 +64,25 @@ export default async function TransactionsPage({
   const { lang } = await params;
   const sp = await searchParams;
 
-  const [dictionary, creditCardsDictionary, accountsRes, cardsRes, categoriesRes, session] =
-    await Promise.all([
-      getDictionary(lang, 'transactions'),
-      getDictionary(lang, 'credit-cards'),
-      getBankAccounts({} as Record<string, never>),
-      getCreditCards({}),
-      getCategories({} as Record<string, never>),
-      getSession(),
-    ]);
+  const [
+    baseDict,
+    creditCardsDictionary,
+    validationDict,
+    accountsRes,
+    cardsRes,
+    categoriesRes,
+    session,
+  ] = await Promise.all([
+    getDictionary(lang, 'transactions'),
+    getDictionary(lang, 'credit-cards'),
+    getDictionary(lang, 'validation'),
+    getBankAccounts({} as Record<string, never>),
+    getCreditCards({}),
+    getCategories({} as Record<string, never>),
+    getSession(),
+  ]);
+
+  const dictionary: Record<string, unknown> = { ...baseDict, validation: validationDict };
 
   const accounts: AccountBrief[] =
     accountsRes.success && accountsRes.data ? (accountsRes.data as unknown as AccountBrief[]) : [];

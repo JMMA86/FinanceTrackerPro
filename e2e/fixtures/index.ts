@@ -106,10 +106,29 @@ export const VARIABLE_EXPENSES_EMPTY_USER = {
   name: 'Empty Variable Expenses E2E User',
 };
 
-export const INVALID_CREDENTIALS = {
-  email: 'nonexistent@test.com',
-  password: 'WrongPass123',
+/**
+ * Isolated user for loans.feature — seeded with a ledger-backed COP bank
+ * account ("Bancolombia (Ahorros)"), a small-balance "Efectivo" account (for the
+ * balance guard), a RECEIVABLE loan with 2 paid installments and a PAYABLE loan
+ * with 1 paid installment, all generated with the real amortization engine.
+ */
+export const LOANS_TEST_USER = {
+  email: process.env.E2E_LOANS_USER ?? 'loans@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Loans E2E User',
 };
+
+/**
+ * Isolated user for loans.feature @empty — has NO loans (and no accounts) so the
+ * loans page must render the empty state.
+ */
+export const LOANS_EMPTY_USER = {
+  email: process.env.E2E_LOANS_EMPTY_USER ?? 'loans-empty@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Empty Loans E2E User',
+};
+
+export const INVALID_CREDENTIALS = { email: 'nonexistent@test.com', password: 'WrongPass123' };
 
 export const NEW_USER = {
   name: 'New Test User',

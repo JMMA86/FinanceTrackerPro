@@ -17,6 +17,7 @@ const TX_TYPE = z.enum([
   'TRANSFER_IN',
   'INVESTMENT',
   'LOAN_PAYMENT',
+  'LOAN_RECEIPT',
   'CREDIT_PAYMENT',
 ]);
 

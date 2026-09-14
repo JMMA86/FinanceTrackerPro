@@ -9,7 +9,9 @@ import { X, ArrowUpRight, ArrowDownRight, AlertCircle } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { createTransaction, updateTransaction } from '@/actions/transaction.actions';
 import { payFixedExpense } from '@/actions/fixed-expense.actions';
+import { registerLoanPayment, addLoanAdjustment } from '@/actions/loan.actions';
 import { get } from '@/lib/i18n';
+import { translateValidationMessage } from '@/lib/i18n/validation';
 import type { Locale } from '@/lib/i18n';
 import { toLocalDateTimeInput } from '@/lib/utils/date-utils';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
@@ -24,18 +26,31 @@ import type {
   FixedExpenseWithPayments,
 } from '@/types/fixed-expense';
 import type { VariableExpenseDefinition } from '@/types/variable-expense';
+import type { LoanPaymentOption, LoanPaymentOptionInstallment } from '@/types/loans';
 
 // ---------------------------------------------------------------------------
 // Expense nature (create + EXPENSE only)
 // ---------------------------------------------------------------------------
 
-type ExpenseNature = 'NORMAL' | 'FIXED' | 'VARIABLE';
+type ExpenseNature = 'NORMAL' | 'FIXED' | 'VARIABLE' | 'LOAN';
 
 const NATURE_OPTIONS: ReadonlyArray<{ value: ExpenseNature; labelKey: string }> = [
   { value: 'NORMAL', labelKey: 'natureNormal' },
   { value: 'FIXED', labelKey: 'natureFixed' },
   { value: 'VARIABLE', labelKey: 'natureVariable' },
+  { value: 'LOAN', labelKey: 'natureLoan' },
 ];
+
+/**
+ * Natures offered per transaction type: EXPENSE supports all four; INCOME only
+ * Normal and Loan (a receivable loan generates a receipt/income).
+ */
+function getNatureOptions(
+  isExpense: boolean
+): ReadonlyArray<{ value: ExpenseNature; labelKey: string }> {
+  if (isExpense) return NATURE_OPTIONS;
+  return NATURE_OPTIONS.filter((option) => option.value === 'NORMAL' || option.value === 'LOAN');
+}
 
 type Notify = (type: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 
@@ -49,15 +64,12 @@ interface IdempotencyKeyRef {
 
 const CreateTransactionFormSchema = z.object({
   type: z.enum(['INCOME', 'EXPENSE'], {
-    message: 'Select a transaction type',
+    message: 'validation.selectType',
   }),
-  accountId: z.string().min(1, 'Select an account'),
+  accountId: z.string().min(1, 'validation.selectAccount'),
   categoryId: z.string().optional(),
-  amountCents: z
-    .number()
-    .int('Amount must be a whole number')
-    .positive('Amount must be greater than 0'),
-  description: z.string().max(500, 'Description is too long').optional(),
+  amountCents: z.number().int('validation.amountWhole').positive('validation.amountPositive'),
+  description: z.string().max(500, 'validation.descriptionTooLong').optional(),
   date: z.string().optional(),
 });
 
@@ -160,7 +172,9 @@ function formatLongDate(value: Date | string, locale: string): string {
 // ---------------------------------------------------------------------------
 
 function resolveEffectiveNature(isExpense: boolean, nature: ExpenseNature): ExpenseNature {
-  return isExpense ? nature : 'NORMAL';
+  if (isExpense) return nature;
+  // Income supports only Normal or Loan (receivable receipts).
+  return nature === 'LOAN' ? 'LOAN' : 'NORMAL';
 }
 
 function resolveFixedTarget(
@@ -187,15 +201,77 @@ function resolveVariableExpenseOptions(
   return definitions.filter((definition) => definition.currency === account.currency);
 }
 
-function isSubmitDisabled(
-  isSubmitting: boolean,
-  hasNoAccounts: boolean,
+/** Loan movement the user can register from a selected loan. */
+type LoanAction = 'PAGAR_CUOTA' | 'ABONAR_CAPITAL';
+
+/** The installment a "pay installment" movement targets, if any. */
+function resolveLoanTargetInstallment(
+  loan: LoanPaymentOption | null
+): LoanPaymentOptionInstallment | null {
+  if (!loan) return null;
+  return loan.overdueInstallment ?? loan.nextInstallment;
+}
+
+/** ACTIVE loans compatible with the chosen type and account currency. */
+function resolveLoanOptions(
+  loans: LoanPaymentOption[],
+  account: AccountBrief | undefined,
+  isExpense: boolean
+): LoanPaymentOption[] {
+  const expectedType = isExpense ? 'LOAN_PAYMENT' : 'LOAN_RECEIPT';
+  return loans.filter((loan) => {
+    if (loan.expectedTransactionType !== expectedType) return false;
+    return !account || loan.currency === account.currency;
+  });
+}
+
+function isLoanCurrencyMismatch(
   nature: ExpenseNature,
-  target: FixedExpensePaymentSerialized | null,
-  currencyMismatch: boolean
+  target: LoanPaymentOption | null,
+  account: AccountBrief | undefined
 ): boolean {
-  if (isSubmitting || hasNoAccounts) return true;
-  return nature === 'FIXED' && (!target || currencyMismatch);
+  if (nature !== 'LOAN' || !target || !account) return false;
+  return account.currency !== target.currency;
+}
+
+/**
+ * Upper bound for the loan amount input: the full outstanding balance for an
+ * extra capital payment, or the target installment remainder otherwise. No cap
+ * for non-loan natures.
+ */
+function resolveLoanAmountMaxCents(
+  nature: ExpenseNature,
+  action: LoanAction,
+  loan: LoanPaymentOption | null
+): number | undefined {
+  if (nature !== 'LOAN') return undefined;
+  if (action === 'ABONAR_CAPITAL') return loan?.balanceCents;
+  return resolveLoanTargetInstallment(loan)?.remainingCents;
+}
+
+interface SubmitDisabledInput {
+  isSubmitting: boolean;
+  hasNoAccounts: boolean;
+  nature: ExpenseNature;
+  fixedTarget: FixedExpensePaymentSerialized | null;
+  loanTarget: LoanPaymentOption | null;
+  loanAction: LoanAction;
+  loanAmountCents: number;
+  currencyMismatch: boolean;
+}
+
+function isSubmitDisabled(input: SubmitDisabledInput): boolean {
+  if (input.isSubmitting || input.hasNoAccounts) return true;
+  if (input.nature === 'FIXED') return !input.fixedTarget || input.currencyMismatch;
+  if (input.nature === 'LOAN') {
+    if (!input.loanTarget || input.currencyMismatch) return true;
+    if (input.loanAction === 'PAGAR_CUOTA') {
+      return resolveLoanTargetInstallment(input.loanTarget) === null;
+    }
+    // Extra capital payment requires a positive amount.
+    return input.loanAmountCents <= 0;
+  }
+  return false;
 }
 
 /** Maps fixed-payment action errors to localized messages. */
@@ -236,7 +312,10 @@ function notifyTransactionError(
   ctx: SubmitContext,
   result: { code?: string; error?: string }
 ): void {
-  const message = getTransactionError(result, ctx.dictionary);
+  const message = translateValidationMessage(
+    getTransactionError(result, ctx.dictionary),
+    ctx.dictionary
+  );
   ctx.setServerError(message);
   ctx.addNotification('error', message);
 }
@@ -290,9 +369,82 @@ async function submitFixedPayment(
     notifyTransactionSuccess(ctx, 'createSuccess');
     return;
   }
-  const message = mapFixedPayError(result, ctx.dictionary);
+  const message = translateValidationMessage(
+    mapFixedPayError(result, ctx.dictionary),
+    ctx.dictionary
+  );
   ctx.setServerError(message);
   ctx.addNotification('error', message);
+}
+
+async function submitLoanMovement(
+  ctx: SubmitContext,
+  loanTarget: LoanPaymentOption | null,
+  loanAction: LoanAction,
+  idempotencyKeyRef: IdempotencyKeyRef
+): Promise<void> {
+  if (!loanTarget) {
+    ctx.setIsSubmitting(false);
+    ctx.setNatureError(get(ctx.dictionary, 'noPendingLoanInstallments'));
+    return;
+  }
+  if (ctx.account.currency !== loanTarget.currency) {
+    ctx.setIsSubmitting(false);
+    ctx.setNatureError(get(ctx.dictionary, 'currencyMismatch'));
+    return;
+  }
+  if (!idempotencyKeyRef.current) {
+    idempotencyKeyRef.current = crypto.randomUUID();
+  }
+
+  const date = ctx.data.date ? new Date(ctx.data.date) : undefined;
+
+  if (loanAction === 'ABONAR_CAPITAL') {
+    const result = await addLoanAdjustment({
+      loanId: loanTarget.loanId,
+      type: 'EXTRA_PAYMENT',
+      effectiveDate: date ?? new Date(),
+      amountCents: ctx.data.amountCents,
+      accountId: ctx.data.accountId,
+      notes: ctx.data.description || undefined,
+      idempotencyKey: idempotencyKeyRef.current,
+    });
+    ctx.setIsSubmitting(false);
+    if (result.success) {
+      idempotencyKeyRef.current = null;
+      notifyTransactionSuccess(ctx, 'loanCapitalPaymentSuccess');
+      return;
+    }
+    notifyTransactionError(ctx, result);
+    return;
+  }
+
+  const target = resolveLoanTargetInstallment(loanTarget);
+  if (!target) {
+    ctx.setIsSubmitting(false);
+    ctx.setNatureError(get(ctx.dictionary, 'noPendingLoanInstallments'));
+    return;
+  }
+
+  const result = await registerLoanPayment({
+    installmentId: target.installmentId,
+    accountId: ctx.data.accountId,
+    amountCents: ctx.data.amountCents,
+    date,
+    notes: ctx.data.description || undefined,
+    idempotencyKey: idempotencyKeyRef.current,
+  });
+  ctx.setIsSubmitting(false);
+  if (result.success) {
+    idempotencyKeyRef.current = null;
+    const successKey =
+      loanTarget.expectedTransactionType === 'LOAN_RECEIPT'
+        ? 'loanReceiptSuccess'
+        : 'createSuccess';
+    notifyTransactionSuccess(ctx, successKey);
+    return;
+  }
+  notifyTransactionError(ctx, result);
 }
 
 function validateVariableExpense(
@@ -454,19 +606,31 @@ function TypeField({
 interface NatureFieldProps {
   dictionary: Record<string, unknown>;
   visible: boolean;
-  nature: ExpenseNature;
+  options: ReadonlyArray<{ value: ExpenseNature; labelKey: string }>;
+  selectedNature: ExpenseNature;
   error: string;
   onSelect: (value: ExpenseNature) => void;
 }
 
-function NatureField({ dictionary, visible, nature, error, onSelect }: Readonly<NatureFieldProps>) {
+function NatureField({
+  dictionary,
+  visible,
+  options,
+  selectedNature,
+  error,
+  onSelect,
+}: Readonly<NatureFieldProps>) {
   if (!visible) return null;
+
+  const gridClass =
+    options.length > 2 ? 'grid grid-cols-2 sm:grid-cols-4 gap-2' : 'grid grid-cols-2 gap-2';
+
   return (
     <fieldset>
       <legend className={labelCls}>{get(dictionary, 'expenseNature')}</legend>
-      <div className="grid grid-cols-3 gap-2">
-        {NATURE_OPTIONS.map((option) => {
-          const isActive = nature === option.value;
+      <div className={gridClass}>
+        {options.map((option) => {
+          const isActive = selectedNature === option.value;
           return (
             <button
               key={option.value}
@@ -726,6 +890,164 @@ function FixedExpenseField({
   );
 }
 
+/** Replaces `{{token}}` placeholders with the provided values. */
+function interpolateTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
+}
+
+interface LoanFieldProps {
+  dictionary: Record<string, unknown>;
+  visible: boolean;
+  loansLoaded: boolean;
+  options: LoanPaymentOption[];
+  selectedId: string;
+  onChange: (id: string) => void;
+  selectedLoan: LoanPaymentOption | null;
+  action: LoanAction;
+  onActionChange: (action: LoanAction) => void;
+  hasError: boolean;
+  ariaDescribedBy?: string;
+  locale: string;
+}
+
+function LoanField({
+  dictionary,
+  visible,
+  loansLoaded,
+  options,
+  selectedId,
+  onChange,
+  selectedLoan,
+  action,
+  onActionChange,
+  hasError,
+  ariaDescribedBy,
+  locale,
+}: Readonly<LoanFieldProps>) {
+  if (!visible) return null;
+
+  const target = resolveLoanTargetInstallment(selectedLoan);
+  const overdue = selectedLoan?.overdueInstallment ?? null;
+  const next = selectedLoan?.nextInstallment ?? null;
+
+  function installmentLine(key: string, installment: LoanPaymentOptionInstallment): string {
+    return interpolateTemplate(get(dictionary, key), {
+      number: String(installment.installmentNumber),
+      date: formatLongDate(installment.dueDate, locale),
+      amount: formatMoney(installment.remainingCents, selectedLoan?.currency ?? 'COP', locale),
+    });
+  }
+
+  return (
+    <div>
+      <label htmlFor="tx-loan" className={labelCls}>
+        {get(dictionary, 'selectLoan')}
+      </label>
+      <select
+        id="tx-loan"
+        value={selectedId}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={hasError}
+        aria-describedby={ariaDescribedBy}
+        className={`${inputCls} appearance-none`}
+      >
+        <option value="" disabled className="bg-slate-800">
+          {loansLoaded ? get(dictionary, 'selectLoan') : get(dictionary, 'loading')}
+        </option>
+        {options.map((loan) => (
+          <option key={loan.loanId} value={loan.loanId} className="bg-slate-800">
+            {`${loan.loanName} — ${formatMoney(loan.balanceCents, loan.currency, locale)}`}
+          </option>
+        ))}
+      </select>
+
+      {loansLoaded && options.length === 0 && (
+        <p className="mt-1.5 text-xs text-amber-400">
+          {get(dictionary, 'noPendingLoanInstallments')}
+        </p>
+      )}
+
+      {selectedLoan && (
+        <div className="mt-3 space-y-3">
+          {/* Current installment state */}
+          {overdue && (
+            <output className="block rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
+              {installmentLine('loanStatusOverdue', overdue)}
+            </output>
+          )}
+
+          {!overdue && selectedLoan.currentMonthPaid && (
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+                {get(dictionary, 'loanStatusCurrentMonthPaid')}
+              </span>
+              {next && (
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 tabular-nums">
+                  {installmentLine('loanStatusNext', next)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!overdue && !selectedLoan.currentMonthPaid && next && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">
+              {installmentLine('loanStatusPending', next)}
+            </div>
+          )}
+
+          {!overdue && !selectedLoan.currentMonthPaid && !next && (
+            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-400">
+              {get(dictionary, 'loanStatusNoPending')}
+            </div>
+          )}
+
+          {/* Action selector */}
+          <fieldset>
+            <legend className={labelCls}>{get(dictionary, 'selectLoanAction')}</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-400 ${
+                  action === 'PAGAR_CUOTA'
+                    ? 'border-blue-500/60 bg-blue-500/15 text-white'
+                    : 'border-white/10 bg-white/4 text-slate-300'
+                } ${target ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+              >
+                <input
+                  type="radio"
+                  name="tx-loan-action"
+                  value="PAGAR_CUOTA"
+                  checked={action === 'PAGAR_CUOTA'}
+                  disabled={!target}
+                  onChange={() => onActionChange('PAGAR_CUOTA')}
+                  className="sr-only"
+                />
+                {get(dictionary, 'loanActionPayInstallment')}
+              </label>
+              <label
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-400 ${
+                  action === 'ABONAR_CAPITAL'
+                    ? 'border-blue-500/60 bg-blue-500/15 text-white'
+                    : 'border-white/10 bg-white/4 text-slate-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="tx-loan-action"
+                  value="ABONAR_CAPITAL"
+                  checked={action === 'ABONAR_CAPITAL'}
+                  onChange={() => onActionChange('ABONAR_CAPITAL')}
+                  className="sr-only"
+                />
+                {get(dictionary, 'loanActionExtraCapital')}
+              </label>
+            </div>
+          </fieldset>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface AmountAndCategoryFieldsProps {
   dictionary: Record<string, unknown>;
   effectiveNature: ExpenseNature;
@@ -742,6 +1064,10 @@ interface AmountAndCategoryFieldsProps {
   onOpenCategoryManager?: () => void;
   categoryError?: string;
   locale: string;
+  /** Overrides the account-derived max (e.g. a loan installment's remainder). */
+  amountMaxCents?: number;
+  /** Overrides the amount label key (e.g. "Extra principal payment amount"). */
+  amountLabelKey?: string;
 }
 
 function AmountAndCategoryFields({
@@ -760,6 +1086,8 @@ function AmountAndCategoryFields({
   onOpenCategoryManager,
   categoryError,
   locale,
+  amountMaxCents,
+  amountLabelKey,
 }: Readonly<AmountAndCategoryFieldsProps>) {
   if (effectiveNature === 'FIXED') return null;
 
@@ -768,7 +1096,7 @@ function AmountAndCategoryFields({
       {/* Amount */}
       <div>
         <label htmlFor="tx-amount" className={labelCls}>
-          {get(dictionary, 'amountLabel')}
+          {get(dictionary, amountLabelKey ?? 'amountLabel')}
           {selectedAccount && (
             <span className="text-slate-500 font-normal lowercase ml-1">
               ({selectedAccount.currency})
@@ -787,7 +1115,7 @@ function AmountAndCategoryFields({
           id="tx-amount"
           value={amountCents}
           onChange={onAmountChange}
-          maxValue={getAmountMaxValue(selectedAccount, isEditing, isExpense)}
+          maxValue={amountMaxCents ?? getAmountMaxValue(selectedAccount, isEditing, isExpense)}
           aria-invalid={!!amountError}
           aria-describedby={amountAriaDescribedBy}
           className={`${inputCls} font-mono tabular-nums text-lg`}
@@ -1052,6 +1380,15 @@ export function CreateTransactionModal({
   // cleared after a confirmed success (mirrors PayFixedExpenseModal).
   const fixedIdempotencyKeyRef = useRef<string | null>(null);
 
+  // Loan nature state: ACTIVE loans available for payment/receipt, the selected
+  // loan, the chosen movement (pay installment / extra capital) and its own
+  // retry-stable idempotency key (same policy as the fixed-payment path).
+  const [loansForPayment, setLoansForPayment] = useState<LoanPaymentOption[]>([]);
+  const [loansLoaded, setLoansLoaded] = useState(false);
+  const [selectedLoanId, setSelectedLoanId] = useState('');
+  const [loanAction, setLoanAction] = useState<LoanAction>('PAGAR_CUOTA');
+  const loanIdempotencyKeyRef = useRef<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -1103,6 +1440,7 @@ export function CreateTransactionModal({
     fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId) ?? null;
   const selectedVariableDefinition =
     variableExpenses.find((definition) => definition.id === selectedVariableExpenseId) ?? null;
+  const selectedLoan = loansForPayment.find((loan) => loan.loanId === selectedLoanId) ?? null;
 
   const fixedTargets = useMemo(
     () =>
@@ -1121,13 +1459,22 @@ export function CreateTransactionModal({
     selectedAccount
   );
   const variableExpenseOptions = resolveVariableExpenseOptions(variableExpenses, selectedAccount);
-  const submitDisabled = isSubmitDisabled(
+  const loanOptions = resolveLoanOptions(loansForPayment, selectedAccount, isExpense);
+  const loanCurrencyMismatch = isLoanCurrencyMismatch(
+    effectiveNature,
+    selectedLoan,
+    selectedAccount
+  );
+  const submitDisabled = isSubmitDisabled({
     isSubmitting,
     hasNoAccounts,
-    effectiveNature,
+    nature: effectiveNature,
     fixedTarget,
-    fixedCurrencyMismatch
-  );
+    loanTarget: selectedLoan,
+    loanAction,
+    loanAmountCents: amountCents,
+    currencyMismatch: fixedCurrencyMismatch || loanCurrencyMismatch,
+  });
 
   // -----------------------------------------------------------------------
   // Modal open/close with animation
@@ -1191,6 +1538,7 @@ export function CreateTransactionModal({
     if (isEditing) return;
     if (selectedType !== 'EXPENSE') return;
     if (effectiveNature === 'FIXED') return;
+    if (effectiveNature === 'LOAN') return;
     const acc = accounts.find((a) => a.id === selectedAccountId);
     if (!acc) return;
     const cap =
@@ -1222,9 +1570,9 @@ export function CreateTransactionModal({
     }
   }, [selectedType, selectedAccountId, accounts, setValue]);
 
-  // Lazy-load the fixed + variable definitions when the modal opens in CREATE
-  // mode (same deferral pattern as the accounts fetch). The nature resets to
-  // Normal on every fresh open.
+  // Lazy-load the fixed + variable definitions AND the ACTIVE loans for
+  // payment when the modal opens in CREATE mode (same deferral pattern as the
+  // accounts fetch). The nature resets to Normal on every fresh open.
   useEffect(() => {
     if (!isOpen || isEditing) return;
     const timer = setTimeout(() => {
@@ -1232,26 +1580,35 @@ export function CreateTransactionModal({
       setNatureError('');
       setSelectedFixedExpenseId('');
       setSelectedVariableExpenseId('');
+      setSelectedLoanId('');
+      setLoanAction('PAGAR_CUOTA');
       setAdvanceNextMonth(false);
       setDefinitionsLoaded(false);
+      setLoansLoaded(false);
       fixedIdempotencyKeyRef.current = null;
+      loanIdempotencyKeyRef.current = null;
       void (async () => {
         try {
-          const [fixedModule, variableModule] = await Promise.all([
+          const [fixedModule, variableModule, loanModule] = await Promise.all([
             import('@/actions/fixed-expense.actions'),
             import('@/actions/variable-expense.actions'),
+            import('@/actions/loan.actions'),
           ]);
-          const [fixedRes, variableRes] = await Promise.all([
+          const [fixedRes, variableRes, loanRes] = await Promise.all([
             fixedModule.getFixedExpenses({}),
             variableModule.getVariableExpenses({}),
+            loanModule.getLoansForPayment({}),
           ]);
           setFixedExpenses(fixedRes.success && fixedRes.data ? fixedRes.data : []);
           setVariableExpenses(variableRes.success && variableRes.data ? variableRes.data : []);
+          setLoansForPayment(loanRes.success && loanRes.data ? loanRes.data : []);
         } catch {
           setFixedExpenses([]);
           setVariableExpenses([]);
+          setLoansForPayment([]);
         } finally {
           setDefinitionsLoaded(true);
+          setLoansLoaded(true);
         }
       })();
     }, 0);
@@ -1273,6 +1630,30 @@ export function CreateTransactionModal({
       queueMicrotask(() => setSelectedVariableExpenseId(''));
     }
   }, [effectiveNature, selectedAccount, variableExpenses, selectedVariableExpenseId]);
+
+  // Loan nature: when a loan is selected, choose the default movement
+  // (pay installment when there is a target, extra capital otherwise) and seed
+  // the amount (installment remainder or empty for capital). Both stay editable.
+  useEffect(() => {
+    if (effectiveNature !== 'LOAN' || !selectedLoan) return;
+    const target = resolveLoanTargetInstallment(selectedLoan);
+    const nextAction: LoanAction = target ? 'PAGAR_CUOTA' : 'ABONAR_CAPITAL';
+    const nextAmount = target ? target.remainingCents : 0;
+    setValue('amountCents', nextAmount, { shouldValidate: false });
+    queueMicrotask(() => {
+      setLoanAction(nextAction);
+      setAmountCents(nextAmount);
+    });
+  }, [effectiveNature, selectedLoan, setValue]);
+
+  // A selected loan must share the selected account currency.
+  useEffect(() => {
+    if (effectiveNature !== 'LOAN' || !selectedAccount) return;
+    const current = loansForPayment.find((loan) => loan.loanId === selectedLoanId);
+    if (current && current.currency !== selectedAccount.currency) {
+      queueMicrotask(() => setSelectedLoanId(''));
+    }
+  }, [effectiveNature, selectedAccount, loansForPayment, selectedLoanId]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
@@ -1311,6 +1692,29 @@ export function CreateTransactionModal({
     setSelectedVariableExpenseId(id);
     setNatureError('');
   }, []);
+
+  const handleLoanChange = useCallback((id: string) => {
+    setSelectedLoanId(id);
+    setNatureError('');
+  }, []);
+
+  const handleLoanActionChange = useCallback(
+    (nextAction: LoanAction) => {
+      setLoanAction(nextAction);
+      setNatureError('');
+      if (!selectedLoan) return;
+      if (nextAction === 'PAGAR_CUOTA') {
+        const target = resolveLoanTargetInstallment(selectedLoan);
+        const nextAmount = target ? target.remainingCents : 0;
+        setValue('amountCents', nextAmount, { shouldValidate: false });
+        setAmountCents(nextAmount);
+      } else {
+        setValue('amountCents', 0, { shouldValidate: false });
+        setAmountCents(0);
+      }
+    },
+    [selectedLoan, setValue]
+  );
 
   const handleTemplateChange = useCallback((id: string) => {
     setSelectedFixedExpenseId(id);
@@ -1372,6 +1776,13 @@ export function CreateTransactionModal({
         return;
       }
 
+      // Loan nature: register the chosen movement (installment payment/receipt
+      // or an extra capital payment) against the selected loan.
+      if (effectiveNature === 'LOAN') {
+        await submitLoanMovement(ctx, selectedLoan, loanAction, loanIdempotencyKeyRef);
+        return;
+      }
+
       // Variable nature requires a monitored definition in the account currency.
       if (effectiveNature === 'VARIABLE') {
         const validationError = validateVariableExpense(
@@ -1398,6 +1809,8 @@ export function CreateTransactionModal({
       effectiveNature,
       fixedTarget,
       selectedVariableDefinition,
+      selectedLoan,
+      loanAction,
     ]
   );
 
@@ -1466,13 +1879,14 @@ export function CreateTransactionModal({
             isEditing={isEditing}
             selectedType={selectedType}
             register={register}
-            error={errors.type?.message}
+            error={translateValidationMessage(errors.type?.message, dictionary)}
           />
 
           <NatureField
             dictionary={dictionary}
-            visible={!isEditing && isExpense}
-            nature={nature}
+            visible={!isEditing}
+            options={getNatureOptions(isExpense)}
+            selectedNature={effectiveNature}
             error={natureError}
             onSelect={handleNatureSelect}
           />
@@ -1485,7 +1899,7 @@ export function CreateTransactionModal({
             onAccountChange={handleAccountChange}
             hasError={!!errors.accountId}
             ariaDescribedBy={errors.accountId ? 'tx-account-error' : undefined}
-            error={errors.accountId?.message}
+            error={translateValidationMessage(errors.accountId?.message, dictionary)}
             bankAccountOptions={bankAccountOptions}
             creditCardOptions={creditCardOptions}
             pocketOptions={pocketOptions}
@@ -1522,6 +1936,21 @@ export function CreateTransactionModal({
             locale={locale}
           />
 
+          <LoanField
+            dictionary={dictionary}
+            visible={!isEditing && effectiveNature === 'LOAN'}
+            loansLoaded={loansLoaded}
+            options={loanOptions}
+            selectedId={selectedLoanId}
+            onChange={handleLoanChange}
+            selectedLoan={selectedLoan}
+            action={loanAction}
+            onActionChange={handleLoanActionChange}
+            hasError={!!natureError}
+            ariaDescribedBy={natureError ? 'tx-nature-error' : undefined}
+            locale={locale}
+          />
+
           <AmountAndCategoryFields
             dictionary={dictionary}
             effectiveNature={effectiveNature}
@@ -1530,24 +1959,34 @@ export function CreateTransactionModal({
             isExpense={isExpense}
             amountCents={amountCents}
             onAmountChange={handleAmountChange}
-            amountError={errors.amountCents?.message}
+            amountError={translateValidationMessage(errors.amountCents?.message, dictionary)}
             amountAriaDescribedBy={errors.amountCents ? 'tx-amount-error' : undefined}
             categories={categories}
             selectedCategoryId={selectedCategoryId ?? ''}
             register={register}
             onOpenCategoryManager={onOpenCategoryManager}
-            categoryError={errors.categoryId?.message}
+            categoryError={translateValidationMessage(errors.categoryId?.message, dictionary)}
             locale={locale}
+            amountMaxCents={resolveLoanAmountMaxCents(effectiveNature, loanAction, selectedLoan)}
+            amountLabelKey={
+              effectiveNature === 'LOAN' && loanAction === 'ABONAR_CAPITAL'
+                ? 'capitalPaymentAmount'
+                : undefined
+            }
           />
 
           <DescriptionField
             dictionary={dictionary}
             register={register}
-            error={errors.description?.message}
+            error={translateValidationMessage(errors.description?.message, dictionary)}
             ariaDescribedBy={errors.description ? 'tx-description-error' : undefined}
           />
 
-          <DateField dictionary={dictionary} register={register} error={errors.date?.message} />
+          <DateField
+            dictionary={dictionary}
+            register={register}
+            error={translateValidationMessage(errors.date?.message, dictionary)}
+          />
 
           <ServerErrorAlert message={serverError} />
 

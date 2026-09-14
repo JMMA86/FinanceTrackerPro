@@ -82,6 +82,30 @@ export const FIXED_EXPENSES_EMPTY_USER = {
   name: 'Empty Fixed Expenses E2E User',
 };
 
+/**
+ * Isolated user for variable-expenses.feature — seeded with a funded
+ * CHECKING/COP account (ledger-backed), four monitored definitions with monthly
+ * targets and 6 months of linked EXPENSE transactions, plus two fixed-expense
+ * templates so the transaction form's Fijo nature can be exercised.
+ */
+export const VARIABLE_EXPENSES_TEST_USER = {
+  email: process.env.E2E_VARIABLE_EXPENSES_USER ?? 'variable-expenses@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Variable Expenses E2E User',
+};
+
+/**
+ * Isolated user for variable-expenses.feature @empty — has NO monitored
+ * definitions (and no accounts) so the page renders the empty state.
+ */
+export const VARIABLE_EXPENSES_EMPTY_USER = {
+  email:
+    process.env.E2E_VARIABLE_EXPENSES_EMPTY_USER ??
+    'variable-expenses-empty@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Empty Variable Expenses E2E User',
+};
+
 export const INVALID_CREDENTIALS = {
   email: 'nonexistent@test.com',
   password: 'WrongPass123',

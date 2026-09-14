@@ -1,22 +1,47 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type UseFormRegister } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { X, ArrowUpRight, ArrowDownRight, AlertCircle } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { createTransaction, updateTransaction } from '@/actions/transaction.actions';
+import { payFixedExpense } from '@/actions/fixed-expense.actions';
 import { get } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import { toLocalDateTimeInput } from '@/lib/utils/date-utils';
 import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
 import { AccountSelect } from '@/components/transactions/AccountSelect';
 import { isPocket } from '@/components/transactions/transferRules';
+import { comparePaymentsByDueDate } from '@/components/fixed-expenses/constants';
 import { formatMoney } from '@/lib/money';
 import { getTransactionError } from '@/components/transactions/getTransactionError';
 import type { AccountBrief, CategoryBrief, TransactionRow } from '@/components/transactions/types';
+import type {
+  FixedExpensePaymentSerialized,
+  FixedExpenseWithPayments,
+} from '@/types/fixed-expense';
+import type { VariableExpenseDefinition } from '@/types/variable-expense';
+
+// ---------------------------------------------------------------------------
+// Expense nature (create + EXPENSE only)
+// ---------------------------------------------------------------------------
+
+type ExpenseNature = 'NORMAL' | 'FIXED' | 'VARIABLE';
+
+const NATURE_OPTIONS: ReadonlyArray<{ value: ExpenseNature; labelKey: string }> = [
+  { value: 'NORMAL', labelKey: 'natureNormal' },
+  { value: 'FIXED', labelKey: 'natureFixed' },
+  { value: 'VARIABLE', labelKey: 'natureVariable' },
+];
+
+type Notify = (type: 'success' | 'error' | 'warning' | 'info', message: string) => void;
+
+interface IdempotencyKeyRef {
+  current: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Client-side validation schema
@@ -49,6 +74,12 @@ interface CreateTransactionModalProps {
   lang: Locale;
   locale?: string;
   onOpenCategoryManager?: () => void;
+  /**
+   * Optional callback fired after a successful create/update. Host pages that
+   * own server data (e.g. variable expenses) use it to refresh their RSC.
+   * Retro-compatible: the transactions page omits it.
+   */
+  onSuccess?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +111,893 @@ function getAmountMaxValue(
     : account.balanceCents;
 }
 
+/**
+ * Resolve the pending payments of a fixed expense that are eligible for the
+ * chosen transaction date: the occurrence due THIS month, plus the first one due
+ * after the month (to offer "advance next month's payment").
+ */
+function resolveFixedPaymentTargets(
+  expense: FixedExpenseWithPayments | null,
+  date: Date
+): FixedExpensePaymentTargets {
+  if (!expense) return { monthPayment: null, nextPayment: null };
+
+  const pending = expense.payments
+    .filter((payment) => payment.paidDate == null)
+    .sort(comparePaymentsByDueDate);
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999).getTime();
+
+  const monthPayment =
+    pending.find((payment) => {
+      const due = new Date(payment.dueDate);
+      return due.getFullYear() === year && due.getMonth() === month;
+    }) ?? null;
+
+  const nextPayment =
+    pending.find((payment) => new Date(payment.dueDate).getTime() > monthEnd) ?? null;
+
+  return { monthPayment, nextPayment };
+}
+
+interface FixedExpensePaymentTargets {
+  monthPayment: FixedExpensePaymentSerialized | null;
+  nextPayment: FixedExpensePaymentSerialized | null;
+}
+
+function formatLongDate(value: Date | string, locale: string): string {
+  return new Date(value).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Derived-state helpers (kept out of the component to limit its complexity)
+// ---------------------------------------------------------------------------
+
+function resolveEffectiveNature(isExpense: boolean, nature: ExpenseNature): ExpenseNature {
+  return isExpense ? nature : 'NORMAL';
+}
+
+function resolveFixedTarget(
+  targets: FixedExpensePaymentTargets,
+  advanceNextMonth: boolean
+): FixedExpensePaymentSerialized | null {
+  return targets.monthPayment ?? (advanceNextMonth ? targets.nextPayment : null);
+}
+
+function isFixedCurrencyMismatch(
+  nature: ExpenseNature,
+  target: FixedExpensePaymentSerialized | null,
+  account: AccountBrief | undefined
+): boolean {
+  if (nature !== 'FIXED' || !target || !account) return false;
+  return account.currency !== target.currency;
+}
+
+function resolveVariableExpenseOptions(
+  definitions: VariableExpenseDefinition[],
+  account: AccountBrief | undefined
+): VariableExpenseDefinition[] {
+  if (!account) return definitions;
+  return definitions.filter((definition) => definition.currency === account.currency);
+}
+
+function isSubmitDisabled(
+  isSubmitting: boolean,
+  hasNoAccounts: boolean,
+  nature: ExpenseNature,
+  target: FixedExpensePaymentSerialized | null,
+  currencyMismatch: boolean
+): boolean {
+  if (isSubmitting || hasNoAccounts) return true;
+  return nature === 'FIXED' && (!target || currencyMismatch);
+}
+
+/** Maps fixed-payment action errors to localized messages. */
+function mapFixedPayError(
+  result: { code?: string; error?: string },
+  dictionary: Record<string, unknown>
+): string {
+  if (result.code === 'FIXED_EXPENSE_ALREADY_PAID') {
+    return get(dictionary, 'fixedExpenseAlreadyPaid');
+  }
+  return getTransactionError(result, dictionary);
+}
+
+// ---------------------------------------------------------------------------
+// Submission helpers (extracted from onSubmit to reduce cognitive complexity)
+// ---------------------------------------------------------------------------
+
+interface SubmitContext {
+  data: CreateTransactionFormData;
+  account: AccountBrief;
+  dictionary: Record<string, unknown>;
+  addNotification: Notify;
+  closeModal: () => void;
+  onSuccess?: () => void;
+  setServerError: (message: string) => void;
+  setNatureError: (message: string) => void;
+  setIsSubmitting: (value: boolean) => void;
+}
+
+function notifyTransactionSuccess(ctx: SubmitContext, successKey: string): void {
+  ctx.setServerError('');
+  ctx.addNotification('success', get(ctx.dictionary, successKey));
+  ctx.closeModal();
+  ctx.onSuccess?.();
+}
+
+function notifyTransactionError(
+  ctx: SubmitContext,
+  result: { code?: string; error?: string }
+): void {
+  const message = getTransactionError(result, ctx.dictionary);
+  ctx.setServerError(message);
+  ctx.addNotification('error', message);
+}
+
+async function submitEditedTransaction(ctx: SubmitContext, editing: TransactionRow): Promise<void> {
+  // The amount sign is derived from the ORIGINAL row so it stays correct for
+  // every transaction type (INCOME positive, EXPENSE/TRANSFER_OUT negative).
+  const signedAmountCents = editing.amountCents < 0 ? -ctx.data.amountCents : ctx.data.amountCents;
+  const result = await updateTransaction({
+    transactionId: editing.id,
+    description: ctx.data.description || undefined,
+    amountCents: signedAmountCents,
+    date: ctx.data.date ? new Date(ctx.data.date) : undefined,
+    categoryId: ctx.data.categoryId || null,
+  });
+  ctx.setIsSubmitting(false);
+  if (result.success) {
+    notifyTransactionSuccess(ctx, 'updateSuccess');
+    return;
+  }
+  notifyTransactionError(ctx, result);
+}
+
+async function submitFixedPayment(
+  ctx: SubmitContext,
+  fixedTarget: FixedExpensePaymentSerialized | null,
+  idempotencyKeyRef: IdempotencyKeyRef
+): Promise<void> {
+  if (!fixedTarget) {
+    ctx.setIsSubmitting(false);
+    ctx.setNatureError(get(ctx.dictionary, 'noPendingPayments'));
+    return;
+  }
+  if (ctx.account.currency !== fixedTarget.currency) {
+    ctx.setIsSubmitting(false);
+    ctx.setNatureError(get(ctx.dictionary, 'currencyMismatch'));
+    return;
+  }
+  if (!idempotencyKeyRef.current) {
+    idempotencyKeyRef.current = crypto.randomUUID();
+  }
+  const result = await payFixedExpense({
+    paymentId: fixedTarget.id,
+    accountId: ctx.data.accountId,
+    date: ctx.data.date ? new Date(ctx.data.date) : undefined,
+    idempotencyKey: idempotencyKeyRef.current,
+  });
+  ctx.setIsSubmitting(false);
+  if (result.success) {
+    idempotencyKeyRef.current = null;
+    notifyTransactionSuccess(ctx, 'createSuccess');
+    return;
+  }
+  const message = mapFixedPayError(result, ctx.dictionary);
+  ctx.setServerError(message);
+  ctx.addNotification('error', message);
+}
+
+function validateVariableExpense(
+  account: AccountBrief,
+  definition: VariableExpenseDefinition | null,
+  dictionary: Record<string, unknown>
+): string | null {
+  if (!definition) return get(dictionary, 'selectVariableExpense');
+  if (account.currency !== definition.currency) return get(dictionary, 'currencyMismatch');
+  return null;
+}
+
+async function submitNewTransaction(
+  ctx: SubmitContext,
+  nature: ExpenseNature,
+  definition: VariableExpenseDefinition | null
+): Promise<void> {
+  const isVariable = nature === 'VARIABLE';
+  const signedAmountCents =
+    ctx.data.type === 'EXPENSE' ? -ctx.data.amountCents : ctx.data.amountCents;
+  const result = await createTransaction({
+    idempotencyKey: crypto.randomUUID(),
+    accountId: ctx.data.accountId,
+    type: ctx.data.type,
+    amountCents: signedAmountCents,
+    currency: ctx.account.currency,
+    description: ctx.data.description || undefined,
+    date: ctx.data.date ? new Date(ctx.data.date) : undefined,
+    categoryId: isVariable ? undefined : ctx.data.categoryId || undefined,
+    variableExpenseId: isVariable ? definition?.id : undefined,
+  });
+  ctx.setIsSubmitting(false);
+  if (result.success) {
+    notifyTransactionSuccess(ctx, 'createSuccess');
+    return;
+  }
+  notifyTransactionError(ctx, result);
+}
+
+// ---------------------------------------------------------------------------
+// Field subcomponents (split out to keep the orchestrator's complexity low)
+// ---------------------------------------------------------------------------
+
+interface NoAccountsWarningProps {
+  visible: boolean;
+  dictionary: Record<string, unknown>;
+  lang: Locale;
+}
+
+function NoAccountsWarning({ visible, dictionary, lang }: Readonly<NoAccountsWarningProps>) {
+  if (!visible) return null;
+  return (
+    <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-500/10">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-slate-200 leading-relaxed">
+            {get(dictionary, 'noAccountsDesc')}
+          </p>
+          <Link
+            href={`/${lang}/accounts`}
+            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            {get(dictionary, 'createAccountCta')}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface TypeFieldProps {
+  dictionary: Record<string, unknown>;
+  isEditing: boolean;
+  selectedType: 'INCOME' | 'EXPENSE';
+  register: UseFormRegister<CreateTransactionFormData>;
+  error?: string;
+}
+
+function TypeField({
+  dictionary,
+  isEditing,
+  selectedType,
+  register,
+  error,
+}: Readonly<TypeFieldProps>) {
+  const typeOptions = [
+    {
+      value: 'EXPENSE' as const,
+      label: get(dictionary, 'expenseLabel'),
+      icon: ArrowDownRight,
+      activeColor: 'rose',
+    },
+    {
+      value: 'INCOME' as const,
+      label: get(dictionary, 'incomeLabel'),
+      icon: ArrowUpRight,
+      activeColor: 'emerald',
+    },
+  ];
+
+  return (
+    <fieldset>
+      <legend className={labelCls}>{get(dictionary, 'type')}</legend>
+      <div className="grid grid-cols-2 gap-3">
+        {typeOptions.map((opt) => {
+          const isActive = selectedType === opt.value;
+          const Icon = opt.icon;
+          const isIncome = opt.activeColor === 'emerald';
+          let borderClasses: string;
+          let iconClasses: string;
+          if (isActive) {
+            borderClasses = isIncome
+              ? 'border-emerald-500/60 bg-emerald-500/15'
+              : 'border-rose-500/60 bg-rose-500/15';
+            iconClasses = isIncome
+              ? 'bg-emerald-500/20 text-emerald-400'
+              : 'bg-rose-500/20 text-rose-400';
+          } else {
+            borderClasses = 'border-white/10 bg-white/4 hover:border-white/20';
+            iconClasses = 'bg-white/5 text-slate-400';
+          }
+          return (
+            <label
+              key={opt.value}
+              className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${borderClasses} ${
+                isEditing ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+              }`}
+            >
+              <input
+                type="radio"
+                value={opt.value}
+                {...register('type')}
+                disabled={isEditing}
+                className="sr-only"
+                aria-label={opt.label}
+              />
+              <div className={`p-1.5 rounded-lg ${iconClasses}`}>
+                <Icon className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <span
+                className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-slate-300'}`}
+              >
+                {opt.label}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {error && (
+        <p className={errorCls} role="alert">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+interface NatureFieldProps {
+  dictionary: Record<string, unknown>;
+  visible: boolean;
+  nature: ExpenseNature;
+  error: string;
+  onSelect: (value: ExpenseNature) => void;
+}
+
+function NatureField({ dictionary, visible, nature, error, onSelect }: Readonly<NatureFieldProps>) {
+  if (!visible) return null;
+  return (
+    <fieldset>
+      <legend className={labelCls}>{get(dictionary, 'expenseNature')}</legend>
+      <div className="grid grid-cols-3 gap-2">
+        {NATURE_OPTIONS.map((option) => {
+          const isActive = nature === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => onSelect(option.value)}
+              className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                isActive
+                  ? 'border-blue-500/60 bg-blue-500/15 text-white'
+                  : 'border-white/10 bg-white/4 text-slate-300 hover:border-white/20'
+              }`}
+            >
+              {get(dictionary, option.labelKey)}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <p className={errorCls} role="alert">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+interface AccountFieldProps {
+  dictionary: Record<string, unknown>;
+  isEditing: boolean;
+  selectedAccountId: string;
+  modalSession: number;
+  onAccountChange: (accountId: string) => void;
+  hasError: boolean;
+  ariaDescribedBy?: string;
+  error?: string;
+  bankAccountOptions: AccountBrief[];
+  creditCardOptions: AccountBrief[];
+  pocketOptions: AccountBrief[];
+  parentNameById: Record<string, string>;
+  locale: string;
+}
+
+function AccountField({
+  dictionary,
+  isEditing,
+  selectedAccountId,
+  modalSession,
+  onAccountChange,
+  hasError,
+  ariaDescribedBy,
+  error,
+  bankAccountOptions,
+  creditCardOptions,
+  pocketOptions,
+  parentNameById,
+  locale,
+}: Readonly<AccountFieldProps>) {
+  return (
+    <div>
+      <label htmlFor="tx-account" className={labelCls}>
+        {get(dictionary, 'account')}
+      </label>
+      <AccountSelect
+        key={`account-${modalSession}`}
+        id="tx-account"
+        value={selectedAccountId}
+        onChange={onAccountChange}
+        placeholder={get(dictionary, 'selectAccount')}
+        accountsGroupLabel={get(dictionary, 'accountsGroup')}
+        creditCardsGroupLabel={get(dictionary, 'creditCardsGroup')}
+        pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
+        parentNameById={parentNameById}
+        accounts={bankAccountOptions}
+        creditCards={creditCardOptions}
+        pockets={pocketOptions}
+        showBalance
+        disabled={isEditing}
+        locale={locale}
+        hasError={hasError}
+        ariaDescribedBy={ariaDescribedBy}
+      />
+      {error && (
+        <p id="tx-account-error" className={errorCls} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface VariableExpenseFieldProps {
+  dictionary: Record<string, unknown>;
+  visible: boolean;
+  definitionsLoaded: boolean;
+  options: VariableExpenseDefinition[];
+  selectedId: string;
+  onChange: (id: string) => void;
+  hasError: boolean;
+  ariaDescribedBy?: string;
+}
+
+function VariableExpenseField({
+  dictionary,
+  visible,
+  definitionsLoaded,
+  options,
+  selectedId,
+  onChange,
+  hasError,
+  ariaDescribedBy,
+}: Readonly<VariableExpenseFieldProps>) {
+  if (!visible) return null;
+  return (
+    <div>
+      <label htmlFor="tx-variable-expense" className={labelCls}>
+        {get(dictionary, 'selectVariableExpense')}
+      </label>
+      <select
+        id="tx-variable-expense"
+        value={selectedId}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={hasError}
+        aria-describedby={ariaDescribedBy}
+        className={`${inputCls} appearance-none`}
+      >
+        <option value="" disabled className="bg-slate-800">
+          {definitionsLoaded
+            ? get(dictionary, 'selectVariableExpense')
+            : get(dictionary, 'loading')}
+        </option>
+        {options.map((definition) => (
+          <option key={definition.id} value={definition.id} className="bg-slate-800">
+            {definition.name}
+          </option>
+        ))}
+      </select>
+      {definitionsLoaded && options.length === 0 && (
+        <p className="mt-1.5 text-xs text-amber-400">{get(dictionary, 'noVariableExpenses')}</p>
+      )}
+    </div>
+  );
+}
+
+interface FixedExpenseFieldProps {
+  dictionary: Record<string, unknown>;
+  visible: boolean;
+  definitionsLoaded: boolean;
+  fixedExpenses: FixedExpenseWithPayments[];
+  selectedFixedExpenseId: string;
+  selectedFixedExpense: FixedExpenseWithPayments | null;
+  fixedTarget: FixedExpensePaymentSerialized | null;
+  nextPayment: FixedExpensePaymentSerialized | null;
+  fixedCurrencyMismatch: boolean;
+  advanceNextMonth: boolean;
+  onTemplateChange: (id: string) => void;
+  onAdvanceChange: (checked: boolean) => void;
+  hasError: boolean;
+  ariaDescribedBy?: string;
+  locale: string;
+}
+
+function FixedExpenseField({
+  dictionary,
+  visible,
+  definitionsLoaded,
+  fixedExpenses,
+  selectedFixedExpenseId,
+  selectedFixedExpense,
+  fixedTarget,
+  nextPayment,
+  fixedCurrencyMismatch,
+  advanceNextMonth,
+  onTemplateChange,
+  onAdvanceChange,
+  hasError,
+  ariaDescribedBy,
+  locale,
+}: Readonly<FixedExpenseFieldProps>) {
+  if (!visible) return null;
+
+  // Resolved with independent statements (Sonar S3358: no nested ternaries).
+  let paymentPanel: React.ReactNode;
+  if (fixedTarget) {
+    paymentPanel = (
+      <>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">{get(dictionary, 'dueDate')}</span>
+          <span className="font-semibold text-white">
+            {formatLongDate(fixedTarget.dueDate, locale)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-400">{get(dictionary, 'autoAmount')}</span>
+          <output className="font-semibold text-emerald-400 tabular-nums">
+            {formatMoney(fixedTarget.expectedAmountCents, fixedTarget.currency, locale)}
+          </output>
+        </div>
+        <p className="text-[10px] text-slate-500">{get(dictionary, 'fixedAmountAuto')}</p>
+        {fixedCurrencyMismatch && (
+          <p role="alert" className="text-xs text-amber-400">
+            {get(dictionary, 'currencyMismatch')}
+          </p>
+        )}
+      </>
+    );
+  } else if (nextPayment) {
+    paymentPanel = (
+      <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={advanceNextMonth}
+          onChange={(event) => onAdvanceChange(event.target.checked)}
+          className="rounded border-white/20 bg-white/5"
+        />
+        {get(dictionary, 'advanceNextMonth')}
+      </label>
+    );
+  } else {
+    paymentPanel = (
+      <output className="block text-xs text-amber-400">
+        {get(dictionary, 'noPendingPayments')}
+      </output>
+    );
+  }
+
+  return (
+    <div>
+      <label htmlFor="tx-fixed-expense" className={labelCls}>
+        {get(dictionary, 'selectFixedExpense')}
+      </label>
+      <select
+        id="tx-fixed-expense"
+        value={selectedFixedExpenseId}
+        onChange={(event) => onTemplateChange(event.target.value)}
+        aria-invalid={hasError}
+        aria-describedby={ariaDescribedBy}
+        className={`${inputCls} appearance-none`}
+      >
+        <option value="" disabled className="bg-slate-800">
+          {definitionsLoaded ? get(dictionary, 'selectFixedExpense') : get(dictionary, 'loading')}
+        </option>
+        {fixedExpenses.map((expense) => (
+          <option key={expense.id} value={expense.id} className="bg-slate-800">
+            {expense.name} — {formatMoney(expense.amountCents, expense.currency, locale)}
+          </option>
+        ))}
+      </select>
+
+      {definitionsLoaded && fixedExpenses.length === 0 && (
+        <p className="mt-1.5 text-xs text-amber-400">{get(dictionary, 'noFixedExpenses')}</p>
+      )}
+
+      {selectedFixedExpense && (
+        <div className="mt-3 bg-white/5 rounded-xl p-3 space-y-2">{paymentPanel}</div>
+      )}
+    </div>
+  );
+}
+
+interface AmountAndCategoryFieldsProps {
+  dictionary: Record<string, unknown>;
+  effectiveNature: ExpenseNature;
+  selectedAccount: AccountBrief | undefined;
+  isEditing: boolean;
+  isExpense: boolean;
+  amountCents: number;
+  onAmountChange: (value: number) => void;
+  amountError?: string;
+  amountAriaDescribedBy?: string;
+  categories: CategoryBrief[];
+  selectedCategoryId: string;
+  register: UseFormRegister<CreateTransactionFormData>;
+  onOpenCategoryManager?: () => void;
+  categoryError?: string;
+  locale: string;
+}
+
+function AmountAndCategoryFields({
+  dictionary,
+  effectiveNature,
+  selectedAccount,
+  isEditing,
+  isExpense,
+  amountCents,
+  onAmountChange,
+  amountError,
+  amountAriaDescribedBy,
+  categories,
+  selectedCategoryId,
+  register,
+  onOpenCategoryManager,
+  categoryError,
+  locale,
+}: Readonly<AmountAndCategoryFieldsProps>) {
+  if (effectiveNature === 'FIXED') return null;
+
+  return (
+    <>
+      {/* Amount */}
+      <div>
+        <label htmlFor="tx-amount" className={labelCls}>
+          {get(dictionary, 'amountLabel')}
+          {selectedAccount && (
+            <span className="text-slate-500 font-normal lowercase ml-1">
+              ({selectedAccount.currency})
+            </span>
+          )}
+        </label>
+        {!isEditing && isExpense && selectedAccount && (
+          <p className="mt-1 mb-3 text-xs text-slate-400">
+            {get(dictionary, 'availableToSpend')}:{' '}
+            <span className="font-semibold text-emerald-400 tabular-nums">
+              {formatMoney(getAvailableToSpend(selectedAccount), selectedAccount.currency, locale)}
+            </span>
+          </p>
+        )}
+        <FormattedNumericInput
+          id="tx-amount"
+          value={amountCents}
+          onChange={onAmountChange}
+          maxValue={getAmountMaxValue(selectedAccount, isEditing, isExpense)}
+          aria-invalid={!!amountError}
+          aria-describedby={amountAriaDescribedBy}
+          className={`${inputCls} font-mono tabular-nums text-lg`}
+        />
+        {amountError && (
+          <p id="tx-amount-error" className={errorCls} role="alert">
+            {amountError}
+          </p>
+        )}
+      </div>
+
+      {/* Category selector (Normal only — Variable inherits the definition's category) */}
+      {effectiveNature === 'NORMAL' && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={labelCls}>{get(dictionary, 'category')}</span>
+            {onOpenCategoryManager && (
+              <button
+                type="button"
+                onClick={onOpenCategoryManager}
+                className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg px-1.5 py-0.5"
+              >
+                {get(dictionary, 'manageCategories')}
+              </button>
+            )}
+          </div>
+          <fieldset className="mt-2">
+            <legend className="sr-only">{get(dictionary, 'category')}</legend>
+            <div className="flex flex-wrap gap-2">
+              {/* No category option */}
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
+                  selectedCategoryId === ''
+                    ? 'border-blue-500/60 bg-blue-500/15'
+                    : 'border-white/10 bg-white/4 hover:border-white/20'
+                }`}
+              >
+                <input
+                  type="radio"
+                  value=""
+                  {...register('categoryId')}
+                  className="sr-only"
+                  aria-label={get(dictionary, 'selectCategory')}
+                />
+                <span
+                  className={`text-xs font-semibold ${
+                    selectedCategoryId === '' ? 'text-white' : 'text-slate-300'
+                  }`}
+                >
+                  {get(dictionary, 'selectCategory')}
+                </span>
+              </label>
+
+              {/* Active categories (system + own) */}
+              {categories.map((cat) => {
+                const isActive = selectedCategoryId === cat.id;
+                return (
+                  <label
+                    key={cat.id}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
+                      isActive
+                        ? 'border-blue-500/60 bg-blue-500/15'
+                        : 'border-white/10 bg-white/4 hover:border-white/20'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      value={cat.id}
+                      {...register('categoryId')}
+                      className="sr-only"
+                      aria-label={cat.name}
+                    />
+                    <span
+                      className="w-3 h-3 rounded-full inline-block shrink-0"
+                      style={{ backgroundColor: cat.color ?? '#64748B' }}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={`text-xs font-semibold ${
+                        isActive ? 'text-white' : 'text-slate-300'
+                      }`}
+                    >
+                      {cat.name}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+          {categoryError && (
+            <p className={errorCls} role="alert">
+              {categoryError}
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+interface DescriptionFieldProps {
+  dictionary: Record<string, unknown>;
+  register: UseFormRegister<CreateTransactionFormData>;
+  error?: string;
+  ariaDescribedBy?: string;
+}
+
+function DescriptionField({
+  dictionary,
+  register,
+  error,
+  ariaDescribedBy,
+}: Readonly<DescriptionFieldProps>) {
+  return (
+    <div>
+      <label htmlFor="tx-description" className={labelCls}>
+        {get(dictionary, 'descriptionLabel')}
+      </label>
+      <textarea
+        id="tx-description"
+        {...register('description')}
+        rows={3}
+        placeholder={get(dictionary, 'descriptionPlaceholder')}
+        aria-invalid={!!error}
+        aria-describedby={ariaDescribedBy}
+        className={`${inputCls} resize-none`}
+      />
+      {error && (
+        <p id="tx-description-error" className={errorCls} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface DateFieldProps {
+  dictionary: Record<string, unknown>;
+  register: UseFormRegister<CreateTransactionFormData>;
+  error?: string;
+}
+
+function DateField({ dictionary, register, error }: Readonly<DateFieldProps>) {
+  return (
+    <div>
+      <label htmlFor="tx-date" className={labelCls}>
+        {get(dictionary, 'transactionDate')}
+      </label>
+      <input
+        id="tx-date"
+        type="datetime-local"
+        {...register('date')}
+        aria-invalid={!!error}
+        className={inputCls}
+      />
+      {error && (
+        <p className={errorCls} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface ServerErrorAlertProps {
+  message: string;
+}
+
+function ServerErrorAlert({ message }: Readonly<ServerErrorAlertProps>) {
+  if (!message) return null;
+  return (
+    <div
+      role="alert"
+      className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3"
+    >
+      <p className="text-sm text-red-200 font-medium">{message}</p>
+    </div>
+  );
+}
+
+interface FormActionsProps {
+  dictionary: Record<string, unknown>;
+  isSubmitting: boolean;
+  disabled: boolean;
+  onClose: () => void;
+}
+
+function FormActions({ dictionary, isSubmitting, disabled, onClose }: Readonly<FormActionsProps>) {
+  const submitLabel = isSubmitting ? get(dictionary, 'creating') : get(dictionary, 'create');
+  return (
+    <div className="flex gap-3 pt-2">
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
+      >
+        {get(dictionary, 'cancel')}
+      </button>
+      <button
+        type="submit"
+        disabled={disabled}
+        aria-busy={isSubmitting}
+        className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+      >
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -91,6 +1009,7 @@ export function CreateTransactionModal({
   lang,
   locale = 'es-CO',
   onOpenCategoryManager,
+  onSuccess,
 }: Readonly<CreateTransactionModalProps>) {
   const activeModal = useUIStore((s) => s.activeModal);
   const modalData = useUIStore((s) => s.modalData);
@@ -120,6 +1039,19 @@ export function CreateTransactionModal({
   // toast is kept as reinforcement in case the modal closes first.
   const [serverError, setServerError] = useState('');
 
+  // Expense nature (create + EXPENSE only): Normal / Fixed / Variable.
+  const [nature, setNature] = useState<ExpenseNature>('NORMAL');
+  const [natureError, setNatureError] = useState('');
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseWithPayments[]>([]);
+  const [variableExpenses, setVariableExpenses] = useState<VariableExpenseDefinition[]>([]);
+  const [definitionsLoaded, setDefinitionsLoaded] = useState(false);
+  const [selectedFixedExpenseId, setSelectedFixedExpenseId] = useState('');
+  const [selectedVariableExpenseId, setSelectedVariableExpenseId] = useState('');
+  const [advanceNextMonth, setAdvanceNextMonth] = useState(false);
+  // Idempotency key for the fixed-payment path: stable across retries and only
+  // cleared after a confirmed success (mirrors PayFixedExpenseModal).
+  const fixedIdempotencyKeyRef = useRef<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -142,6 +1074,7 @@ export function CreateTransactionModal({
   const selectedType = useWatch({ control, name: 'type' });
   const selectedAccountId = useWatch({ control, name: 'accountId' });
   const selectedCategoryId = useWatch({ control, name: 'categoryId' });
+  const selectedDateValue = useWatch({ control, name: 'date' });
 
   // Find selected account currency for display
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
@@ -161,6 +1094,40 @@ export function CreateTransactionModal({
     [accounts]
   );
   const isExpense = selectedType === 'EXPENSE';
+
+  // INCOME ignores the nature selector entirely: an income is never "fixed" or
+  // "variable". Deriving (instead of resetting state) avoids a set-state effect.
+  const effectiveNature = resolveEffectiveNature(isExpense, nature);
+
+  const selectedFixedExpense =
+    fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId) ?? null;
+  const selectedVariableDefinition =
+    variableExpenses.find((definition) => definition.id === selectedVariableExpenseId) ?? null;
+
+  const fixedTargets = useMemo(
+    () =>
+      resolveFixedPaymentTargets(
+        selectedFixedExpense,
+        selectedDateValue ? new Date(selectedDateValue) : new Date()
+      ),
+    [selectedFixedExpense, selectedDateValue]
+  );
+
+  // "Advance next month" only makes sense when this month's occurrence is gone.
+  const fixedTarget = resolveFixedTarget(fixedTargets, advanceNextMonth);
+  const fixedCurrencyMismatch = isFixedCurrencyMismatch(
+    effectiveNature,
+    fixedTarget,
+    selectedAccount
+  );
+  const variableExpenseOptions = resolveVariableExpenseOptions(variableExpenses, selectedAccount);
+  const submitDisabled = isSubmitDisabled(
+    isSubmitting,
+    hasNoAccounts,
+    effectiveNature,
+    fixedTarget,
+    fixedCurrencyMismatch
+  );
 
   // -----------------------------------------------------------------------
   // Modal open/close with animation
@@ -223,6 +1190,7 @@ export function CreateTransactionModal({
   useEffect(() => {
     if (isEditing) return;
     if (selectedType !== 'EXPENSE') return;
+    if (effectiveNature === 'FIXED') return;
     const acc = accounts.find((a) => a.id === selectedAccountId);
     if (!acc) return;
     const cap =
@@ -233,7 +1201,15 @@ export function CreateTransactionModal({
         setValue('amountCents', 0);
       });
     }
-  }, [selectedAccountId, selectedType, amountCents, accounts, isEditing, setValue]);
+  }, [
+    selectedAccountId,
+    selectedType,
+    amountCents,
+    accounts,
+    isEditing,
+    setValue,
+    effectiveNature,
+  ]);
 
   // Clear the account when the type switches to INCOME and a credit card was
   // selected (cards are expense-only; leaving a card selected would break the
@@ -245,6 +1221,58 @@ export function CreateTransactionModal({
       setValue('accountId', '');
     }
   }, [selectedType, selectedAccountId, accounts, setValue]);
+
+  // Lazy-load the fixed + variable definitions when the modal opens in CREATE
+  // mode (same deferral pattern as the accounts fetch). The nature resets to
+  // Normal on every fresh open.
+  useEffect(() => {
+    if (!isOpen || isEditing) return;
+    const timer = setTimeout(() => {
+      setNature('NORMAL');
+      setNatureError('');
+      setSelectedFixedExpenseId('');
+      setSelectedVariableExpenseId('');
+      setAdvanceNextMonth(false);
+      setDefinitionsLoaded(false);
+      fixedIdempotencyKeyRef.current = null;
+      void (async () => {
+        try {
+          const [fixedModule, variableModule] = await Promise.all([
+            import('@/actions/fixed-expense.actions'),
+            import('@/actions/variable-expense.actions'),
+          ]);
+          const [fixedRes, variableRes] = await Promise.all([
+            fixedModule.getFixedExpenses({}),
+            variableModule.getVariableExpenses({}),
+          ]);
+          setFixedExpenses(fixedRes.success && fixedRes.data ? fixedRes.data : []);
+          setVariableExpenses(variableRes.success && variableRes.data ? variableRes.data : []);
+        } catch {
+          setFixedExpenses([]);
+          setVariableExpenses([]);
+        } finally {
+          setDefinitionsLoaded(true);
+        }
+      })();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isOpen, isEditing]);
+
+  // Fixed nature: the amount is driven by the resolved payment (read-only).
+  useEffect(() => {
+    if (effectiveNature !== 'FIXED' || !fixedTarget) return;
+    setValue('amountCents', fixedTarget.expectedAmountCents, { shouldValidate: false });
+  }, [effectiveNature, fixedTarget, setValue]);
+
+  // A variable definition must share the selected account currency; clear a
+  // stale selection when the account changes (currencies are never mixed).
+  useEffect(() => {
+    if (effectiveNature !== 'VARIABLE' || !selectedAccount) return;
+    const definition = variableExpenses.find((item) => item.id === selectedVariableExpenseId);
+    if (definition && definition.currency !== selectedAccount.currency) {
+      queueMicrotask(() => setSelectedVariableExpenseId(''));
+    }
+  }, [effectiveNature, selectedAccount, variableExpenses, selectedVariableExpenseId]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;
@@ -259,6 +1287,50 @@ export function CreateTransactionModal({
     closeModal();
   }, [closeModal]);
 
+  const handleNatureSelect = useCallback(
+    (value: ExpenseNature) => {
+      setNature(value);
+      setNatureError('');
+      // Variable inherits the definition's category: drop any previously
+      // selected category so it is never sent.
+      if (value === 'VARIABLE') {
+        setValue('categoryId', '');
+      }
+    },
+    [setValue]
+  );
+
+  const handleAccountChange = useCallback(
+    (accountId: string) => {
+      setValue('accountId', accountId);
+    },
+    [setValue]
+  );
+
+  const handleVariableChange = useCallback((id: string) => {
+    setSelectedVariableExpenseId(id);
+    setNatureError('');
+  }, []);
+
+  const handleTemplateChange = useCallback((id: string) => {
+    setSelectedFixedExpenseId(id);
+    setAdvanceNextMonth(false);
+    setNatureError('');
+  }, []);
+
+  const handleAdvanceChange = useCallback((checked: boolean) => {
+    setAdvanceNextMonth(checked);
+    setNatureError('');
+  }, []);
+
+  const handleAmountChange = useCallback(
+    (value: number) => {
+      setAmountCents(value);
+      setValue('amountCents', value);
+    },
+    [setValue]
+  );
+
   // -----------------------------------------------------------------------
   // Submit
   // -----------------------------------------------------------------------
@@ -267,6 +1339,7 @@ export function CreateTransactionModal({
     async (data: CreateTransactionFormData) => {
       // Clear any previous server error on each submit attempt
       setServerError('');
+      setNatureError('');
 
       if (!selectedAccount) {
         addNotification('error', get(dictionary, 'selectAccount'));
@@ -275,87 +1348,69 @@ export function CreateTransactionModal({
 
       setIsSubmitting(true);
 
-      // Edit mode: type and account are immutable. The amount sign is derived
-      // from the ORIGINAL row so it stays correct for every transaction type
-      // (INCOME positive, EXPENSE/TRANSFER_OUT negative, etc.).
+      const ctx: SubmitContext = {
+        data,
+        account: selectedAccount,
+        dictionary,
+        addNotification,
+        closeModal,
+        onSuccess,
+        setServerError,
+        setNatureError,
+        setIsSubmitting,
+      };
+
+      // Edit mode: type and account are immutable.
       if (editingTransaction) {
-        const signedAmountCents =
-          editingTransaction.amountCents < 0 ? -data.amountCents : data.amountCents;
-
-        const result = await updateTransaction({
-          transactionId: editingTransaction.id,
-          description: data.description || undefined,
-          amountCents: signedAmountCents,
-          date: data.date ? new Date(data.date) : undefined,
-          categoryId: data.categoryId || null,
-        });
-
-        setIsSubmitting(false);
-
-        if (result.success) {
-          setServerError('');
-          addNotification('success', get(dictionary, 'updateSuccess'));
-          closeModal();
-        } else {
-          const message = getTransactionError(result, dictionary);
-          setServerError(message);
-          addNotification('error', message);
-        }
+        await submitEditedTransaction(ctx, editingTransaction);
         return;
       }
 
-      // Convert amount: positive for INCOME, negative for EXPENSE
-      const signedAmountCents = data.type === 'EXPENSE' ? -data.amountCents : data.amountCents;
-
-      const result = await createTransaction({
-        idempotencyKey: crypto.randomUUID(),
-        accountId: data.accountId,
-        type: data.type,
-        amountCents: signedAmountCents,
-        currency: selectedAccount.currency,
-        description: data.description || undefined,
-        date: data.date ? new Date(data.date) : undefined,
-        categoryId: data.categoryId || undefined,
-      });
-
-      setIsSubmitting(false);
-
-      if (result.success) {
-        setServerError('');
-        addNotification('success', get(dictionary, 'createSuccess'));
-        closeModal();
-      } else {
-        // Render the error inline inside the modal: the toast below the
-        // <dialog> top layer is invisible while the modal is open. Keep the
-        // toast too — it becomes visible if/when the modal closes.
-        const message = getTransactionError(result, dictionary);
-        setServerError(message);
-        addNotification('error', message);
+      // Fixed nature: pay the resolved materialized payment.
+      if (effectiveNature === 'FIXED') {
+        await submitFixedPayment(ctx, fixedTarget, fixedIdempotencyKeyRef);
+        return;
       }
+
+      // Variable nature requires a monitored definition in the account currency.
+      if (effectiveNature === 'VARIABLE') {
+        const validationError = validateVariableExpense(
+          selectedAccount,
+          selectedVariableDefinition,
+          dictionary
+        );
+        if (validationError) {
+          setIsSubmitting(false);
+          setNatureError(validationError);
+          return;
+        }
+      }
+
+      await submitNewTransaction(ctx, effectiveNature, selectedVariableDefinition);
     },
-    [selectedAccount, dictionary, addNotification, closeModal, editingTransaction]
+    [
+      selectedAccount,
+      dictionary,
+      addNotification,
+      closeModal,
+      editingTransaction,
+      onSuccess,
+      effectiveNature,
+      fixedTarget,
+      selectedVariableDefinition,
+    ]
   );
 
-  // -----------------------------------------------------------------------
-  // Render
-  // -----------------------------------------------------------------------
-
-  const typeOptions = [
-    {
-      value: 'EXPENSE' as const,
-      label: get(dictionary, 'expenseLabel'),
-      icon: ArrowDownRight,
-      activeColor: 'rose',
+  // handleSubmit is invoked inside the DOM submit event (not during render) so
+  // the ref-backed fixed-payment idempotency key is only touched in the event
+  // phase (react-hooks/refs).
+  const handleFormSubmit = useCallback(
+    (event: React.SubmitEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      void handleSubmit(onSubmit)(event);
     },
-    {
-      value: 'INCOME' as const,
-      label: get(dictionary, 'incomeLabel'),
-      icon: ArrowUpRight,
-      activeColor: 'emerald',
-    },
-  ];
-
-  const submitLabel = isSubmitting ? get(dictionary, 'creating') : get(dictionary, 'create');
+    [handleSubmit, onSubmit]
+  );
 
   return (
     <dialog
@@ -402,309 +1457,106 @@ export function CreateTransactionModal({
           </button>
         </div>
 
-        {/* No-accounts warning (defense in depth) */}
-        {hasNoAccounts && (
-          <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-500/10">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {get(dictionary, 'noAccountsDesc')}
-                </p>
-                <Link
-                  href={`/${lang}/accounts`}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                >
-                  {get(dictionary, 'createAccountCta')}
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
+        <NoAccountsWarning visible={hasNoAccounts} dictionary={dictionary} lang={lang} />
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-5" noValidate>
-          {/* Type selector (INCOME / EXPENSE) */}
-          <fieldset>
-            <legend className={labelCls}>{get(dictionary, 'type')}</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {typeOptions.map((opt) => {
-                const isActive = selectedType === opt.value;
-                const Icon = opt.icon;
-                const isIncome = opt.activeColor === 'emerald';
-                let borderClasses: string;
-                let iconClasses: string;
-                if (isActive) {
-                  borderClasses = isIncome
-                    ? 'border-emerald-500/60 bg-emerald-500/15'
-                    : 'border-rose-500/60 bg-rose-500/15';
-                  iconClasses = isIncome
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-rose-500/20 text-rose-400';
-                } else {
-                  borderClasses = 'border-white/10 bg-white/4 hover:border-white/20';
-                  iconClasses = 'bg-white/5 text-slate-400';
-                }
-                return (
-                  <label
-                    key={opt.value}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${borderClasses} ${
-                      isEditing ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      value={opt.value}
-                      {...register('type')}
-                      disabled={isEditing}
-                      className="sr-only"
-                      aria-label={opt.label}
-                    />
-                    <div className={`p-1.5 rounded-lg ${iconClasses}`}>
-                      <Icon className="w-4 h-4" aria-hidden="true" />
-                    </div>
-                    <span
-                      className={`text-sm font-semibold ${
-                        isActive ? 'text-white' : 'text-slate-300'
-                      }`}
-                    >
-                      {opt.label}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            {errors.type && (
-              <p className={errorCls} role="alert">
-                {errors.type.message}
-              </p>
-            )}
-          </fieldset>
+        <form onSubmit={handleFormSubmit} className="px-6 py-5 space-y-5" noValidate>
+          <TypeField
+            dictionary={dictionary}
+            isEditing={isEditing}
+            selectedType={selectedType}
+            register={register}
+            error={errors.type?.message}
+          />
 
-          {/* Account */}
-          <div>
-            <label htmlFor="tx-account" className={labelCls}>
-              {get(dictionary, 'account')}
-            </label>
-            <AccountSelect
-              key={`account-${modalSession}`}
-              id="tx-account"
-              value={selectedAccountId ?? ''}
-              onChange={(accountId) => setValue('accountId', accountId)}
-              placeholder={get(dictionary, 'selectAccount')}
-              accountsGroupLabel={get(dictionary, 'accountsGroup')}
-              creditCardsGroupLabel={get(dictionary, 'creditCardsGroup')}
-              pocketsGroupLabel={get(dictionary, 'pocketsGroup')}
-              parentNameById={parentNameById}
-              accounts={bankAccountOptions}
-              creditCards={creditCardOptions}
-              pockets={pocketOptions}
-              showBalance
-              disabled={isEditing}
-              locale={locale}
-              hasError={!!errors.accountId}
-              ariaDescribedBy={errors.accountId ? 'tx-account-error' : undefined}
-            />
-            {errors.accountId && (
-              <p id="tx-account-error" className={errorCls} role="alert">
-                {errors.accountId.message}
-              </p>
-            )}
-          </div>
+          <NatureField
+            dictionary={dictionary}
+            visible={!isEditing && isExpense}
+            nature={nature}
+            error={natureError}
+            onSelect={handleNatureSelect}
+          />
 
-          {/* Amount */}
-          <div>
-            <label htmlFor="tx-amount" className={labelCls}>
-              {get(dictionary, 'amountLabel')}
-              {selectedAccount && (
-                <span className="text-slate-500 font-normal lowercase ml-1">
-                  ({selectedAccount.currency})
-                </span>
-              )}
-            </label>
-            {!isEditing && isExpense && selectedAccount && (
-              <p className="mt-1 mb-3 text-xs text-slate-400">
-                {get(dictionary, 'availableToSpend')}:{' '}
-                <span className="font-semibold text-emerald-400 tabular-nums">
-                  {formatMoney(
-                    getAvailableToSpend(selectedAccount),
-                    selectedAccount.currency,
-                    locale
-                  )}
-                </span>
-              </p>
-            )}
-            <FormattedNumericInput
-              id="tx-amount"
-              value={amountCents}
-              onChange={(v) => {
-                setAmountCents(v);
-                setValue('amountCents', v);
-              }}
-              maxValue={getAmountMaxValue(selectedAccount, isEditing, isExpense)}
-              aria-invalid={!!errors.amountCents}
-              aria-describedby={errors.amountCents ? 'tx-amount-error' : undefined}
-              className={`${inputCls} font-mono tabular-nums text-lg`}
-            />
-            {errors.amountCents && (
-              <p id="tx-amount-error" className={errorCls} role="alert">
-                {errors.amountCents.message}
-              </p>
-            )}
-          </div>
+          <AccountField
+            dictionary={dictionary}
+            isEditing={isEditing}
+            selectedAccountId={selectedAccountId ?? ''}
+            modalSession={modalSession}
+            onAccountChange={handleAccountChange}
+            hasError={!!errors.accountId}
+            ariaDescribedBy={errors.accountId ? 'tx-account-error' : undefined}
+            error={errors.accountId?.message}
+            bankAccountOptions={bankAccountOptions}
+            creditCardOptions={creditCardOptions}
+            pocketOptions={pocketOptions}
+            parentNameById={parentNameById}
+            locale={locale}
+          />
 
-          {/* Category selector */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className={labelCls}>{get(dictionary, 'category')}</span>
-              {onOpenCategoryManager && (
-                <button
-                  type="button"
-                  onClick={onOpenCategoryManager}
-                  className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg px-1.5 py-0.5"
-                >
-                  {get(dictionary, 'manageCategories')}
-                </button>
-              )}
-            </div>
-            <fieldset className="mt-2">
-              <legend className="sr-only">{get(dictionary, 'category')}</legend>
-              <div className="flex flex-wrap gap-2">
-                {/* No category option */}
-                <label
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
-                    selectedCategoryId === ''
-                      ? 'border-blue-500/60 bg-blue-500/15'
-                      : 'border-white/10 bg-white/4 hover:border-white/20'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    value=""
-                    {...register('categoryId')}
-                    className="sr-only"
-                    aria-label={get(dictionary, 'selectCategory')}
-                  />
-                  <span
-                    className={`text-xs font-semibold ${
-                      selectedCategoryId === '' ? 'text-white' : 'text-slate-300'
-                    }`}
-                  >
-                    {get(dictionary, 'selectCategory')}
-                  </span>
-                </label>
+          <VariableExpenseField
+            dictionary={dictionary}
+            visible={!isEditing && effectiveNature === 'VARIABLE'}
+            definitionsLoaded={definitionsLoaded}
+            options={variableExpenseOptions}
+            selectedId={selectedVariableExpenseId}
+            onChange={handleVariableChange}
+            hasError={!!natureError}
+            ariaDescribedBy={natureError ? 'tx-nature-error' : undefined}
+          />
 
-                {/* Active categories (system + own) */}
-                {categories.map((cat) => {
-                  const isActive = selectedCategoryId === cat.id;
-                  return (
-                    <label
-                      key={cat.id}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all ${
-                        isActive
-                          ? 'border-blue-500/60 bg-blue-500/15'
-                          : 'border-white/10 bg-white/4 hover:border-white/20'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        value={cat.id}
-                        {...register('categoryId')}
-                        className="sr-only"
-                        aria-label={cat.name}
-                      />
-                      <span
-                        className="w-3 h-3 rounded-full inline-block shrink-0"
-                        style={{ backgroundColor: cat.color ?? '#64748B' }}
-                        aria-hidden="true"
-                      />
-                      <span
-                        className={`text-xs font-semibold ${
-                          isActive ? 'text-white' : 'text-slate-300'
-                        }`}
-                      >
-                        {cat.name}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-            {errors.categoryId && (
-              <p className={errorCls} role="alert">
-                {errors.categoryId.message}
-              </p>
-            )}
-          </div>
+          <FixedExpenseField
+            dictionary={dictionary}
+            visible={!isEditing && effectiveNature === 'FIXED'}
+            definitionsLoaded={definitionsLoaded}
+            fixedExpenses={fixedExpenses}
+            selectedFixedExpenseId={selectedFixedExpenseId}
+            selectedFixedExpense={selectedFixedExpense}
+            fixedTarget={fixedTarget}
+            nextPayment={fixedTargets.nextPayment}
+            fixedCurrencyMismatch={fixedCurrencyMismatch}
+            advanceNextMonth={advanceNextMonth}
+            onTemplateChange={handleTemplateChange}
+            onAdvanceChange={handleAdvanceChange}
+            hasError={!!natureError}
+            ariaDescribedBy={natureError ? 'tx-nature-error' : undefined}
+            locale={locale}
+          />
 
-          {/* Description */}
-          <div>
-            <label htmlFor="tx-description" className={labelCls}>
-              {get(dictionary, 'descriptionLabel')}
-            </label>
-            <textarea
-              id="tx-description"
-              {...register('description')}
-              rows={3}
-              placeholder={get(dictionary, 'descriptionPlaceholder')}
-              aria-invalid={!!errors.description}
-              aria-describedby={errors.description ? 'tx-description-error' : undefined}
-              className={`${inputCls} resize-none`}
-            />
-            {errors.description && (
-              <p id="tx-description-error" className={errorCls} role="alert">
-                {errors.description.message}
-              </p>
-            )}
-          </div>
+          <AmountAndCategoryFields
+            dictionary={dictionary}
+            effectiveNature={effectiveNature}
+            selectedAccount={selectedAccount}
+            isEditing={isEditing}
+            isExpense={isExpense}
+            amountCents={amountCents}
+            onAmountChange={handleAmountChange}
+            amountError={errors.amountCents?.message}
+            amountAriaDescribedBy={errors.amountCents ? 'tx-amount-error' : undefined}
+            categories={categories}
+            selectedCategoryId={selectedCategoryId ?? ''}
+            register={register}
+            onOpenCategoryManager={onOpenCategoryManager}
+            categoryError={errors.categoryId?.message}
+            locale={locale}
+          />
 
-          {/* Date */}
-          <div>
-            <label htmlFor="tx-date" className={labelCls}>
-              {get(dictionary, 'transactionDate')}
-            </label>
-            <input
-              id="tx-date"
-              type="datetime-local"
-              {...register('date')}
-              aria-invalid={!!errors.date}
-              className={inputCls}
-            />
-            {errors.date && (
-              <p className={errorCls} role="alert">
-                {errors.date.message}
-              </p>
-            )}
-          </div>
+          <DescriptionField
+            dictionary={dictionary}
+            register={register}
+            error={errors.description?.message}
+            ariaDescribedBy={errors.description ? 'tx-description-error' : undefined}
+          />
 
-          {/* Server error (inline — the toast is hidden below the <dialog> top layer) */}
-          {serverError && (
-            <div
-              role="alert"
-              className="mt-1 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3"
-            >
-              <p className="text-sm text-red-200 font-medium">{serverError}</p>
-            </div>
-          )}
+          <DateField dictionary={dictionary} register={register} error={errors.date?.message} />
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-slate-300 hover:bg-white/5 transition-colors"
-            >
-              {get(dictionary, 'cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || hasNoAccounts}
-              aria-busy={isSubmitting}
-              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
-            >
-              {submitLabel}
-            </button>
-          </div>
+          <ServerErrorAlert message={serverError} />
+
+          <FormActions
+            dictionary={dictionary}
+            isSubmitting={isSubmitting}
+            disabled={submitDisabled}
+            onClose={handleClose}
+          />
         </form>
       </div>
     </dialog>

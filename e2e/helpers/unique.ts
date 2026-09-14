@@ -37,6 +37,12 @@ export const UNIQUE_EDITED_GOAL_NAME_KEY = '__e2eUniqueEditedGoalName';
 /** localStorage key where the unique fixed-expense name is stored for the current scenario. */
 export const UNIQUE_FIXED_EXPENSE_NAME_KEY = '__e2eUniqueFixedExpenseName';
 
+/** localStorage key where the unique variable-expense definition name is stored. */
+export const UNIQUE_VARIABLE_EXPENSE_NAME_KEY = '__e2eUniqueVariableExpenseName';
+
+/** localStorage key where the unique variable-expense transaction note is stored. */
+export const UNIQUE_VARIABLE_TX_NOTE_KEY = '__e2eUniqueVariableTxNote';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -162,4 +168,32 @@ export async function getStoredFixedExpenseName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_FIXED_EXPENSE_NAME_KEY);
   if (!name) throw new Error('No unique fixed-expense name stored on the page');
   return name;
+}
+
+/** Generates a timestamped variable-expense definition name, stores it and returns it. */
+export async function storeUniqueVariableExpenseName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_VARIABLE_EXPENSE_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique variable-expense definition name stored by the create step. */
+export async function getStoredVariableExpenseName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_VARIABLE_EXPENSE_NAME_KEY);
+  if (!name) throw new Error('No unique variable-expense name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped variable-expense transaction note, stores it and returns it. */
+export async function storeUniqueVariableTxNote(page: Page, prefix: string): Promise<string> {
+  const note = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_VARIABLE_TX_NOTE_KEY, note);
+  return note;
+}
+
+/** Reads the unique variable-expense transaction note stored by the register step. */
+export async function getStoredVariableTxNote(page: Page): Promise<string> {
+  const note = await getWindowValue(page, UNIQUE_VARIABLE_TX_NOTE_KEY);
+  if (!note) throw new Error('No unique variable-expense transaction note stored on the page');
+  return note;
 }

@@ -38,6 +38,17 @@ export interface TransactionCategoryBrief {
 }
 
 /**
+ * Monitored variable-expense definition attached to a transaction row. Mirrors
+ * the Prisma `transaction.variableExpense` select (`id`, `name`, `color`)
+ * returned by `getAllTransactions`.
+ */
+export interface TransactionVariableExpenseBrief {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+/**
  * Shared transaction row shape consumed by the transactions table and the
  * create/edit modal. `category` is `null` when the transaction has no
  * category; `categoryId` is kept alongside so the edit modal can prefill the
@@ -56,6 +67,8 @@ export interface TransactionRow {
   accountId: string;
   categoryId: string | null;
   category: TransactionCategoryBrief | null;
+  /** Monitored variable-expense definition when the row is linked to one. */
+  variableExpense?: TransactionVariableExpenseBrief | null;
   account?: { name: string } | null;
   createdAt: string | Date;
 }

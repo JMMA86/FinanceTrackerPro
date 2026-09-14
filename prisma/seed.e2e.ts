@@ -1024,6 +1024,338 @@ async function main() {
   }
   console.log(`✓ Seeded ${systemCategories.length} system categories`);
 
+  // ============================================================================
+  // Variable expenses E2E user (variable-expenses.feature)
+  // Isolated so monitored-definition scenarios never collide with other features.
+  //   - CHECKING/COP account with a ledger-backed opening balance so a UI
+  //     "Registrar gasto" (a real EXPENSE) passes the funds check (Rule 13).
+  //   - 4 monitored definitions with deterministic idempotency keys, a system
+  //     category and monthly targets (Café / Fútbol / Salidas Novia / Mercado).
+  //   - EXPENSE transactions for the last 6 months (current month included)
+  //     linked to each definition and keeping the definition's categoryId.
+  //   - 2 fixed-expense templates so the transaction form's Fijo nature is
+  //     testable: one with a PENDING current-month occurrence (read-only amount)
+  //     and one whose current-month occurrence is PAID (offer "advance").
+  //
+  // IMPORTANT: this block runs AFTER the system categories are seeded because
+  // `VariableExpense.categoryId` is a FK to `Category`.
+  // ============================================================================
+  const variableExpensesUserEmail =
+    process.env.E2E_VARIABLE_EXPENSES_USER || 'variable-expenses@e2e.financetrackerpro.com';
+  const variableExpensesUser = await upsertUserAndGet(
+    variableExpensesUserEmail,
+    'Variable Expenses E2E User'
+  );
+
+  const VARIABLE_OPENING_CENTS = 500000000; // $5.000.000 COP
+
+  const variableAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-variable-expenses-bank-account' },
+    create: {
+      idempotencyKey: 'e2e-variable-expenses-bank-account',
+      userId: variableExpensesUser.id,
+      name: 'Cuenta Corriente',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: VARIABLE_OPENING_CENTS,
+      createdBy: variableExpensesUser.id,
+      lastModifiedBy: variableExpensesUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Rule 13: the cached balance must be backed by the ledger. The opening row is
+  // deterministic and idempotent; the account balance is re-derived below from
+  // the exact seeded expense rows so `ledger === cache` after every seed run.
+  await prisma.transaction.upsert({
+    where: { idempotencyKey: 'e2e-variable-expenses-bank-initial' },
+    update: {
+      openingBalance: true,
+      description: 'Saldo inicial',
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: variableExpensesUser.id,
+    },
+    create: {
+      idempotencyKey: 'e2e-variable-expenses-bank-initial',
+      userId: variableExpensesUser.id,
+      accountId: variableAccount.id,
+      type: 'INCOME',
+      amountCents: VARIABLE_OPENING_CENTS,
+      currency: 'COP',
+      description: 'Saldo inicial',
+      date: new Date('2025-01-01'),
+      openingBalance: true,
+      createdBy: variableExpensesUser.id,
+      lastModifiedBy: variableExpensesUser.id,
+      isActive: true,
+    },
+  });
+
+  interface E2eVariableDefinition {
+    key: string;
+    name: string;
+    description: string;
+    color: string;
+    icon: string;
+    categoryId: string;
+    expectedTimesPerMonth: number;
+    expectedAmountCents: number;
+    /** Occurrences seeded per month (current month included). */
+    perMonth: number;
+    transactionDescription: string;
+  }
+
+  const e2eVariableDefinitions: E2eVariableDefinition[] = [
+    {
+      key: 'cafe',
+      name: 'Café',
+      description: 'Café y tintos',
+      color: '#A16207',
+      icon: 'coffee',
+      categoryId: 'ce2edining00000000000000000',
+      expectedTimesPerMonth: 10,
+      expectedAmountCents: 800000, // $8.000 COP
+      perMonth: 2,
+      transactionDescription: 'Café E2E',
+    },
+    {
+      key: 'futbol',
+      name: 'Fútbol',
+      description: 'Partidos y canchas',
+      color: '#22C55E',
+      icon: 'dumbbell',
+      categoryId: 'ce2eentertainment0000000000',
+      expectedTimesPerMonth: 4,
+      expectedAmountCents: 4000000, // $40.000 COP
+      perMonth: 1,
+      transactionDescription: 'Fútbol E2E',
+    },
+    {
+      key: 'salidas-novia',
+      name: 'Salidas Novia',
+      description: 'Planes con mi novia',
+      color: '#F97316',
+      icon: 'beer',
+      categoryId: 'ce2edining00000000000000000',
+      expectedTimesPerMonth: 5,
+      expectedAmountCents: 8000000, // $80.000 COP
+      perMonth: 1,
+      transactionDescription: 'Salida novia E2E',
+    },
+    {
+      key: 'mercado',
+      name: 'Mercado',
+      description: 'Mercado del hogar',
+      color: '#3B82F6',
+      icon: 'shoppingBag',
+      categoryId: 'ce2egroceries000000000000000',
+      expectedTimesPerMonth: 4,
+      expectedAmountCents: 25000000, // $250.000 COP
+      perMonth: 1,
+      transactionDescription: 'Mercado E2E',
+    },
+  ];
+
+  const variableDefinitionIds = new Map<string, string>();
+  for (const definition of e2eVariableDefinitions) {
+    const idempotencyKey = `e2e-variable-def-${definition.key}`;
+    const row = await prisma.variableExpense.upsert({
+      where: { idempotencyKey },
+      update: {
+        name: definition.name,
+        description: definition.description,
+        color: definition.color,
+        icon: definition.icon,
+        categoryId: definition.categoryId,
+        expectedTimesPerMonth: definition.expectedTimesPerMonth,
+        expectedAmountCents: BigInt(definition.expectedAmountCents),
+        currency: 'COP',
+        isActive: true,
+        deletedAt: null,
+        lastModifiedBy: variableExpensesUser.id,
+      },
+      create: {
+        idempotencyKey,
+        userId: variableExpensesUser.id,
+        name: definition.name,
+        description: definition.description,
+        color: definition.color,
+        icon: definition.icon,
+        categoryId: definition.categoryId,
+        expectedTimesPerMonth: definition.expectedTimesPerMonth,
+        expectedAmountCents: BigInt(definition.expectedAmountCents),
+        currency: 'COP',
+        createdBy: variableExpensesUser.id,
+        lastModifiedBy: variableExpensesUser.id,
+      },
+      select: { id: true },
+    });
+    variableDefinitionIds.set(definition.key, row.id);
+  }
+
+  const variableNow = new Date();
+  let variableExpensesTotalCents = 0;
+  // Last 6 months (current month included), oldest first.
+  for (let offset = 5; offset >= 0; offset -= 1) {
+    const monthDate = new Date(variableNow.getFullYear(), variableNow.getMonth() - offset, 1);
+    const isCurrentMonth = offset === 0;
+    // Keep current-month rows on/before today so the month stats never include a
+    // future date (day 3 is always <= "today" on the 3rd or later; day 1 otherwise).
+    const day = isCurrentMonth ? Math.min(3, variableNow.getDate()) : 10;
+    for (const definition of e2eVariableDefinitions) {
+      const definitionId = variableDefinitionIds.get(definition.key);
+      if (!definitionId) continue;
+      for (let index = 0; index < definition.perMonth; index += 1) {
+        const amountCents = definition.expectedAmountCents;
+        variableExpensesTotalCents += amountCents;
+        const idempotencyKey = `e2e-var-tx-${definition.key}-${monthDate.getFullYear()}-${
+          monthDate.getMonth() + 1
+        }-${index}`;
+        const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day, 12, 0, 0);
+        await prisma.transaction.upsert({
+          where: { idempotencyKey },
+          update: {
+            accountId: variableAccount.id,
+            type: 'EXPENSE',
+            amountCents: BigInt(-amountCents),
+            currency: 'COP',
+            description: definition.transactionDescription,
+            date,
+            categoryId: definition.categoryId,
+            variableExpenseId: definitionId,
+            isActive: true,
+            deletedAt: null,
+            lastModifiedBy: variableExpensesUser.id,
+          },
+          create: {
+            idempotencyKey,
+            userId: variableExpensesUser.id,
+            accountId: variableAccount.id,
+            type: 'EXPENSE',
+            amountCents: BigInt(-amountCents),
+            currency: 'COP',
+            description: definition.transactionDescription,
+            date,
+            categoryId: definition.categoryId,
+            variableExpenseId: definitionId,
+            createdBy: variableExpensesUser.id,
+            lastModifiedBy: variableExpensesUser.id,
+          },
+        });
+      }
+    }
+  }
+
+  // Rule 13: ledger === cache. The account balance absorbs the exact seeded
+  // expense total on top of the opening balance.
+  await prisma.account.update({
+    where: { id: variableAccount.id },
+    data: {
+      balanceCents: BigInt(VARIABLE_OPENING_CENTS - variableExpensesTotalCents),
+      lastModifiedBy: variableExpensesUser.id,
+    },
+  });
+
+  // Fixed-expense templates for the transaction form's Fijo nature.
+  const varFeStartOfMonth = feLocalMidnight(feYear, feMonth, 1);
+  const varFeClampedDay = (day: number): Date => {
+    const lastDay = new Date(feYear, feMonth + 1, 0).getDate();
+    return feLocalMidnight(feYear, feMonth, Math.min(day, lastDay));
+  };
+
+  const pendingFixedName = 'Fijo Pendiente E2E';
+  const existingPendingFixed = await prisma.fixedExpense.findFirst({
+    where: { userId: variableExpensesUser.id, name: pendingFixedName, isActive: true },
+  });
+  if (!existingPendingFixed) {
+    await prisma.fixedExpense.create({
+      data: {
+        userId: variableExpensesUser.id,
+        name: pendingFixedName,
+        description: 'Plantilla para el selector Fijo (ocurrencia pendiente)',
+        amountCents: 12000000, // $120.000 COP
+        currency: 'COP',
+        frequency: 'MONTHLY',
+        dayOfPayment: 31, // clamped to the last day → always >= today = Pendiente
+        startDate: varFeStartOfMonth,
+        color: '#3B82F6',
+        icon: 'receipt',
+        createdBy: variableExpensesUser.id,
+        lastModifiedBy: variableExpensesUser.id,
+      },
+    });
+  }
+
+  const paidFixedName = 'Fijo Pagado E2E';
+  const paidFixed =
+    (await prisma.fixedExpense.findFirst({
+      where: { userId: variableExpensesUser.id, name: paidFixedName, isActive: true },
+    })) ??
+    (await prisma.fixedExpense.create({
+      data: {
+        userId: variableExpensesUser.id,
+        name: paidFixedName,
+        description: 'Plantilla para el selector Fijo (ocurrencia pagada)',
+        amountCents: 120000000, // $1.200.000 COP
+        currency: 'COP',
+        frequency: 'MONTHLY',
+        dayOfPayment: 1,
+        startDate: varFeStartOfMonth,
+        color: '#8B5CF6',
+        icon: 'receipt',
+        createdBy: variableExpensesUser.id,
+        lastModifiedBy: variableExpensesUser.id,
+      },
+    }));
+
+  // Mark the current-month occurrence of "Fijo Pagado E2E" as PAID so the create
+  // modal resolves no pending current-month payment and offers "advance next
+  // month" instead. The next-month occurrence is materialized by generatePayments.
+  await prisma.fixedExpensePayment.upsert({
+    where: {
+      fixedExpenseId_dueDate: {
+        fixedExpenseId: paidFixed.id,
+        dueDate: varFeClampedDay(1),
+      },
+    },
+    update: {
+      paidDate: varFeClampedDay(1),
+      paidAmountCents: 120000000,
+      expectedAmountCents: 120000000,
+      currency: 'COP',
+      notes: 'Pagado este mes',
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: variableExpensesUser.id,
+    },
+    create: {
+      fixedExpenseId: paidFixed.id,
+      dueDate: varFeClampedDay(1),
+      paidDate: varFeClampedDay(1),
+      expectedAmountCents: 120000000,
+      paidAmountCents: 120000000,
+      currency: 'COP',
+      notes: 'Pagado este mes',
+      createdBy: variableExpensesUser.id,
+      lastModifiedBy: variableExpensesUser.id,
+    },
+  });
+
+  console.log(
+    '✓ Variable expenses user seeded with COP account, 4 monitored definitions, 6 months of expenses and 2 fixed templates'
+  );
+
+  // Empty variable-expenses user (variable-expenses.feature @empty) — has NO
+  // definitions (and no accounts) so the page renders the empty state. Isolated
+  // from every other user so the empty-state scenario never couples to seed data.
+  const variableExpensesEmptyUserEmail =
+    process.env.E2E_VARIABLE_EXPENSES_EMPTY_USER ||
+    'variable-expenses-empty@e2e.financetrackerpro.com';
+  await upsertUserAndGet(variableExpensesEmptyUserEmail, 'Empty Variable Expenses E2E User');
+  console.log('✓ Empty variable expenses user seeded with no definitions');
+
   console.log('✅ E2E seed completed successfully!');
 }
 

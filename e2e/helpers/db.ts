@@ -231,3 +231,97 @@ export async function getActiveGoalCurrentAmountByEmail(
   }
   return Number(goal.currentAmountCents);
 }
+
+/**
+ * Returns the id of the ACTIVE monitored variable-expense definition matching the
+ * given user email + exact definition name.
+ *
+ * Why: the register happy-path needs the DB id to answer "did this definition get
+ * a new monitored transaction this month?" through {@link getVariableExpenseMonthStatByEmail}.
+ */
+export async function getVariableExpenseDefinitionIdByEmail(
+  email: string,
+  definitionName: string
+): Promise<string> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getVariableExpenseDefinitionIdByEmail: user ${email} not found`);
+  }
+  const definition = await db.variableExpense.findFirst({
+    where: { userId: user.id, name: definitionName, isActive: true },
+    select: { id: true },
+  });
+  if (!definition) {
+    throw new Error(
+      `getVariableExpenseDefinitionIdByEmail: active definition "${definitionName}" not found for ${email}`
+    );
+  }
+  return definition.id;
+}
+
+/**
+ * Returns the current-month monitored stat (count + absolute total cents) of one
+ * ACTIVE variable-expense definition for the given user email.
+ *
+ * Replicates the service's `buildVariableExpenseWhere` predicate for the current
+ * local month: active EXPENSE transactions of the user, linked to the definition,
+ * NOT linked to a fixed-expense payment and NOT linked to an active
+ * SavingsContribution. Reading the stat from the DB (rather than hardcoding a
+ * seed count) keeps assertions correct even when a previous attempt in the same
+ * run already registered an expense (CI retries reuse the seeded DB).
+ */
+export async function getVariableExpenseMonthStatByEmail(
+  email: string,
+  definitionName: string
+): Promise<{ variableExpenseId: string; count: number; totalCents: number }> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getVariableExpenseMonthStatByEmail: user ${email} not found`);
+  }
+  const definition = await db.variableExpense.findFirst({
+    where: { userId: user.id, name: definitionName, isActive: true },
+    select: { id: true },
+  });
+  if (!definition) {
+    throw new Error(
+      `getVariableExpenseMonthStatByEmail: active definition "${definitionName}" not found for ${email}`
+    );
+  }
+
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const transactions = await db.transaction.findMany({
+    where: {
+      userId: user.id,
+      isActive: true,
+      type: 'EXPENSE',
+      variableExpenseId: definition.id,
+      fixedExpensePaymentId: null,
+      date: { gte: from, lte: to },
+      savingsContributions: {
+        none: {
+          isActive: true,
+          date: { gte: from, lte: to },
+          goal: { userId: user.id, isActive: true },
+        },
+      },
+    },
+    select: { amountCents: true },
+  });
+
+  let totalCents = 0;
+  for (const tx of transactions) {
+    // EXPENSE amounts are stored negative: sum the magnitude.
+    totalCents += Math.abs(Number(tx.amountCents));
+  }
+
+  return {
+    variableExpenseId: definition.id,
+    count: transactions.length,
+    totalCents,
+  };
+}

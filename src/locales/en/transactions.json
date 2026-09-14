@@ -111,5 +111,19 @@
   "creditCardsGroup": "Credit Cards",
   "pocketsGroup": "Pockets",
   "availableToTransfer": "Available to transfer",
-  "availableToSpend": "Available to spend"
+  "availableToSpend": "Available to spend",
+  "expenseNature": "Expense nature",
+  "natureNormal": "Normal",
+  "natureFixed": "Fixed",
+  "natureVariable": "Variable",
+  "selectFixedExpense": "Select fixed expense",
+  "selectVariableExpense": "Select variable expense",
+  "advanceNextMonth": "Advance next month's payment",
+  "autoAmount": "Automatic amount",
+  "fixedAmountAuto": "Amount taken from the fixed expense (read-only)",
+  "noPendingPayments": "This fixed expense has no pending payments.",
+  "noFixedExpenses": "You have no fixed expenses.",
+  "noVariableExpenses": "You have no variable expense definitions.",
+  "dueDate": "Due date",
+  "fixedExpenseAlreadyPaid": "This payment has already been recorded."
 }

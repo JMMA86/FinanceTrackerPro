@@ -111,5 +111,19 @@
   "creditCardsGroup": "Tarjetas de Crédito",
   "pocketsGroup": "Bolsillos",
   "availableToTransfer": "Disponible para transferir",
-  "availableToSpend": "Disponible para gastar"
+  "availableToSpend": "Disponible para gastar",
+  "expenseNature": "Naturaleza del gasto",
+  "natureNormal": "Normal",
+  "natureFixed": "Fijo",
+  "natureVariable": "Variable",
+  "selectFixedExpense": "Seleccionar gasto fijo",
+  "selectVariableExpense": "Seleccionar gasto variable",
+  "advanceNextMonth": "Adelantar el pago del próximo mes",
+  "autoAmount": "Monto automático",
+  "fixedAmountAuto": "Monto tomado del gasto fijo (solo lectura)",
+  "noPendingPayments": "Este gasto fijo no tiene pagos pendientes.",
+  "noFixedExpenses": "No tienes gastos fijos.",
+  "noVariableExpenses": "No tienes definiciones de gastos variables.",
+  "dueDate": "Fecha de vencimiento",
+  "fixedExpenseAlreadyPaid": "Este pago ya fue registrado anteriormente."
 }

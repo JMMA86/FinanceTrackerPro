@@ -36,7 +36,7 @@ import {
   GetTransactionByIdSchema,
   UpdateTransactionSchema,
 } from './transaction.schema';
-import type { Prisma, ApiAction, TransactionType } from '@prisma/client';
+import type { Prisma, ApiAction, TransactionType, Currency } from '@prisma/client';
 
 /**
  * Verify funds (Rule 13) for a transaction with a negative amount. CREDIT_CARD
@@ -108,6 +108,7 @@ async function getAllTransactionsInternal(input: unknown) {
       include: {
         category: { select: { id: true, name: true, color: true } },
         account: { select: { name: true } },
+        variableExpense: { select: { id: true, name: true, color: true } },
       },
     }),
     prisma.transaction.count({ where }),
@@ -193,7 +194,19 @@ async function createTransactionInternal(input: unknown) {
       throw new ValidationError('Income cannot be registered on a credit card');
     }
 
-    await validateCategoryForUpdate(tx, validated.categoryId, session.userId);
+    const variableExpenseLink = await validateVariableExpenseForCreate(
+      tx,
+      validated.variableExpenseId,
+      session.userId,
+      validated.type,
+      account.currency
+    );
+
+    // A monitored transaction inherits the definition's configured category
+    // unless the caller set one explicitly.
+    const resolvedCategoryId = validated.categoryId ?? variableExpenseLink?.categoryId ?? null;
+
+    await validateCategoryForUpdate(tx, resolvedCategoryId, session.userId);
     await validateExpenseFundsForCreate(validated.amountCents, account);
 
     // Create transaction record (Rule 2: integer cents)
@@ -210,7 +223,8 @@ async function createTransactionInternal(input: unknown) {
         originalAmountCents: validated.originalAmountCents ?? null,
         originalCurrency: validated.originalCurrency ?? null,
         exchangeRate: validated.exchangeRate ?? null,
-        categoryId: validated.categoryId ?? null,
+        categoryId: resolvedCategoryId,
+        variableExpenseId: validated.variableExpenseId ?? null,
         ipAddress,
         userAgent,
         createdBy: session.userId,
@@ -529,6 +543,43 @@ async function validateCategoryForUpdate(
   if (category.userId !== null && category.userId !== userId) {
     throw new UnauthorizedError('Category does not belong to user');
   }
+}
+
+/**
+ * Verify that a monitored VariableExpense definition exists, is active, belongs
+ * to the user, is only used for EXPENSE transactions and shares the account's
+ * currency (Rule 4). Prevents silently mixing currencies in a definition.
+ *
+ * @returns the matched definition (id + configured categoryId) so the caller can
+ *   inherit the definition's category, or null when no definition was provided.
+ */
+async function validateVariableExpenseForCreate(
+  tx: Prisma.TransactionClient,
+  variableExpenseId: string | undefined,
+  userId: string,
+  type: TransactionType,
+  accountCurrency: Currency
+): Promise<{ id: string; categoryId: string | null } | null> {
+  if (variableExpenseId === undefined) return null;
+
+  if (type !== 'EXPENSE') {
+    throw new ValidationError('variableExpenseId is only allowed for EXPENSE transactions');
+  }
+
+  const definition = await tx.variableExpense.findUnique({
+    where: { id: variableExpenseId },
+    select: { id: true, isActive: true, userId: true, currency: true, categoryId: true },
+  });
+
+  if (!definition?.isActive) throw new NotFoundError('VariableExpense', variableExpenseId);
+  if (definition.userId !== userId) {
+    throw new UnauthorizedError('Variable expense does not belong to user');
+  }
+  if (definition.currency !== accountCurrency) {
+    throw new CurrencyMismatchError(definition.currency, accountCurrency);
+  }
+
+  return { id: definition.id, categoryId: definition.categoryId };
 }
 
 function assertAmountSignMatchesType(amountCents: number, type: TransactionType): void {

@@ -20,8 +20,10 @@ export const GetAllTransactionsSchema = z.object({
  * CreateTransaction action schema
  * Based on CreateTransactionSchema but without explicit userId (obtained from session)
  * Restricted to INCOME and EXPENSE only with correct amount signs
+ * Optionally links the expense to a monitored VariableExpense definition.
  */
 export const CreateTransactionActionSchema = CreateTransactionSchemaBase.omit({ userId: true })
+  .extend({ variableExpenseId: CUID.optional() })
   .refine((data) => ['INCOME', 'EXPENSE'].includes(data.type), {
     message: 'Only INCOME and EXPENSE transactions are allowed',
     path: ['type'],
@@ -36,7 +38,11 @@ export const CreateTransactionActionSchema = CreateTransactionSchemaBase.omit({ 
       message: 'Amount must be positive for INCOME and negative for EXPENSE',
       path: ['amountCents'],
     }
-  );
+  )
+  .refine((data) => data.variableExpenseId === undefined || data.type === 'EXPENSE', {
+    message: 'variableExpenseId is only allowed for EXPENSE transactions',
+    path: ['variableExpenseId'],
+  });
 
 /**
  * DeleteTransaction input schema

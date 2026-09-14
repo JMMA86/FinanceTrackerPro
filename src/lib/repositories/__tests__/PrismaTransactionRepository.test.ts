@@ -31,6 +31,7 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
   transferFromAccountId: null,
   categoryId: null,
   fixedExpensePaymentId: null,
+  variableExpenseId: null,
   loanInstallmentId: null,
   ipAddress: null,
   userAgent: null,

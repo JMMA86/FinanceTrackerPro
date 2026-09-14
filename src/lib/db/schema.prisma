@@ -152,6 +152,7 @@ model User {
   categories        Category[]
   apiAttempts       ApiAttempt[]
   biometricCredentials BiometricCredential[]
+  variableExpenses  VariableExpense[]
 
   // Audit fields
   isActive          Boolean   @default(true)
@@ -289,6 +290,10 @@ model Transaction {
   categoryId          String?
   category            Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
+  // Monitored variable expense definition link
+  variableExpenseId   String?
+  variableExpense     VariableExpense? @relation(fields: [variableExpenseId], references: [id], onDelete: SetNull)
+
   // Fixed expense payment link
   fixedExpensePaymentId String?         @unique
   fixedExpensePayment   FixedExpensePayment? @relation(fields: [fixedExpensePaymentId], references: [id], onDelete: SetNull)
@@ -323,6 +328,8 @@ model Transaction {
   @@index([idempotencyKey])
   @@index([categoryId])
   @@index([transferId]) // Query paired transactions
+  @@index([userId, type, date]) // Variable expenses: EXPENSE aggregation by user/month
+  @@index([variableExpenseId])
 }
 
 // ============================================================================
@@ -424,6 +431,7 @@ model Category {
 
   // Relations
   transactions    Transaction[]
+  variableExpenses VariableExpense[]
 
   // Audit (Rule 4)
   isActive        Boolean                   @default(true)
@@ -436,6 +444,51 @@ model Category {
   @@index([isActive])
   @@index([type])
   @@index([userId, isActive])
+}
+
+// ============================================================================
+// VARIABLE EXPENSE DEFINITIONS (Monitored variable expenses)
+// A user-defined, monitored bucket ("Fútbol", "Salidas Novia", ...). Transactions
+// are linked to it on registration; the module reports count/amount per
+// definition, month over month.
+// ============================================================================
+
+model VariableExpense {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                  String
+  description           String?
+  color                 String?
+  icon                  String?
+
+  // Configured category inherited by transactions registered for this definition
+  categoryId            String?
+  category              Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Optional monitoring targets
+  expectedTimesPerMonth Int?      // e.g. 4
+  expectedAmountCents   BigInt?   // e.g. 4000000 (=$40.000 COP)
+  currency              Currency  @default(COP)
+
+  idempotencyKey        String?   @unique // for idempotent seeds
+
+  transactions          Transaction[]
+
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  createdBy             String?
+  lastModifiedBy        String?
+  ipAddress             String?
+  userAgent             String?
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([userId, isActive])
+  @@index([categoryId])
 }
 
 // ============================================================================
@@ -644,6 +697,7 @@ model SavingsContribution {
   @@index([goalId])
   @@index([date])
   @@index([isActive])
+  @@index([transactionId, isActive]) // Anti-join: exclude transactions linked to active savings contributions
 }
 
 // ============================================================================

@@ -20,6 +20,7 @@ import {
   getMaterializationHorizon,
   startOfDay,
 } from '@/lib/fixed-expense-recurrence';
+import { seedVariableExpenses } from './seed-variable-expenses';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -1369,6 +1370,20 @@ async function main() {
   console.log(
     `✓ Created ${fixedExpenses.length} fixed expenses with ${fixedExpensePaymentCount} payments`
   );
+
+  // 6. Demo variable expenses (per-category breakdown + 6-month trend + the
+  // "Sin categoría" bucket). These EXPENSE rows land on the COP accounts, so the
+  // cached balances must be reconciled again afterwards to keep
+  // `ledger === cache` (Rule 13). `seedVariableExpenses` reconciles them to the
+  // current cache; the explicit calls below re-anchor the demo targets.
+  console.log('Creating demo variable expenses...');
+  await seedVariableExpenses(prisma, user.id, { now });
+  console.log('✓ Seeded demo variable expenses');
+
+  await reconcileSeedAccountLedger(efectivo.id, 50000000, 'COP', user.id);
+  await reconcileSeedAccountLedger(bancolombia.id, 400000000, 'COP', user.id);
+  await reconcileSeedAccountLedger(nubank.id, -9800000, 'COP', user.id);
+
   console.log('✅ Seed completed successfully!');
 }
 

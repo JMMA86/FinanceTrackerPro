@@ -127,6 +127,7 @@ const buildMockTransaction = (overrides: MockTransactionOverrides = {}): Transac
     transferFromAccountId: VALID_FROM_ACCOUNT,
     categoryId: null,
     fixedExpensePaymentId: null,
+    variableExpenseId: null,
     loanInstallmentId: null,
     ipAddress: '192.168.1.1',
     userAgent: 'test',

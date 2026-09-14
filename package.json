@@ -31,6 +31,7 @@
     "db:reset:e2e": "dotenv --override -e .env.e2e -- prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:e2e": "dotenv --override -e .env.e2e -- tsx prisma/seed.e2e.ts",
+    "db:seed:variables": "tsx prisma/seed-variable-expenses.ts",
     "db:repair-ledgers": "tsx prisma/repair-account-ledgers.ts",
     "prepare": "husky"
   },

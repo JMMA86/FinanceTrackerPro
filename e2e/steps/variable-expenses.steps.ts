@@ -398,16 +398,21 @@ Then(
     await expect(dialog.getByRole('heading', { name: 'Tendencia' })).toBeVisible({
       timeout: 10000,
     });
-    await expect(
-      dialog.getByRole('img', { name: new RegExp(`Tendencia ${definitionName}`) })
-    ).toBeVisible({ timeout: 10000 });
+    // The chart SVG is decorative (aria-hidden, no role="img") after the S6819
+    // accessibility fix; the accessible trend data is carried by the sr-only
+    // table, whose caption names the definition.
+    const trendTable = dialog.locator('table.sr-only');
+    await expect(trendTable).toHaveCount(1);
+    await expect(trendTable.locator('caption')).toContainText(definitionName);
   }
 );
 
 Then('el detalle no debe mostrar la tendencia', async ({ page }) => {
-  await expect(getOpenDialog(page).getByRole('heading', { name: 'Tendencia' })).toHaveCount(0, {
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('heading', { name: 'Tendencia' })).toHaveCount(0, {
     timeout: 10000,
   });
+  await expect(dialog.locator('table.sr-only')).toHaveCount(0, { timeout: 10000 });
 });
 
 Then('el detalle debe listar movimientos de todas las definiciones', async ({ page }) => {

@@ -2,6 +2,7 @@ import type { Locale } from '@/lib/i18n';
 import type { Metadata } from 'next';
 import { unstable_noStore } from 'next/cache';
 import { Suspense } from 'react';
+import { getDictionary, get } from '@/lib/i18n';
 import { DashboardMetrics } from './DashboardMetrics';
 import { DashboardSkeleton } from './DashboardSkeleton';
 
@@ -11,13 +12,16 @@ interface DashboardPageProps {
 
 export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
   const { lang } = await params;
+  const dashboard = await getDictionary(lang, 'dashboard');
+  const title = `${get(dashboard, 'title')} - FinanceTrackerPro`;
+  const description = get(dashboard, 'metaDescription');
+
   return {
-    title: `Dashboard - FinanceTrackerPro`,
-    description:
-      'Your financial command center. Track expenses, manage budgets, and monitor investments.',
+    title,
+    description,
     openGraph: {
-      title: 'Dashboard - FinanceTrackerPro',
-      description: 'Your financial command center',
+      title,
+      description,
       url: `https://financetrackerpro.com/${lang}/dashboard`,
       siteName: 'FinanceTrackerPro',
       locale: lang,
@@ -25,8 +29,8 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'Dashboard - FinanceTrackerPro',
-      description: 'Your financial command center',
+      title,
+      description,
     },
     robots: {
       index: true,

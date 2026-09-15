@@ -14,6 +14,10 @@ interface DashboardSidebarProps {
   readonly navigationLabels: Readonly<Record<string, string>>;
   readonly logoutLabel: string;
   readonly loggingOutLabel: string;
+  /** Localized a11y label for the "expand sidebar" control. */
+  readonly expandLabel?: string;
+  /** Localized a11y label for the "collapse sidebar" control. */
+  readonly collapseLabel?: string;
 }
 
 const SIDEBAR_WIDTH = {
@@ -26,6 +30,8 @@ export function DashboardSidebar({
   navigationLabels,
   logoutLabel,
   loggingOutLabel,
+  expandLabel = 'Expand sidebar',
+  collapseLabel = 'Collapse sidebar',
 }: Readonly<DashboardSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
@@ -78,7 +84,7 @@ export function DashboardSidebar({
       <button
         type="button"
         onClick={toggleSidebar}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? expandLabel : collapseLabel}
         aria-expanded={!collapsed}
         className="hidden md:flex fixed top-20 w-6 h-6 rounded-full items-center justify-center transition-all duration-200 z-[70] cursor-pointer hover:scale-110 active:scale-95"
         style={{

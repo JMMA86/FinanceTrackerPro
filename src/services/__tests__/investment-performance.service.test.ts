@@ -74,7 +74,9 @@ describe('InvestmentPerformanceService', () => {
     // Coherency invariant
     expect(result.totalReturnCents).toBe(result.totalValueCents - result.totalInvestedCents);
     expect(result.totalReturnCents).toBe(-47500);
-    expect(result.totalReturnPct).toBeCloseTo((-47500 / 130000) * 100, 6);
+    // Rule 3: the percentage is Decimal ROUND_HALF_EVEN to 2 decimals.
+    // -47500 / 130000 * 100 = -36.538461… → -36.54
+    expect(result.totalReturnPct).toBe(-36.54);
     expect(result.currency).toBe('USD');
     expect(result.name).toBe('Tech');
 

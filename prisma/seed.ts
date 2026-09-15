@@ -191,7 +191,7 @@ async function main() {
   const efectivo = await findOrCreateAccount({
     slug: 'efectivo',
     name: 'Efectivo',
-    type: 'SAVINGS',
+    type: 'CASH',
     currency: 'COP',
     balanceCents: 50000000, // $500,000 COP
   });

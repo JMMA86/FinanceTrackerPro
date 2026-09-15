@@ -30,6 +30,8 @@ export default async function DashboardLayout({
         navigationLabels={navigation}
         logoutLabel={get(common, 'navigation.logout')}
         loggingOutLabel={get(common, 'navigation.loggingOut')}
+        expandLabel={get(common, 'navigation.expandSidebar')}
+        collapseLabel={get(common, 'navigation.collapseSidebar')}
       />
 
       {/* Main Content Area */}

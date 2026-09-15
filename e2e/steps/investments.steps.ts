@@ -7,7 +7,7 @@ import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
-import { INVESTMENTS_TEST_USER } from '../fixtures';
+import { INVESTMENTS_TEST_USER, INVESTMENTS_VISUAL_USER } from '../fixtures';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -115,6 +115,13 @@ Given('que el usuario de inversiones ha iniciado sesión', async ({ page }) => {
   await loginAs(page, INVESTMENTS_TEST_USER.email, INVESTMENTS_TEST_USER.password);
 });
 
+// Dedicated user for investments.feature (visual / empty state). Kept separate so
+// the destructive "que no existen cuentas de inversión" precondition below never
+// touches the accounts used by investments-accounts.feature in a parallel worker.
+Given('que el usuario de inversiones visual ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, INVESTMENTS_VISUAL_USER.email, INVESTMENTS_VISUAL_USER.password);
+});
+
 // Dedicated DB client for state cleanup — the test worker points at the E2E
 // database (DATABASE_URL from .env.e2e), so direct deletion is isolated.
 const e2ePool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -122,7 +129,7 @@ const e2ePrisma = new PrismaClient({ adapter: new PrismaPg(e2ePool) });
 
 Given('que no existen cuentas de inversión', async () => {
   const user = await e2ePrisma.user.findUnique({
-    where: { email: INVESTMENTS_TEST_USER.email },
+    where: { email: INVESTMENTS_VISUAL_USER.email },
   });
   if (!user) return;
 

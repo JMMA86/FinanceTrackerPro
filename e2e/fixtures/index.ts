@@ -9,11 +9,31 @@ export const TEST_USER = {
   name: 'E2E Test User',
 };
 
-/** Isolated user for investments.feature — investment tests never touch other users' accounts. */
+/**
+ * Isolated user for investments-accounts.feature — create/deposit/withdraw/buy
+ * scenarios. This user is seeded with a COP bank account ("Cuenta Bancaria COP")
+ * that acts as the deposit source.
+ *
+ * Kept SEPARATE from INVESTMENTS_VISUAL_USER below: the visual feature deletes
+ * every INVESTMENT account to assert the empty state, which raced with the
+ * create/deposit scenarios of this file when both shared the same seed user.
+ */
 export const INVESTMENTS_TEST_USER = {
   email: process.env.E2E_INVESTMENTS_USER ?? 'investments@e2e.financetrackerpro.com',
   password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
   name: 'Investments E2E User',
+};
+
+/**
+ * Isolated user for investments.feature (visual / modal / empty-state / mobile).
+ * Has NO investment accounts. The empty-state scenario hard-deletes investment
+ * accounts, so it must NEVER share the user with investments-accounts.feature
+ * (they run in parallel workers).
+ */
+export const INVESTMENTS_VISUAL_USER = {
+  email: process.env.E2E_INVESTMENTS_VISUAL_USER ?? 'investments-visual@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Investments Visual E2E User',
 };
 
 /** Isolated user for accounts.feature — accounts tests never touch the auth or dashboard users. */
@@ -23,11 +43,29 @@ export const ACCOUNTS_TEST_USER = {
   name: 'Accounts E2E User',
 };
 
-/** Isolated user for dashboard.feature — this user never has accounts created, keeping $0 assertions stable. */
+/**
+ * Isolated user for dashboard.feature — seeded with a deterministic, ledger-backed
+ * patrimony (3 asset accounts + 1 credit card with debt + 1 receivable and 1
+ * payable loan) so the redesigned "Distribución Patrimonial" (Option A) renders
+ * its donut and Activos/Pasivos lists. This user is NOT empty; the empty-state
+ * scenarios use DASHBOARD_EMPTY_USER below.
+ */
 export const DASHBOARD_TEST_USER = {
   email: process.env.E2E_DASHBOARD_USER ?? 'dashboard@e2e.financetrackerpro.com',
   password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
   name: 'Dashboard E2E User',
+};
+
+/**
+ * Isolated user for dashboard.feature @empty-state — has NO accounts, cards,
+ * loans or transactions, so every KPI renders $0 and "Distribución Patrimonial"
+ * renders its empty state ("Sin datos" / "Agrega cuentas para ver distribución").
+ * Kept separate so non-empty distribution assertions never collide with it.
+ */
+export const DASHBOARD_EMPTY_USER = {
+  email: process.env.E2E_DASHBOARD_EMPTY_USER ?? 'dashboard-empty@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Empty Dashboard E2E User',
 };
 
 /** Isolated user for savings.feature — savings tests need pre-seeded accounts and goals. */
@@ -126,6 +164,22 @@ export const LOANS_EMPTY_USER = {
   email: process.env.E2E_LOANS_EMPTY_USER ?? 'loans-empty@e2e.financetrackerpro.com',
   password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
   name: 'Empty Loans E2E User',
+};
+
+/**
+ * Isolated user for transfers.feature — seeded with two COP accounts
+ * ("Efectivo" CASH and "Bancolombia Ahorros" SAVINGS) so the transfer
+ * happy-path/error/validation scenarios own their balances.
+ *
+ * Kept SEPARATE from the transactions user: transfers.feature used to login as
+ * `transactions@e2e...`, and its TRANSFER_OUT/TRANSFER_IN rows raced with
+ * transactions.feature's fixed 20-row pagination assertions when both files ran
+ * in parallel workers.
+ */
+export const TRANSFERS_TEST_USER = {
+  email: process.env.E2E_TRANSFERS_USER ?? 'transfers@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Transfers E2E User',
 };
 
 export const INVALID_CREDENTIALS = { email: 'nonexistent@test.com', password: 'WrongPass123' };

@@ -168,6 +168,13 @@ When(
 
 When('envía el formulario de creación de préstamo', async ({ page }) => {
   await getOpenDialog(page).getByRole('button', { name: 'Crear préstamo', exact: true }).click();
+  // The modal closes only after createLoan() resolves with success, so waiting
+  // for it guarantees the loan row is committed before we re-read server data.
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 30000 });
+  // Re-fetch the server-rendered list with a full navigation instead of relying
+  // on the coalesced client router.refresh(), which can intermittently leave a
+  // stale RSC payload when workers run concurrently.
+  await page.reload({ waitUntil: 'domcontentloaded' });
 });
 
 // ============================================================================

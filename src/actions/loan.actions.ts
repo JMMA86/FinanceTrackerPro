@@ -13,6 +13,7 @@
 'use server';
 import 'server-only';
 
+import { revalidatePath } from 'next/cache';
 import {
   Prisma,
   type ApiAction,
@@ -184,6 +185,15 @@ async function recordSuccessfulAttempt(
   }
 }
 
+/**
+ * Invalidate the pages that surface loan data after a mutation so the dashboard
+ * KPIs (external debt / receivables) and the loans list never serve stale data.
+ */
+function revalidateLoanViews(): void {
+  revalidatePath('/[lang]/dashboard', 'page');
+  revalidatePath('/[lang]/loans', 'page');
+}
+
 /** Normalize a Prisma P2002 `meta.target` into a list of field names. */
 function normalizeConstraintTarget(target: unknown): string[] {
   if (Array.isArray(target)) return target.map(String);
@@ -338,6 +348,8 @@ async function createLoanInternal(input: unknown) {
     'Loan created with amortization schedule'
   );
 
+  revalidateLoanViews();
+
   return { loan: detail, wasIdempotent: false };
 }
 
@@ -414,6 +426,8 @@ async function updateLoanInternal(input: unknown) {
     'Loan metadata updated'
   );
 
+  revalidateLoanViews();
+
   return serializeLoan(updated);
 }
 
@@ -478,6 +492,8 @@ async function deleteLoanInternal(input: unknown) {
     { action: 'loan.delete', loanId: validated.loanId, userId: session.userId },
     'Loan soft-deleted'
   );
+
+  revalidateLoanViews();
 
   return { success: true, loanId: validated.loanId };
 }
@@ -767,6 +783,8 @@ async function registerLoanPaymentInternal(input: unknown) {
     },
     'Loan installment payment recorded'
   );
+
+  revalidateLoanViews();
 
   return {
     payment: serializePayment(outcome.payment),
@@ -1190,6 +1208,8 @@ async function addLoanAdjustmentInternal(input: unknown) {
     },
     'Loan adjustment applied'
   );
+
+  revalidateLoanViews();
 
   return { adjustment: serializeAdjustment(adjustment), wasIdempotent: outcome.wasIdempotent };
 }

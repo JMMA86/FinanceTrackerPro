@@ -300,16 +300,34 @@ export interface FixedExpensePaymentsRange {
   to?: Date;
 }
 
+export interface GetFixedExpensesWithPaymentsOptions {
+  includeInactive?: boolean;
+  /**
+   * Skip the best-effort rolling materialization (`ensureUpcomingPayments`).
+   *
+   * Callers that already materialized payments earlier in the SAME read (e.g.
+   * the dashboard) set this to `true` so a single render never runs the
+   * materialization twice. Defaults to `false`, so `/fixed-expenses` keeps
+   * materializing exactly as before.
+   */
+  skipMaterialization?: boolean;
+}
+
 /**
  * Active (or optionally all) templates of a user with their materialized
  * payments, optionally range-filtered by dueDate.
+ *
+ * Materialization is best-effort (see `ensureUpcomingPayments`); pass
+ * `skipMaterialization` when the caller already triggered it in this read.
  */
 export async function getFixedExpensesWithPayments(
   userId: string,
   range?: FixedExpensePaymentsRange,
-  options?: { includeInactive?: boolean }
+  options?: GetFixedExpensesWithPaymentsOptions
 ): Promise<FixedExpenseWithPayments[]> {
-  await ensureUpcomingPayments(userId);
+  if (!options?.skipMaterialization) {
+    await ensureUpcomingPayments(userId);
+  }
 
   const paymentWhere: Prisma.FixedExpensePaymentWhereInput = { isActive: true };
   if (range?.from || range?.to) {

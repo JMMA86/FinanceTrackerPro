@@ -24,28 +24,31 @@ interface Transaction {
 interface TransactionListProps {
   transactions: Transaction[];
   emptyMessage?: string;
+  /** BCP 47 locale for dates and money formatting (defaults to `es-CO`). */
+  locale?: string;
 }
 
 interface TransactionItemProps {
   transaction: Transaction;
+  locale: string;
 }
 
 // Extract single item component for memo optimization
 const TransactionItem = memo(
-  function TransactionItem({ transaction }: TransactionItemProps) {
+  function TransactionItem({ transaction, locale }: TransactionItemProps) {
     const isIncome = transaction.amount >= 0;
     const formattedAmount = useMemo(
-      () => formatMoney(Math.abs(transaction.amount), transaction.currency),
-      [transaction.amount, transaction.currency]
+      () => formatMoney(Math.abs(transaction.amount), transaction.currency, locale),
+      [transaction.amount, transaction.currency, locale]
     );
 
     const formattedDate = useMemo(
       () =>
-        new Date(transaction.date).toLocaleDateString('es-CO', {
+        new Date(transaction.date).toLocaleDateString(locale, {
           day: 'numeric',
           month: 'short',
         }),
-      [transaction.date]
+      [transaction.date, locale]
     );
 
     return (
@@ -104,6 +107,7 @@ export const TransactionList = memo(
   function TransactionList({
     transactions,
     emptyMessage = 'No transactions yet',
+    locale = 'es-CO',
   }: TransactionListProps) {
     const sortedTransactions = useMemo(
       () =>
@@ -120,14 +124,16 @@ export const TransactionList = memo(
     return (
       <ul className="divide-y divide-white/5">
         {sortedTransactions.map((tx) => (
-          <TransactionItem key={tx.id} transaction={tx} />
+          <TransactionItem key={tx.id} transaction={tx} locale={locale} />
         ))}
       </ul>
     );
   },
   (prevProps, nextProps) => {
     // Shallow comparison - if same array reference, don't re-render
-    return prevProps.transactions === nextProps.transactions;
+    return (
+      prevProps.transactions === nextProps.transactions && prevProps.locale === nextProps.locale
+    );
   }
 );
 

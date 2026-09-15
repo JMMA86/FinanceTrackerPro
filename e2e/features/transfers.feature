@@ -6,22 +6,21 @@ Feature: Transferencias entre cuentas
   # ============================================================================
   # Contexto de datos (seed: prisma/seed.e2e.ts)
   # ----------------------------------------------------------------------------
-  # El usuario de transacciones (transactions@e2e.financetrackerpro.com) tiene:
+  # Los escenarios NO-pocket usan el usuario dedicado de transferencias
+  # (transfers@e2e.financetrackerpro.com), que tiene:
   #   - "Efectivo"            (CASH,    COP) balanceCents =  50.000.000  ($500.000)
   #   - "Bancolombia Ahorros" (SAVINGS, COP) balanceCents = 150.000.000 ($1.500.000)
   # Montos de transferencia usados: 20000 (≈ $200 COP) — pequeño, no rompe nada.
   #
-  # ORDEN DE EJECUCIÓN (confirmado con `npx playwright test --list`):
-  #   transactions.feature corre ANTES que transfers.feature (orden alfabético
-  #   "transactions" < "transfers"). Los escenarios de paginación de
-  #   transactions.feature esperan "11–20 de 20 transacciones" y corren antes de
-  #   que este feature añada las filas TRANSFER_OUT/TRANSFER_IN. Si este feature
-  #   se ejecutara en aislamiento o antes, la paginación se rompería por +2 filas.
+  # Este usuario es INDEPENDIENTE del usuario de transacciones
+  # (transactions@e2e.financetrackerpro.com). Antes compartían usuario y las filas
+  # TRANSFER_OUT/TRANSFER_IN competían con las aserciones de paginación fija
+  # (20 filas) de transactions.feature cuando ambos archivos corrían en workers
+  # paralelos. Con usuarios separados el orden de ejecución ya no importa.
   #
-  # Los escenarios del usuario de transacciones mutan sus saldos en el MISMO run
-  # (create/edit/delete en transactions.feature), por lo que el happy path lee
-  # los saldos actuales desde la BD justo antes de transferir y verifica el
-  # DELTA esperado en /es/accounts (nunca saldos absolutos del seed).
+  # Las transferencias leen los saldos actuales desde la BD justo antes de
+  # transferir y verifican el DELTA esperado en /es/accounts (nunca saldos
+  # absolutos del seed).
   # ============================================================================
 
   # NOTA: No se usa Background porque playwright-bdd@8.5.1 tiene un bug donde
@@ -35,7 +34,7 @@ Feature: Transferencias entre cuentas
 
   @transfers @happy-path
   Scenario: Transferencias: transferencia exitosa entre cuentas (partida doble)
-    Given que el usuario de transacciones ha iniciado sesión
+    Given que el usuario de transferencias ha iniciado sesión
     And guarda los saldos actuales de las cuentas de transferencia
     And navega a la página de transacciones
     Then el botón "Transferir" debe estar visible
@@ -92,7 +91,7 @@ Feature: Transferencias entre cuentas
 
   @transfers @error
   Scenario: Transferencias: transferencia con fondos insuficientes muestra error inline
-    Given que el usuario de transacciones ha iniciado sesión
+    Given que el usuario de transferencias ha iniciado sesión
     And navega a la página de transacciones
     When abre el modal de transferencia
     # Origen = cuenta con MENOS saldo (Efectivo ≈ $500K vs Ahorros ≈ $1.5M)
@@ -111,7 +110,7 @@ Feature: Transferencias entre cuentas
 
   @transfers @validation
   Scenario: Transferencias: la cuenta destino excluye la cuenta origen
-    Given que el usuario de transacciones ha iniciado sesión
+    Given que el usuario de transferencias ha iniciado sesión
     And navega a la página de transacciones
     When abre el modal de transferencia
     And selecciona "Efectivo" como cuenta origen

@@ -69,9 +69,9 @@ async function main() {
     process.env.E2E_ACCOUNTS_USER || 'accounts@e2e.financetrackerpro.com',
     'Accounts E2E User' // accounts.feature
   );
-  await upsertUserAndGet(
+  const dashboardUser = await upsertUserAndGet(
     process.env.E2E_DASHBOARD_USER || 'dashboard@e2e.financetrackerpro.com',
-    'Dashboard E2E User' // dashboard.feature
+    'Dashboard E2E User' // dashboard.feature (seeded non-empty patrimony, see block below)
   );
 
   // Investments E2E user with pre-seeded COP bank account for deposit tests
@@ -118,6 +118,17 @@ async function main() {
   }
 
   console.log('✓ Investments user seeded with COP bank account and initial transaction');
+
+  // Investments VISUAL user — used ONLY by investments.feature (empty state,
+  // create-modal, mobile, sidebar). Deliberately has NO investment accounts: the
+  // empty-state scenario hard-deletes any leftovers. It must never share the
+  // seed user with investments-accounts.feature, because that file creates,
+  // deposits to and withdraws from its own investment accounts concurrently.
+  await upsertUserAndGet(
+    process.env.E2E_INVESTMENTS_VISUAL_USER || 'investments-visual@e2e.financetrackerpro.com',
+    'Investments Visual E2E User'
+  );
+  console.log('✓ Investments visual user seeded (no accounts)');
 
   // Transactions E2E user with pre-seeded accounts and transactions
   const txUserEmail = process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com';
@@ -193,6 +204,91 @@ async function main() {
   }
 
   console.log('✓ Transactions user seeded with 2 accounts and 20 transactions');
+
+  // ============================================================================
+  // Transfers E2E user — dedicated user for transfers.feature (non-pocket
+  // scenarios). Mirrors the transactions seed accounts so the transfer modal has
+  // a source ("Efectivo") and a destination ("Bancolombia Ahorros") to move
+  // money between. Isolated so its TRANSFER_OUT/TRANSFER_IN rows never race with
+  // transactions.feature's fixed 20-row pagination assertions in parallel workers.
+  // ============================================================================
+  const transfersUserEmail =
+    process.env.E2E_TRANSFERS_USER || 'transfers@e2e.financetrackerpro.com';
+  const transfersUser = await upsertUserAndGet(transfersUserEmail, 'Transfers E2E User');
+
+  const transfersCashAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-transfers-cash-account' },
+    create: {
+      idempotencyKey: 'e2e-transfers-cash-account',
+      userId: transfersUser.id,
+      name: 'Efectivo',
+      type: 'CASH',
+      currency: 'COP',
+      balanceCents: 50000000, // $500,000 COP
+      createdBy: transfersUser.id,
+      lastModifiedBy: transfersUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const transfersSavingsAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-transfers-savings-account' },
+    create: {
+      idempotencyKey: 'e2e-transfers-savings-account',
+      userId: transfersUser.id,
+      name: 'Bancolombia Ahorros',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 150000000, // $1,500,000 COP
+      createdBy: transfersUser.id,
+      lastModifiedBy: transfersUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Opening INCOME transactions so the ledger-backed TRUE balance backs the
+  // cached balanceCents. "Efectivo" is intentionally seeded with a SMALL true
+  // balance ($25.000) while its cached/displayed balance stays $500.000: the
+  // transfer error scenario enters an amount larger than the true balance to
+  // assert the Rule 13 "fondos insuficientes" guard (the modal caps the input
+  // against the cached balance, but the server validates the true ledger).
+  for (const [account, amountCents, key, description] of [
+    [transfersCashAccount, 2500000, 'e2e-transfers-cash-initial', 'Saldo inicial Efectivo'],
+    [
+      transfersSavingsAccount,
+      150000000,
+      'e2e-transfers-savings-initial',
+      'Saldo inicial Bancolombia Ahorros',
+    ],
+  ] as const) {
+    await prisma.transaction.upsert({
+      where: { idempotencyKey: key },
+      update: {
+        openingBalance: true,
+        description,
+        isActive: true,
+        lastModifiedBy: transfersUser.id,
+      },
+      create: {
+        idempotencyKey: key,
+        userId: transfersUser.id,
+        accountId: account.id,
+        type: 'INCOME',
+        amountCents,
+        currency: 'COP',
+        description,
+        date: new Date('2026-01-01'),
+        openingBalance: true,
+        createdBy: transfersUser.id,
+        lastModifiedBy: transfersUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  console.log('✓ Transfers user seeded with 2 accounts');
 
   // ============================================================================
   // Savings E2E user with pre-seeded bank account for goals
@@ -1485,7 +1581,11 @@ async function main() {
    * and the matching account money movement. Skips entirely when the loan already
    * exists (idempotent manual re-seeds).
    */
-  async function seedLoan(spec: SeedLoanSpec): Promise<void> {
+  async function seedLoan(
+    spec: SeedLoanSpec,
+    context: { userId: string; bankAccountId: string }
+  ): Promise<void> {
+    const { userId, bankAccountId } = context;
     const existing = await prisma.loan.findUnique({
       where: { idempotencyKey: spec.idempotencyKey },
       select: { id: true },
@@ -1522,7 +1622,7 @@ async function main() {
     await prisma.$transaction(async (tx) => {
       const loan = await tx.loan.create({
         data: {
-          userId: loansUser.id,
+          userId,
           name: spec.name,
           type: 'PERSONAL',
           direction: spec.direction,
@@ -1545,8 +1645,8 @@ async function main() {
           balanceCents,
           color: spec.color,
           idempotencyKey: spec.idempotencyKey,
-          createdBy: loansUser.id,
-          lastModifiedBy: loansUser.id,
+          createdBy: userId,
+          lastModifiedBy: userId,
         },
       });
 
@@ -1571,8 +1671,8 @@ async function main() {
             paidPrincipalCents: isPaid ? row.principalCents : 0,
             paidInterestCents: isPaid ? row.interestCents : 0,
             idempotencyKey: `${spec.idempotencyKey}-installment-${row.installmentNumber}`,
-            createdBy: loansUser.id,
-            lastModifiedBy: loansUser.id,
+            createdBy: userId,
+            lastModifiedBy: userId,
           },
         });
 
@@ -1584,8 +1684,8 @@ async function main() {
         const booking = await tx.transaction.create({
           data: {
             idempotencyKey: `${spec.idempotencyKey}-booking-${row.installmentNumber}`,
-            userId: loansUser.id,
-            accountId: loansBank.id,
+            userId,
+            accountId: bankAccountId,
             type: isReceivable ? 'LOAN_RECEIPT' : 'LOAN_PAYMENT',
             amountCents: signedTotalCents,
             currency: 'COP',
@@ -1594,8 +1694,8 @@ async function main() {
             }: ${spec.name}`,
             date: row.dueDate,
             loanInstallmentId: installment.id,
-            createdBy: loansUser.id,
-            lastModifiedBy: loansUser.id,
+            createdBy: userId,
+            lastModifiedBy: userId,
           },
         });
 
@@ -1609,8 +1709,8 @@ async function main() {
             currency: 'COP',
             paidAt: row.dueDate,
             idempotencyKey: `${spec.idempotencyKey}-payment-${row.installmentNumber}`,
-            createdBy: loansUser.id,
-            lastModifiedBy: loansUser.id,
+            createdBy: userId,
+            lastModifiedBy: userId,
           },
         });
       }
@@ -1619,31 +1719,37 @@ async function main() {
     console.log(`✓ Loan seeded: ${spec.name}`);
   }
 
-  await seedLoan({
-    idempotencyKey: 'e2e-loan-receivable-diego',
-    name: 'Préstamo E2E a Diego',
-    direction: 'RECEIVABLE',
-    principalCents: 300000000, // $3.000.000 COP
-    interestRateValue: 24,
-    termCount: 12,
-    startDate: loanMonthStart(-3),
-    firstPaymentDate: loanMonthStart(-1), // #2 lands in the current month
-    color: 'from-emerald-500 to-teal-500',
-    paidInstallments: 2,
-  });
+  await seedLoan(
+    {
+      idempotencyKey: 'e2e-loan-receivable-diego',
+      name: 'Préstamo E2E a Diego',
+      direction: 'RECEIVABLE',
+      principalCents: 300000000, // $3.000.000 COP
+      interestRateValue: 24,
+      termCount: 12,
+      startDate: loanMonthStart(-3),
+      firstPaymentDate: loanMonthStart(-1), // #2 lands in the current month
+      color: 'from-emerald-500 to-teal-500',
+      paidInstallments: 2,
+    },
+    { userId: loansUser.id, bankAccountId: loansBank.id }
+  );
 
-  await seedLoan({
-    idempotencyKey: 'e2e-loan-payable-banco',
-    name: 'Crédito E2E Banco',
-    direction: 'PAYABLE',
-    principalCents: 500000000, // $5.000.000 COP
-    interestRateValue: 18,
-    termCount: 24,
-    startDate: loanMonthStart(-4),
-    firstPaymentDate: loanMonthStart(-2), // #2 is overdue, #3 is this month
-    color: 'from-amber-500 to-orange-500',
-    paidInstallments: 1,
-  });
+  await seedLoan(
+    {
+      idempotencyKey: 'e2e-loan-payable-banco',
+      name: 'Crédito E2E Banco',
+      direction: 'PAYABLE',
+      principalCents: 500000000, // $5.000.000 COP
+      interestRateValue: 18,
+      termCount: 24,
+      startDate: loanMonthStart(-4),
+      firstPaymentDate: loanMonthStart(-2), // #2 is overdue, #3 is this month
+      color: 'from-amber-500 to-orange-500',
+      paidInstallments: 1,
+    },
+    { userId: loansUser.id, bankAccountId: loansBank.id }
+  );
 
   // Rule 13: rewrite both caches from the ledger aggregate so re-seeding a
   // partially-populated database converges to ledger === cache.
@@ -1669,6 +1775,214 @@ async function main() {
     process.env.E2E_LOANS_EMPTY_USER || 'loans-empty@e2e.financetrackerpro.com';
   await upsertUserAndGet(loansEmptyUserEmail, 'Empty Loans E2E User');
   console.log('✓ Empty loans user seeded with no loans');
+
+  // ============================================================================
+  // Dashboard E2E user (dashboard.feature) — non-empty patrimony
+  //
+  // The redesigned "Distribución Patrimonial" (Option A) only renders the donut
+  // and the Activos/Pasivos lists when the user owns assets. To verify it for
+  // real, this user is seeded with a deterministic patrimony (all COP, so the
+  // composition needs no FX conversion and never shows the unconverted warning):
+  //   ASSETS
+  //     - "Cuenta Corriente" (CHECKING)  $1.000.000  → slice "Cuenta Corriente"
+  //     - "Cuenta de Ahorros" (SAVINGS)  $500.000    → slice "Ahorros"
+  //     - "Efectivo" (CASH)              $200.000    → slice "Efectivo"
+  //     - RECEIVABLE loan "$3.000.000"                → slice "Cuentas por Cobrar"
+  //   LIABILITIES
+  //     - "Tarjeta E2E" (CREDIT_CARD, debt $300.000) → "Tarjetas de Crédito"
+  //     - PAYABLE loan "$5.000.000" (installment #2 overdue)
+  //                                                  → "Préstamos por pagar"
+  // The overdue payable installment also drives the LOANS_OVERDUE alert, which
+  // exposes an actionable link to /es/loans.
+  //
+  // Every cached balance is ledger-backed (Rule 13): opening INCOME rows define
+  // the asset balances and the card's EXPENSE row defines its debt.
+  // A separate `dashboard-empty` user (below) keeps the empty-state scenarios
+  // deterministic.
+  // ============================================================================
+  const dashboardChecking = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-dashboard-checking-account' },
+    create: {
+      idempotencyKey: 'e2e-dashboard-checking-account',
+      userId: dashboardUser.id,
+      name: 'Cuenta Corriente',
+      type: 'CHECKING',
+      currency: 'COP',
+      balanceCents: 100000000, // $1.000.000 COP
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const dashboardSavings = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-dashboard-savings-account' },
+    create: {
+      idempotencyKey: 'e2e-dashboard-savings-account',
+      userId: dashboardUser.id,
+      name: 'Cuenta de Ahorros',
+      type: 'SAVINGS',
+      currency: 'COP',
+      balanceCents: 50000000, // $500.000 COP
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const dashboardCash = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-dashboard-cash-account' },
+    create: {
+      idempotencyKey: 'e2e-dashboard-cash-account',
+      userId: dashboardUser.id,
+      name: 'Efectivo',
+      type: 'CASH',
+      currency: 'COP',
+      balanceCents: 20000000, // $200.000 COP
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  const dashboardCard = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-dashboard-card-account' },
+    create: {
+      idempotencyKey: 'e2e-dashboard-card-account',
+      userId: dashboardUser.id,
+      name: 'Tarjeta E2E',
+      type: 'CREDIT_CARD',
+      currency: 'COP',
+      balanceCents: -30000000, // debt $300.000 COP
+      creditLimitCents: 300000000, // limit $3.000.000 COP
+      cutoffDay: 5,
+      paymentDueDay: 20,
+      cardNetwork: 'VISA',
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Rule 13: ledger === cache. The opening rows fully define each balance.
+  const dashboardOpeningTxs: Array<{
+    idempotencyKey: string;
+    accountId: string;
+    type: 'INCOME' | 'EXPENSE';
+    amountCents: number;
+    description: string;
+  }> = [
+    {
+      idempotencyKey: 'e2e-dashboard-checking-opening',
+      accountId: dashboardChecking.id,
+      type: 'INCOME',
+      amountCents: 100000000,
+      description: 'Saldo inicial Cuenta Corriente',
+    },
+    {
+      idempotencyKey: 'e2e-dashboard-savings-opening',
+      accountId: dashboardSavings.id,
+      type: 'INCOME',
+      amountCents: 50000000,
+      description: 'Saldo inicial Cuenta de Ahorros',
+    },
+    {
+      idempotencyKey: 'e2e-dashboard-cash-opening',
+      accountId: dashboardCash.id,
+      type: 'INCOME',
+      amountCents: 20000000,
+      description: 'Saldo inicial Efectivo',
+    },
+    {
+      idempotencyKey: 'e2e-dashboard-card-opening',
+      accountId: dashboardCard.id,
+      type: 'EXPENSE',
+      amountCents: -30000000,
+      description: 'Consumo inicial Tarjeta E2E',
+    },
+  ];
+
+  for (const tx of dashboardOpeningTxs) {
+    await prisma.transaction.upsert({
+      where: { idempotencyKey: tx.idempotencyKey },
+      update: {
+        accountId: tx.accountId,
+        type: tx.type,
+        amountCents: tx.amountCents,
+        currency: 'COP',
+        description: tx.description,
+        isActive: true,
+        deletedAt: null,
+        lastModifiedBy: dashboardUser.id,
+      },
+      create: {
+        idempotencyKey: tx.idempotencyKey,
+        userId: dashboardUser.id,
+        accountId: tx.accountId,
+        type: tx.type,
+        amountCents: tx.amountCents,
+        currency: 'COP',
+        description: tx.description,
+        date: new Date('2026-01-15'),
+        createdBy: dashboardUser.id,
+        lastModifiedBy: dashboardUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  // Loans use the same real amortization engine as the app. The PAYABLE loan
+  // keeps installment #2 overdue (paidInstallments: 1, first payment 2 months
+  // ago) which surfaces the LOANS_OVERDUE alert on the dashboard. Paid
+  // installments book against "Cuenta de Ahorros".
+  await seedLoan(
+    {
+      idempotencyKey: 'e2e-dashboard-loan-receivable',
+      name: 'Préstamo E2E por cobrar',
+      direction: 'RECEIVABLE',
+      principalCents: 300000000, // $3.000.000 COP
+      interestRateValue: 20,
+      termCount: 12,
+      startDate: loanMonthStart(-2),
+      firstPaymentDate: loanMonthStart(-1),
+      color: 'from-emerald-500 to-teal-500',
+      paidInstallments: 0,
+    },
+    { userId: dashboardUser.id, bankAccountId: dashboardSavings.id }
+  );
+
+  await seedLoan(
+    {
+      idempotencyKey: 'e2e-dashboard-loan-payable',
+      name: 'Crédito E2E por pagar',
+      direction: 'PAYABLE',
+      principalCents: 500000000, // $5.000.000 COP
+      interestRateValue: 18,
+      termCount: 24,
+      startDate: loanMonthStart(-3),
+      firstPaymentDate: loanMonthStart(-2), // #2 stays overdue
+      color: 'from-amber-500 to-orange-500',
+      paidInstallments: 1,
+    },
+    { userId: dashboardUser.id, bankAccountId: dashboardSavings.id }
+  );
+
+  console.log(
+    '✓ Dashboard user seeded with 3 asset accounts, 1 card with debt and 2 loans (receivable + payable)'
+  );
+
+  // Empty dashboard user (dashboard.feature @empty-state) — has NO accounts,
+  // cards, loans or transactions so every KPI renders $0 and the distribution
+  // renders its empty state. Isolated so the empty-state scenarios never couple
+  // to the seeded dashboard user.
+  const dashboardEmptyUserEmail =
+    process.env.E2E_DASHBOARD_EMPTY_USER || 'dashboard-empty@e2e.financetrackerpro.com';
+  await upsertUserAndGet(dashboardEmptyUserEmail, 'Empty Dashboard E2E User');
+  console.log('✓ Empty dashboard user seeded with no accounts');
 
   console.log('✅ E2E seed completed successfully!');
 }

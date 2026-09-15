@@ -322,6 +322,12 @@ Then(
 );
 
 Then('la tarjeta de meta con el nombre único debe ser visible', async ({ page }) => {
+  // The create modal closes only after createSavingsGoal() resolves with
+  // success. Waiting for it guarantees the row is committed, then a full
+  // navigation re-reads the server list — the coalesced client router.refresh()
+  // can intermittently leave a stale RSC payload under concurrent workers.
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 30000 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   const name = await getStoredGoalName(page);
   await expect(getGoalCard(page, name)).toBeVisible({ timeout: 15000 });
 });
@@ -337,6 +343,10 @@ Then(
 );
 
 Then('la tarjeta de meta con el nombre editado debe ser visible', async ({ page }) => {
+  // Same rationale as the create assertion above: wait for the edit modal to
+  // close (success), then re-read the server list with a full navigation.
+  await expect(page.locator('dialog[open]')).toHaveCount(0, { timeout: 30000 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   const name = await getStoredEditedGoalName(page);
   await expect(getGoalCard(page, name)).toBeVisible({ timeout: 15000 });
 });

@@ -3,8 +3,13 @@ Feature: Dashboard financiero
   Quiero ver mi resumen financiero completo en el dashboard
   Para tener una visión integral de mi situación financiera
 
+  # El usuario "con datos" está sembrado con 3 cuentas de activo, 1 tarjeta con
+  # deuda y 1 préstamo por cobrar + 1 por pagar (todo COP), de modo que la nueva
+  # "Distribución Patrimonial" (Opción A) renderiza donut y listas no vacías.
+  # El usuario "sin datos" está aislado para cubrir los estados vacíos.
+
   # ============================================================================
-  # VISUAL / CONTENIDO
+  # VISUAL / CONTENIDO (usuario con datos)
   # ============================================================================
 
   @dashboard @visual @happy-path
@@ -14,16 +19,15 @@ Feature: Dashboard financiero
     And debe ver la sección de Patrimonio con el label "Patrimonio"
     And debe ver las 4 tarjetas de métricas críticas
     And debe ver la sección de Liquidez expandible
+    And debe ver las secciones expandibles del dashboard
     And debe ver la sección de Distribución Patrimonial
     And debe ver la sección de Transacciones Recientes
 
-  @dashboard @visual @empty-state
-  Scenario: Dashboard en estado vacío muestra valores en cero y empty states
+  @dashboard @visual @alerts
+  Scenario: La región de alertas muestra avisos con enlaces accionables
     Given que el usuario del dashboard ha iniciado sesión
-    Then el valor de Patrimonio debe ser "$0"
-    And las métricas críticas deben mostrar "$0"
-    And la Distribución Patrimonial debe mostrar empty state "Sin datos"
-    And las Transacciones Recientes deben mostrar empty state "Sin transacciones"
+    Then debe ver la región de alertas "Alertas"
+    And la alerta de préstamos debe enlazar a la página de préstamos
 
   @dashboard @visual
   Scenario: Hero card muestra net worth con label y estructura correcta
@@ -40,18 +44,69 @@ Feature: Dashboard financiero
     And debe ver el label "Ahorros" en las métricas
     And debe ver el label "Deudas Totales" en las métricas
 
-  @dashboard @visual @empty-state
-  Scenario: Distribución patrimonial muestra empty state sin datos
+  @dashboard @visual @quick-actions
+  Scenario: Acciones rápidas muestra los accesos principales
     Given que el usuario del dashboard ha iniciado sesión
-    Then la Distribución Patrimonial debe mostrar empty state "Sin datos"
-    And debe mostrar el mensaje "Agrega cuentas para ver distribución"
+    Then debe ver el botón "Nueva Transacción" en Acciones rápidas
+    And debe ver el botón "Registrar gasto" en Acciones rápidas
+    And debe ver el botón "Transferir" en Acciones rápidas
+    And debe ver el botón "Pagar tarjeta" en Acciones rápidas
+    And debe ver el enlace "Aportar a ahorro" en Acciones rápidas
+    And debe ver el enlace "Préstamos" en Acciones rápidas
 
-  @dashboard @visual @empty-state
-  Scenario: Transacciones recientes muestra empty state sin transacciones
+  @dashboard @interaction @quick-actions
+  Scenario: "Nueva Transacción" abre el modal de creación
     Given que el usuario del dashboard ha iniciado sesión
-    Then las Transacciones Recientes deben mostrar empty state "Sin transacciones"
-    And debe mostrar el mensaje "Comienza a registrar para verlas aquí"
-    And debe mostrar el botón "Nueva Transacción" en el empty state
+    When hace clic en el botón "Nueva Transacción" de Acciones rápidas
+    Then debe estar visible el modal "Crear transacción"
+
+  @dashboard @interaction @quick-actions
+  Scenario: "Transferir" abre el modal de transferencia
+    Given que el usuario del dashboard ha iniciado sesión
+    When hace clic en el botón "Transferir" de Acciones rápidas
+    Then debe estar visible el modal "Transferir entre cuentas"
+
+  @dashboard @interaction @quick-actions
+  Scenario: "Pagar tarjeta" abre el modal de pago de tarjeta
+    Given que el usuario del dashboard ha iniciado sesión
+    When hace clic en el botón "Pagar tarjeta" de Acciones rápidas
+    Then debe estar visible el modal "Pagar Tarjeta"
+
+  # ============================================================================
+  # DISTRIBUCIÓN PATRIMONIAL (Opción A)
+  # ============================================================================
+
+  @dashboard @visual @distribution
+  Scenario: El donut de distribución expone el total de activos
+    Given que el usuario del dashboard ha iniciado sesión
+    Then el donut de Distribución Patrimonial debe exponer el total de activos en su aria-label
+    And el centro del donut debe mostrar "Total de activos"
+
+  @dashboard @visual @distribution
+  Scenario: Las listas de Activos y Pasivos renderizan sus categorías
+    Given que el usuario del dashboard ha iniciado sesión
+    Then debe ver la lista "Activos" con la categoría "Cuentas por Cobrar"
+    And debe ver la lista "Activos" con la categoría "Ahorros"
+    And debe ver la lista "Activos" con la categoría "Efectivo"
+    And debe ver la lista "Pasivos" con la categoría "Tarjetas de Crédito"
+    And debe ver la lista "Pasivos" con la categoría "Préstamos por pagar"
+
+  @dashboard @visual @distribution
+  Scenario: El resumen de distribución muestra los totales y la nota explicativa
+    Given que el usuario del dashboard ha iniciado sesión
+    Then debe ver el resumen de Distribución Patrimonial con sus totales
+    And debe ver la nota de distribución
+    And debe ver la nota de conversión a moneda base con "COP"
+
+  @dashboard @visual @distribution
+  Scenario: El Patrimonio del panel de distribución coincide con el del hero
+    Given que el usuario del dashboard ha iniciado sesión
+    Then el Patrimonio del panel de Distribución Patrimonial debe coincidir con el del hero
+
+  @dashboard @visual @distribution
+  Scenario: La leyenda interna del pastel ya no se renderiza
+    Given que el usuario del dashboard ha iniciado sesión
+    Then no debe existir la leyenda interna del pastel de distribución
 
   # ============================================================================
   # INTERACCIÓN
@@ -98,8 +153,6 @@ Feature: Dashboard financiero
   @dashboard @layout @mobile
   Scenario: Bottom bar de navegación visible en mobile
     Given que el usuario del dashboard ha iniciado sesión
-    Given que la pantalla es de escritorio
-    And que el usuario ha iniciado sesión
     And que la pantalla es móvil 390x844
     Then la barra inferior de navegación debe ser visible
     And la barra inferior debe contener enlace a "Dashboard"
@@ -118,14 +171,34 @@ Feature: Dashboard financiero
     Then el enlace "Dashboard" en el sidebar debe estar marcado como activo
 
   # ============================================================================
-  # MULTI-IDIOMA
+  # ESTADO VACÍO (usuario sin cuentas / préstamos)
   # ============================================================================
 
-  @dashboard @i18n
+  @dashboard @visual @empty-state
+  Scenario: Dashboard sin datos muestra valores en cero y empty states
+    Given que el usuario del dashboard sin datos ha iniciado sesión
+    Then el valor de Patrimonio debe ser "$0"
+    And las métricas críticas deben mostrar "$0"
+    And la Distribución Patrimonial debe mostrar empty state "Sin datos"
+    And debe mostrar el mensaje "Agrega cuentas para ver distribución"
+    And las Transacciones Recientes deben mostrar empty state "Sin transacciones"
+    And debe mostrar el mensaje "Comienza a registrar para verlas aquí"
+    And debe mostrar el botón "Nueva Transacción" en el empty state
+
+  @dashboard @visual @distribution @empty-state
+  Scenario: Distribución patrimonial sin datos no muestra donut ni listas
+    Given que el usuario del dashboard sin datos ha iniciado sesión
+    Then la Distribución Patrimonial debe mostrar empty state "Sin datos"
+    And no debe existir ningún donut de distribución
+    And no debe existir la lista "Activos"
+
+  # ============================================================================
+  # MULTI-IDIOMA (usuario vacío, para que los empty state labels sean estables)
+  # ============================================================================
+
+  @dashboard @i18n @empty-state
   Scenario: Dashboard en inglés muestra textos en inglés
-    Given que el usuario del dashboard ha iniciado sesión
-    Given que la pantalla es de escritorio
-    And que el usuario ha iniciado sesión en inglés
+    Given que el usuario del dashboard sin datos ha iniciado sesión en inglés
     Then debe ver el contenido principal del dashboard
     And debe ver el label "Net Worth" en el dashboard
     And debe ver el label "Total Cash" en las métricas

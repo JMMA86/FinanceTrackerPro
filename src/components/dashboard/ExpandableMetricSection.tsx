@@ -9,6 +9,11 @@ interface ExpandableMetricSectionProps {
   readonly children: ReactNode;
   readonly defaultOpen?: boolean;
   readonly category: string;
+  /**
+   * Tailwind max-height utility used when open. Defaults to the compact
+   * `max-h-[600px]`; pass a larger value for sections with long content.
+   */
+  readonly maxHeightClass?: string;
 }
 
 export function ExpandableMetricSection({
@@ -17,6 +22,7 @@ export function ExpandableMetricSection({
   children,
   defaultOpen = false,
   category,
+  maxHeightClass = 'max-h-[600px]',
 }: ExpandableMetricSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -54,7 +60,7 @@ export function ExpandableMetricSection({
       {/* Contenido expandible */}
       <div
         className={`overflow-hidden transition-all duration-300 ease-out ${
-          isOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+          isOpen ? `${maxHeightClass} opacity-100` : 'max-h-0 opacity-0'
         }`}
       >
         <div className="border-t border-white/6">{children}</div>

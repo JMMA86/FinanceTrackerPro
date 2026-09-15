@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DepositModal } from '../DepositModal';
 import { useUIStore } from '@/store/ui.store';
 
@@ -80,6 +81,25 @@ vi.mock('@/components/ui/FormattedNumericInput', () => ({
 // schedules a rAF callback on open that resets amount/exchange rate/submitError
 // and the FX auto-prefill effect also runs via rAF.
 const flushRaf = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+/**
+ * Open an AccountSelect combobox and assert the deterministic open signal
+ * (`aria-expanded="true"`). `userEvent.click` flushes React updates inside
+ * `act()`, so the state is settled when the await resolves — no `waitFor`
+ * polling for transient option rows (whose 1s timeout was the flaky part under
+ * the full suite). The combobox is keyed by `modalSession` and remounts once on
+ * open; callers wait for the auto-selected account first, so the remount has
+ * already settled before this runs.
+ */
+async function openCombobox(label: string) {
+  const user = userEvent.setup();
+  // Query by role (not getByLabelText): once open, the listbox also carries
+  // aria-label={label}, so a text-label query would match two elements.
+  const combobox = screen.getByRole('combobox', { name: label });
+  expect(combobox).toHaveAttribute('aria-expanded', 'false');
+  await user.click(combobox);
+  expect(screen.getByRole('combobox', { name: label })).toHaveAttribute('aria-expanded', 'true');
+}
 
 describe('DepositModal', () => {
   const investmentAccounts = [
@@ -196,22 +216,16 @@ describe('DepositModal', () => {
     });
 
     // Open the bank combobox and verify both options are listed.
-    fireEvent.click(screen.getByLabelText('fromAccount'));
-    await waitFor(() => {
-      const options = screen.getAllByRole('option');
-      const labels = options.map((o) => o.textContent ?? '');
-      expect(labels.some((t) => t.includes('Checking COP'))).toBe(true);
-      expect(labels.some((t) => t.includes('Savings COP'))).toBe(true);
-    });
+    await openCombobox('fromAccount');
+    const bankOptions = screen.getAllByRole('option').map((o) => o.textContent ?? '');
+    expect(bankOptions.some((t) => t.includes('Checking COP'))).toBe(true);
+    expect(bankOptions.some((t) => t.includes('Savings COP'))).toBe(true);
 
     // Open the investment combobox and verify both options are listed.
-    fireEvent.click(screen.getByLabelText('toAccount'));
-    await waitFor(() => {
-      const options = screen.getAllByRole('option');
-      const labels = options.map((o) => o.textContent ?? '');
-      expect(labels.some((t) => t.includes('USD Growth'))).toBe(true);
-      expect(labels.some((t) => t.includes('EUR Value'))).toBe(true);
-    });
+    await openCombobox('toAccount');
+    const investmentOptions = screen.getAllByRole('option').map((o) => o.textContent ?? '');
+    expect(investmentOptions.some((t) => t.includes('USD Growth'))).toBe(true);
+    expect(investmentOptions.some((t) => t.includes('EUR Value'))).toBe(true);
   });
 
   it('should show a message when no COP bank accounts are available', async () => {

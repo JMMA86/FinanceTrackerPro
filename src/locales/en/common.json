@@ -32,6 +32,8 @@
     "loans": "Loans",
     "creditCards": "Credit Cards",
     "settings": "Settings",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
     "dashboardDesc": "Financial overview",
     "transactionsDesc": "Transaction history",
     "accountsDesc": "Account management",

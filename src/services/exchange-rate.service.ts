@@ -15,6 +15,7 @@
  */
 
 import 'server-only';
+import { Decimal } from 'decimal.js';
 import { log } from '@/lib/logger';
 
 const EXCHANGE_RATE_API_BASE = 'https://open.er-api.com/v6/latest/USD';
@@ -42,7 +43,12 @@ const rateCache = new Map<string, CacheEntry>();
  * rates[to] / rates[from] = how many units of `to` per 1 unit of `from`.
  */
 function computeCrossRate(rates: Record<string, number>, from: string, to: string): number {
-  return rates[to] / rates[from];
+  const fromRate = new Decimal(rates[from]);
+  if (!fromRate.isFinite() || fromRate.isZero()) {
+    // Defensive: callers treat a 0 rate as "unavailable" (never a real rate).
+    return 0;
+  }
+  return new Decimal(rates[to]).dividedBy(fromRate).toNumber();
 }
 
 /**
@@ -75,8 +81,14 @@ export async function getExchangeRate(
 
     const data = (await response.json()) as OpenErApiResponse;
 
-    if (!data.rates || typeof data.rates[from] !== 'number' || typeof data.rates[to] !== 'number') {
-      throw new Error(`Exchange rate API is missing rates for ${from}/${to}`);
+    if (
+      !data.rates ||
+      typeof data.rates[from] !== 'number' ||
+      typeof data.rates[to] !== 'number' ||
+      data.rates[from] <= 0 ||
+      data.rates[to] <= 0
+    ) {
+      throw new Error(`Exchange rate API is missing valid rates for ${from}/${to}`);
     }
 
     rateCache.set('USD', { rates: data.rates, cachedAt: now });

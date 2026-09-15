@@ -27,6 +27,11 @@ import { log } from '@/lib/logger';
 import { addCents, subtractCents } from '@/lib/money';
 import { serializeTransaction } from '@/lib/serialize';
 import { getTrueBalance, getTrueBalanceFromTx } from '@/services/reconciliation.service';
+import {
+  computeAvailableCredit,
+  computePaymentStatus,
+  debtFromBalance,
+} from '@/services/credit-card.service';
 import { getTransactionRepository } from '@/lib/repositories';
 import { getClientInfo } from '@/lib/utils/client-info';
 import {
@@ -55,8 +60,6 @@ import {
   GetCreditCardStatementSchema,
   GetCreditCardsSchema,
 } from './credit-card.schema';
-
-type PaymentStatus = 'ON_TRACK' | 'DUE_SOON' | 'OVERDUE';
 
 /**
  * Transaction types that count as card charges (consumptions) on a statement.
@@ -99,27 +102,6 @@ function assertPayableCardDebt(
   if (amountCents > cardDebtCents) {
     throw new CardOverpaymentError(amountCents, cardDebtCents);
   }
-}
-
-/**
- * Payment status for a card based on its paymentDueDay relative to today.
- * DUE_SOON → next due date is within the next 7 days.
- * OVERDUE  → this month's due date already passed and there is outstanding debt.
- * ON_TRACK → otherwise.
- */
-function computePaymentStatus(paymentDueDay: number | null, hasDebt: boolean): PaymentStatus {
-  if (paymentDueDay == null) return 'ON_TRACK';
-
-  const today = new Date();
-  const currentDue = new Date(today.getFullYear(), today.getMonth(), paymentDueDay);
-  const nextDue = new Date(today.getFullYear(), today.getMonth() + 1, paymentDueDay);
-  const upcomingDue = today.getDate() > paymentDueDay ? nextDue : currentDue;
-
-  const daysUntilDue = Math.ceil((upcomingDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (daysUntilDue <= 7) return 'DUE_SOON';
-  if (today.getDate() > paymentDueDay && hasDebt) return 'OVERDUE';
-  return 'ON_TRACK';
 }
 
 /**
@@ -198,11 +180,11 @@ async function getCreditCardsInternal(input: unknown) {
   const result = [];
   for (const card of cards) {
     const trueBalance = await getTrueBalance(card.id, transactionRepo);
-    const debtCents = trueBalance < 0 ? Math.abs(trueBalance) : 0;
-    const availableCreditCents =
-      card.creditLimitCents != null
-        ? subtractCents(Number(card.creditLimitCents), debtCents)
-        : null;
+    const debtCents = debtFromBalance(trueBalance);
+    const availableCreditCents = computeAvailableCredit(
+      card.creditLimitCents == null ? null : Number(card.creditLimitCents),
+      debtCents
+    );
     const paymentStatus = computePaymentStatus(card.paymentDueDay, debtCents > 0);
 
     result.push({
@@ -503,10 +485,10 @@ async function getCreditCardStatementInternal(input: unknown) {
     paymentsTotalCents,
     interestTotalCents: 0, // No interest model yet
     newBalanceCents,
-    availableCreditCents:
-      card.creditLimitCents != null
-        ? subtractCents(Number(card.creditLimitCents), Math.abs(Math.min(newBalanceCents, 0)))
-        : null,
+    availableCreditCents: computeAvailableCredit(
+      card.creditLimitCents == null ? null : Number(card.creditLimitCents),
+      debtFromBalance(newBalanceCents)
+    ),
     transactions: periodTransactions.map((t) => ({
       ...t,
       amountCents: Number(t.amountCents),

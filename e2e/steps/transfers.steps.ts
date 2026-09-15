@@ -14,16 +14,18 @@ const { Given, When, Then } = createBdd();
 import { expect, type Page, type Locator } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
 import { getAccountBalancesByEmail, getAccountTotalBalancesByEmail } from '../helpers/db';
+import { TRANSFERS_TEST_USER } from '../fixtures';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-/** Shared transactions user (seeded with "Efectivo" + "Bancolombia Ahorros"). */
-const TRANSACTIONS_USER = {
-  email: process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com',
-  password: process.env.E2E_TEST_PASSWORD || 'E2ePassword123',
-};
+/**
+ * Isolated transfers user (seeded in prisma/seed.e2e.ts with "Efectivo" +
+ * "Bancolombia Ahorros"). Kept SEPARATE from the transactions user so the
+ * TRANSFER_OUT/TRANSFER_IN rows this feature creates never race with
+ * transactions.feature's fixed 20-row pagination assertions in a parallel worker.
+ */
 
 /**
  * Isolated pockets user (seeded in prisma/seed.e2e.ts):
@@ -154,8 +156,12 @@ async function getStoredPocketTotals(page: Page): Promise<Record<string, number>
 // GIVEN - State
 // ============================================================================
 
+Given('que el usuario de transferencias ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, TRANSFERS_TEST_USER.email, TRANSFERS_TEST_USER.password);
+});
+
 Given('guarda los saldos actuales de las cuentas de transferencia', async ({ page }) => {
-  const balances = await getAccountBalancesByEmail(TRANSACTIONS_USER.email);
+  const balances = await getAccountBalancesByEmail(TRANSFERS_TEST_USER.email);
   await page.evaluate(
     ({ key, value }) => {
       window.localStorage.setItem(key, JSON.stringify(value));

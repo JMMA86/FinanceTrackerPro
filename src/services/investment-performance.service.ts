@@ -6,26 +6,50 @@
  * Rules applied:
  * - Rule 1: Decimal.js (via @/lib/money) for every monetary aggregation
  * - Rule 11: invested net = cash-in − cash-out (TRANSFER_IN/INCOME − TRANSFER_OUT)
- * - Rule 13: holdings market value is computed from holdings, cash from the
- *   cached account.balanceCents (both reconciled separately)
+ * - Rule 13: holdings market value is computed from holdings. The CASH component
+ *   defaults to the cached `account.balanceCents` for the investments page, but
+ *   callers that already hold the ledger truth (e.g. the dashboard) can pass
+ *   `options.cashBalanceCents` so the cash component is derived from the
+ *   transaction ledger instead of the cache. The dashboard therefore no longer
+ *   relies on the cached balance for its investment cash.
  */
 
 import 'server-only';
-import { addCents, multiplyCents } from '@/lib/money';
-import type { PrismaClient } from '@prisma/client';
+import { Decimal } from 'decimal.js';
+import { addCents, multiplyCents, subtractCents } from '@/lib/money';
+import type { Currency, PrismaClient } from '@prisma/client';
 
 export interface PerformancePoint {
   date: Date | string;
   investedCents: number;
 }
 
+/**
+ * Optional inputs that let a caller override the cash component with a
+ * ledger-derived value (Rule 13 — the transaction ledger is the source of
+ * truth). When omitted, the service keeps using the cached balance so the
+ * investments page contract is unchanged.
+ */
+export interface InvestmentPerformanceOptions {
+  /**
+   * Ledger-derived cash balance, in cents, of the investment account. When
+   * provided (including 0) it REPLACES the cached `account.balanceCents` for the
+   * cash component; when omitted the cached balance is used.
+   */
+  cashBalanceCents?: number;
+}
+
 export interface InvestmentPerformance {
   accountId: string;
   name: string;
-  currency: string;
+  currency: Currency;
   /** Net cash-in − cash-out: TRANSFER_IN + INCOME − TRANSFER_OUT */
   totalInvestedCents: number;
-  /** Cached cash balance of the account */
+  /**
+   * Cash balance of the account. Defaults to the cached `account.balanceCents`;
+   * when a ledger balance is supplied via `options.cashBalanceCents`, this is the
+   * ledger-derived cash (dashboard path).
+   */
   cashBalanceCents: number;
   /** sum(quantity * currentPriceCents) over active holdings */
   holdingsMarketValueCents: number;
@@ -43,10 +67,13 @@ export interface InvestmentPerformance {
  * Build the performance report for an investment account.
  * @param prismaClient Prisma client or transaction client
  * @param accountId Investment account id
+ * @param options Optional ledger-derived cash override (Rule 13). Omit to keep
+ *   using the cached account balance (investments page).
  */
 export async function getInvestmentPerformance(
   prismaClient: PrismaClient,
-  accountId: string
+  accountId: string,
+  options?: InvestmentPerformanceOptions
 ): Promise<InvestmentPerformance> {
   const account = await prismaClient.account.findUnique({
     where: { id: accountId },
@@ -91,11 +118,17 @@ export async function getInvestmentPerformance(
     );
   }
 
-  const cashBalanceCents = Number(account.balanceCents);
+  const cashBalanceCents = options?.cashBalanceCents ?? Number(account.balanceCents);
   const totalValueCents = addCents(cashBalanceCents, holdingsMarketValueCents);
-  const totalReturnCents = totalValueCents - totalInvestedCents;
+  const totalReturnCents = subtractCents(totalValueCents, totalInvestedCents);
   const totalReturnPct =
-    totalInvestedCents === 0 ? 0 : (totalReturnCents / totalInvestedCents) * 100;
+    totalInvestedCents === 0
+      ? 0
+      : new Decimal(totalReturnCents)
+          .dividedBy(totalInvestedCents)
+          .times(100)
+          .toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN)
+          .toNumber();
 
   // Append a final point "today" so the chart always ends at the current net invested
   series.push({ date: new Date(), investedCents: totalInvestedCents });

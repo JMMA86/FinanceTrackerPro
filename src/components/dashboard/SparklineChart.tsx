@@ -19,9 +19,12 @@ export function SparklineChart({
     const min = Math.min(...data);
     const max = Math.max(...data);
     const range = max - min || 1;
+    // A single point has no horizontal span; `index / (length - 1)` would be
+    // `0 / 0 = NaN`, so center it instead.
+    const span = data.length - 1;
 
     const points = data.map((value, index) => {
-      const x = (index / (data.length - 1)) * 100;
+      const x = span === 0 ? 50 : (index / span) * 100;
       const y = ((max - value) / range) * 100;
       return { x, y, value };
     });
@@ -42,6 +45,8 @@ export function SparklineChart({
         viewBox={`0 0 100 100`}
         preserveAspectRatio="none"
         className={`${color} opacity-70`}
+        aria-hidden="true"
+        focusable="false"
       >
         {/* Gradient fill area */}
         <defs>

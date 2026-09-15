@@ -48,7 +48,7 @@ export function InlineMetric({
       </div>
 
       {/* Sublabel */}
-      {sublabel && <span className="text-[10px] text-slate-500 block mb-1.5">{sublabel}</span>}
+      {sublabel && <span className="text-[10px] text-slate-400 block mb-1.5">{sublabel}</span>}
 
       {/* Value + sparkline */}
       <div className="flex items-end justify-between gap-1 mb-1 sm:mb-2">

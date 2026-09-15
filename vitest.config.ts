@@ -23,6 +23,9 @@ export default defineConfig({
         'src/app/**',
         'src/locales/**',
         'src/lib/errors/**',
+        // Prisma schema is not executable JS/TS; v8 cannot parse it and emits a
+        // "Failed to parse ... Excluding it from coverage" warning.
+        '**/*.prisma',
         'src/lib/db/index.ts',
         'src/store/ui.store.ts',
         'src/actions/language.actions.ts',

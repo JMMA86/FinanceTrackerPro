@@ -9,6 +9,8 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://financetrackerpro.
 
 const staticRoutes = [
   '',
+  '/es',
+  '/en',
   '/es/login',
   '/es/register',
   '/en/login',
@@ -37,13 +39,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   const getPriority = (route: string): number => {
-    if (route === '') return 1;
+    // Root redirect + localized landing pages are the home of each language.
+    if (route === '' || route === '/es' || route === '/en') return 1;
     if (route.includes('/dashboard')) return 0.9;
     return 0.7;
   };
 
   const getChangeFrequency = (route: string): 'weekly' | 'monthly' => {
-    return route === '' ? 'weekly' : 'monthly';
+    return route === '' || route === '/es' || route === '/en' ? 'weekly' : 'monthly';
   };
 
   const routes = staticRoutes.map((route) => {

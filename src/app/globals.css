@@ -749,3 +749,20 @@ body {
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ============================================================================
+   REDUCED MOTION
+   Honor users who prefer minimal animation (WCAG 2.3.3 Animation from
+   Interactions). Keeps layout and meaning intact while removing motion.
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

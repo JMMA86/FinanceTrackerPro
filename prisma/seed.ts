@@ -140,6 +140,8 @@ async function main() {
       language: 'SPANISH',
       theme: 'SYSTEM',
       lastLoginAt: new Date(),
+      // Seeded demo users must never enter the first-run walkthrough.
+      onboardingCompletedAt: new Date(),
     },
   });
   console.log(`✓ User created: ${user.email}`);

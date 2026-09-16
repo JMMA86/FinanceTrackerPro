@@ -25,6 +25,8 @@ describe('PrismaUserRepository', () => {
     baseCurrency: 'COP' as Currency,
     language: 'SPANISH' as Language,
     theme: 'SYSTEM' as Theme,
+    onboardingCompletedAt: null,
+    onboardingStep: 0,
     isActive: true,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),

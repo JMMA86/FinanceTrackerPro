@@ -43,6 +43,7 @@ export default defineConfig({
         'src/components/dashboard/__tests__/**',
         'src/components/ui/__tests__/**',
         'src/components/i18n/__tests__/**',
+        'src/components/onboarding/__tests__/**',
         'src/components/landing/__tests__/**',
         'coverage/**',
         '.next/**',

@@ -766,3 +766,236 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================================
+   ONBOARDING WIZARD ANIMATIONS (additive)
+   Motion design for the 4-step first-run walkthrough: splash intro, directional
+   step transitions, staggered reveals, check "pops" and contained celebrations.
+   Every utility below is opt-in and stays compatible with the global
+   `prefers-reduced-motion` block defined above. Content animations are finite
+   (1-2 iterations); only the backdrop keeps looping.
+   ============================================================================ */
+
+/* --- Splash intro (decorative overlay, auto-dismissed by the wizard) --- */
+@keyframes splash-overlay {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Brand mark: scale + fade on entry. */
+@keyframes splash-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.82) translateY(8px);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.04) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Gradient light sweep that crosses the brand mark. */
+@keyframes splash-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-130%) skewX(-12deg);
+  }
+  35% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(230%) skewX(-12deg);
+  }
+}
+
+/* Tagline fades in late, then drifts away with the overlay. */
+@keyframes splash-tagline {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  60%,
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.onboarding-splash {
+  animation: splash-overlay 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.splash-mark {
+  animation: splash-mark 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.splash-sweep {
+  animation: splash-sweep 1100ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.splash-tagline {
+  animation: splash-tagline 1400ms ease-in-out both;
+}
+
+/* --- Directional step transitions (container re-keyed per step index) --- */
+@keyframes step-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(42px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes step-in-backward {
+  from {
+    opacity: 0;
+    transform: translateX(-42px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.step-transition-forward {
+  animation: step-in-forward 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.step-transition-backward {
+  animation: step-in-backward 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Check pop (completion feedback) --- */
+@keyframes check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-check-pop {
+  animation: check-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* --- Contained celebration glow (finite: 2 pulses, never infinite) --- */
+@keyframes celebrate-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 0 34px 4px rgba(16, 185, 129, 0.45);
+  }
+}
+
+.animate-celebrate-glow {
+  animation: celebrate-glow 1200ms ease-in-out 2;
+}
+
+/* --- One-shot gradient sweep (CTA band / brand) --- */
+@keyframes gradient-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-gradient-sweep {
+  animation: gradient-sweep 1400ms cubic-bezier(0.22, 1, 0.36, 1) 300ms both;
+}
+
+/* --- Decorative success ring (SVG stroke draw, r=26 => 164 circumference) --- */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: 164;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-ring-draw {
+  animation: ring-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Interactive lift for cards / language options (150-250ms) --- */
+.hover-lift {
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms ease,
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-3px);
+}
+
+/* Stagger delays for longer lists (modules grid has 9 items). */
+.animate-stagger > *:nth-child(9) {
+  animation-delay: 500ms;
+}
+.animate-stagger > *:nth-child(10) {
+  animation-delay: 550ms;
+}
+.animate-stagger > *:nth-child(11) {
+  animation-delay: 600ms;
+}
+.animate-stagger > *:nth-child(12) {
+  animation-delay: 650ms;
+}
+
+/* Reduced motion: drop the splash entirely, never keep content hidden behind
+   an animation delay and remove the decorative hover lift. */
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-splash {
+    display: none !important;
+  }
+
+  .animate-stagger > *,
+  .animate-text-reveal,
+  .animate-scale-in,
+  .animate-fadeIn,
+  .animate-card-enter,
+  .animate-slideUp {
+    animation-delay: 0ms !important;
+    opacity: 1 !important;
+  }
+
+  .hover-lift:hover {
+    transform: none;
+  }
+}

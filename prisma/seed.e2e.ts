@@ -30,10 +30,28 @@ const prisma = new PrismaClient({ adapter });
 
 const sharedPassword = process.env.E2E_TEST_PASSWORD || 'E2ePassword123';
 
-async function upsertUserAndGet(email: string, name: string) {
+/**
+ * Creates (or reuses) an E2E user.
+ *
+ * `onboardingCompleted` defaults to `true` so every regular fixture user skips
+ * the first-run walkthrough. Pass `false` to get a user that starts the
+ * onboarding flow (`onboardingCompletedAt: null`, `onboardingStep: 0`).
+ */
+async function upsertUserAndGet(email: string, name: string, onboardingCompleted = true) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log(`✓ ${name} already exists: ${email}`);
+    // Non-onboarded fixture users must start the walkthrough fresh even on a
+    // manual re-seed without a full DB reset. Already-onboarded users keep
+    // their state untouched.
+    if (!onboardingCompleted && existing.onboardingCompletedAt !== null) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { onboardingCompletedAt: null, onboardingStep: 0 },
+      });
+      console.log(`✓ ${name} reset to non-onboarded: ${email}`);
+    } else {
+      console.log(`✓ ${name} already exists: ${email}`);
+    }
     return existing;
   }
   const passwordHash = await argon2.hash(sharedPassword, {
@@ -51,6 +69,9 @@ async function upsertUserAndGet(email: string, name: string) {
       language: 'SPANISH',
       theme: 'SYSTEM',
       baseSalaryCents: 500000000,
+      // Onboarded by default: regular E2E users must never enter the first-run
+      // walkthrough. The dedicated onboarding users below pass `false`.
+      onboardingCompletedAt: onboardingCompleted ? new Date() : null,
     },
   });
   console.log(`✓ ${name} created: ${email}`);
@@ -1983,6 +2004,34 @@ async function main() {
     process.env.E2E_DASHBOARD_EMPTY_USER || 'dashboard-empty@e2e.financetrackerpro.com';
   await upsertUserAndGet(dashboardEmptyUserEmail, 'Empty Dashboard E2E User');
   console.log('✓ Empty dashboard user seeded with no accounts');
+
+  // ============================================================================
+  // Onboarding E2E users (onboarding.feature)
+  // Deliberately NOT onboarded (`onboardingCompletedAt: null`, `onboardingStep: 0`)
+  // and with NO accounts, so they enter the first-run walkthrough on next login.
+  //
+  // Three isolated users so the destructive/terminal scenarios never race:
+  //   - onboarding1: redirect + modules (read-only) and "skip"
+  //   - onboarding2: welcome + first-account creation (completes via the CTA)
+  //   - onboarding3: language switch (i18n) + full walkthrough completion
+  // Emails are env-overridable with mandatory defaults (CI defines none).
+  // ============================================================================
+  await upsertUserAndGet(
+    process.env.E2E_ONBOARDING_USER_1 || 'onboarding1@e2e.financetrackerpro.com',
+    'Onboarding One E2E User',
+    false
+  );
+  await upsertUserAndGet(
+    process.env.E2E_ONBOARDING_USER_2 || 'onboarding2@e2e.financetrackerpro.com',
+    'Onboarding Two E2E User',
+    false
+  );
+  await upsertUserAndGet(
+    process.env.E2E_ONBOARDING_USER_3 || 'onboarding3@e2e.financetrackerpro.com',
+    'Onboarding Three E2E User',
+    false
+  );
+  console.log('✓ Onboarding users seeded (non-onboarded, no accounts)');
 
   console.log('✅ E2E seed completed successfully!');
 }

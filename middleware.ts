@@ -25,6 +25,7 @@ const PROTECTED_ROUTES = [
   '/variable-expenses',
   '/loans',
   '/settings',
+  '/onboarding',
 ];
 
 export async function middleware(request: NextRequest) {

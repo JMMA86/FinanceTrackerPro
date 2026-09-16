@@ -221,6 +221,10 @@ model User {
   language        Language     @default(SPANISH)
   theme           Theme        @default(SYSTEM)
 
+  // Onboarding (first-run walkthrough)
+  onboardingCompletedAt DateTime?
+  onboardingStep        Int       @default(0)
+
   // Relations
   accounts          Account[]
   transactions      Transaction[]

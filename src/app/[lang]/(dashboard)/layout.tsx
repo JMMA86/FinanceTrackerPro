@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
 import { DashboardBottomBar } from '@/components/dashboard/DashboardBottomBar';
+import { getSession } from '@/lib/auth/session';
+import { prisma } from '@/lib/db';
 import { DEFAULT_LOCALE, getDictionary, get, isValidLocale } from '@/lib/i18n';
 
 export const metadata: Metadata = {
@@ -19,6 +22,21 @@ export default async function DashboardLayout({
 }: Readonly<DashboardLayoutProps>) {
   const { lang: langParam } = await params;
   const lang = isValidLocale(langParam) ? langParam : DEFAULT_LOCALE;
+
+  // First-run gate: users who never completed the walkthrough are sent there.
+  // Cheap single-column read; already-onboarded users (seeds/backfill) pass
+  // straight through.
+  const session = await getSession();
+  if (session?.userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { onboardingCompletedAt: true },
+    });
+    if (user?.onboardingCompletedAt === null) {
+      redirect(`/${lang}/onboarding`);
+    }
+  }
+
   const common = await getDictionary(lang, 'common');
   const navigation = common.navigation as Record<string, string>;
 

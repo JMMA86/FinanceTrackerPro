@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "title": "Configuración inicial",
+    "description": "Configura tu cuenta en unos pocos pasos."
+  },
+  "title": "Configura tu cuenta",
+  "subtitle": "Te guiaremos en tus primeros pasos.",
+  "close": "Cerrar",
+  "cancel": "Cancelar",
+  "progress": {
+    "stepOf": "Paso {current} de {total}",
+    "ariaLabel": "Progreso de la configuración",
+    "announce": "Paso {current} de {total}: {title}"
+  },
+  "buttons": {
+    "next": "Continuar",
+    "back": "Atrás",
+    "skip": "Omitir",
+    "finish": "Ir al dashboard",
+    "finishing": "Finalizando...",
+    "saving": "Guardando..."
+  },
+  "stepper": {
+    "welcome": "Bienvenida",
+    "account": "Cuenta",
+    "modules": "Módulos",
+    "finish": "Listo"
+  },
+  "skip": {
+    "title": "Omitir configuración",
+    "message": "Puedes completar estos pasos más tarde desde Ajustes. ¿Deseas omitir el recorrido?",
+    "confirm": "Sí, omitir",
+    "cancel": "Seguir configurando"
+  },
+  "splash": {
+    "brand": "FinanceTrackerPro",
+    "tagline": "Tus finanzas, en orden"
+  },
+  "steps": {
+    "welcome": {
+      "title": "¡Te damos la bienvenida!",
+      "greeting": "¡Hola, {name}!",
+      "intro": "En menos de un minuto te mostramos cómo empezar a organizar tus finanzas.",
+      "bullet1": "Elige tu idioma",
+      "bullet2": "Crea tu primera cuenta",
+      "bullet3": "Descubre los módulos",
+      "languageLabel": "Idioma",
+      "languageHint": "Podrás cambiarlo más adelante desde Ajustes.",
+      "languageSaving": "Guardando idioma..."
+    },
+    "account": {
+      "title": "Crea tu primera cuenta",
+      "subtitle": "Una cuenta representa el dinero que tienes en un banco, en efectivo o en ahorros.",
+      "nameLabel": "Nombre de la cuenta",
+      "namePlaceholder": "Ej. Nómina Bancolombia",
+      "typeLabel": "Tipo de cuenta",
+      "currencyLabel": "Moneda",
+      "balanceLabel": "Saldo inicial",
+      "balanceHint": "Ingresa el saldo con el que empiezas. Puede ser 0.",
+      "submit": "Crear cuenta",
+      "submitting": "Creando...",
+      "successTitle": "¡Cuenta creada!",
+      "successMessage": "Tu cuenta «{name}» está lista.",
+      "continueHint": "Continúa para descubrir los módulos de tu panel.",
+      "existingNote": "Ya tienes cuentas creadas. Puedes continuar o crear una nueva."
+    },
+    "modules": {
+      "title": "Explora los módulos",
+      "subtitle": "Estos son los módulos disponibles en tu panel. Podrás acceder a ellos desde la barra lateral.",
+      "hint": "No necesitas configurar nada más por ahora."
+    },
+    "finish": {
+      "title": "¡Todo listo!",
+      "subtitle": "Tu cuenta está configurada. Este es un resumen de lo que hiciste.",
+      "summaryTitle": "Resumen",
+      "language": "Idioma",
+      "account": "Primera cuenta",
+      "currency": "Moneda principal",
+      "yes": "Sí",
+      "no": "Aún no",
+      "cta": "Ir al dashboard"
+    }
+  },
+  "currency": {
+    "COP": "Peso colombiano",
+    "USD": "Dólar estadounidense",
+    "EUR": "Euro"
+  },
+  "accountTypes": {
+    "CHECKING": "Cuenta corriente",
+    "CASH": "Efectivo",
+    "SAVINGS": "Ahorros"
+  },
+  "errors": {
+    "sessionInvalid": "Tu sesión expiró. Inicia sesión nuevamente.",
+    "generic": "Ocurrió un error. Inténtalo de nuevo.",
+    "nameRequired": "Ingresa un nombre para la cuenta.",
+    "nameTooLong": "El nombre es demasiado largo.",
+    "nameInvalid": "El nombre contiene caracteres no permitidos.",
+    "accountCreateFailed": "No se pudo crear la cuenta.",
+    "stepSaveFailed": "No se pudo guardar el progreso.",
+    "completeFailed": "No se pudo finalizar la configuración.",
+    "languageUpdateFailed": "No se pudo actualizar el idioma."
+  }
+}

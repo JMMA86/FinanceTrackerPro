@@ -1,0 +1,216 @@
+/**
+ * Shared helpers for storing/reading unique values between steps.
+ *
+ * Values are stored in localStorage (NOT window) because several scenarios
+ * navigate with page.goto() between storing and reading a value, and a full
+ * page load resets window state. localStorage survives same-origin navigations
+ * within the isolated browser context, so the value is still available after
+ * e.g. "navega a la página de transacciones".
+ *
+ * A unique value per attempt keeps retries clean (a retry never collides with
+ * a leftover row from the failed attempt).
+ */
+
+import type { Page } from '@playwright/test';
+
+/** localStorage key where the unique account name is stored for the current scenario. */
+export const UNIQUE_ACCOUNT_NAME_KEY = '__e2eUniqueAccountName';
+
+/** localStorage key where the unique pocket name is stored for the current scenario. */
+export const UNIQUE_POCKET_NAME_KEY = '__e2eUniquePocketName';
+
+/** localStorage key where the unique EDITED account name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_NAME_KEY = '__e2eUniqueEditedName';
+
+/** localStorage key where the unique credit-card name is stored for the current scenario. */
+export const UNIQUE_CARD_NAME_KEY = '__e2eUniqueCardName';
+
+/** localStorage key where the unique EDITED card name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_CARD_NAME_KEY = '__e2eUniqueEditedCardName';
+
+/** localStorage key where the unique savings-goal name is stored for the current scenario. */
+export const UNIQUE_GOAL_NAME_KEY = '__e2eUniqueGoalName';
+
+/** localStorage key where the unique EDITED savings-goal name is stored (post-edit scenario). */
+export const UNIQUE_EDITED_GOAL_NAME_KEY = '__e2eUniqueEditedGoalName';
+
+/** localStorage key where the unique fixed-expense name is stored for the current scenario. */
+export const UNIQUE_FIXED_EXPENSE_NAME_KEY = '__e2eUniqueFixedExpenseName';
+
+/** localStorage key where the unique variable-expense definition name is stored. */
+export const UNIQUE_VARIABLE_EXPENSE_NAME_KEY = '__e2eUniqueVariableExpenseName';
+
+/** localStorage key where the unique variable-expense transaction note is stored. */
+export const UNIQUE_VARIABLE_TX_NOTE_KEY = '__e2eUniqueVariableTxNote';
+
+/** localStorage key where the unique loan name is stored for the current scenario. */
+export const UNIQUE_LOAN_NAME_KEY = '__e2eUniqueLoanName';
+
+export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
+  await page.evaluate(
+    ({ k, v }) => {
+      window.localStorage.setItem(k, v);
+    },
+    { k: key, v: value }
+  );
+}
+
+export async function getWindowValue(page: Page, key: string): Promise<string | undefined> {
+  return page.evaluate((k) => {
+    return window.localStorage.getItem(k) ?? undefined;
+  }, key);
+}
+
+/** Generates a timestamped account name, stores it and returns it. */
+export async function storeUniqueAccountName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_ACCOUNT_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique account name stored by the create-account step. */
+export async function getStoredAccountName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_ACCOUNT_NAME_KEY);
+  if (!name) throw new Error('No unique account name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped pocket name, stores it and returns it. */
+export async function storeUniquePocketName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_POCKET_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique pocket name stored by the create/edit-pocket step. */
+export async function getStoredPocketName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_POCKET_NAME_KEY);
+  if (!name) throw new Error('No unique pocket name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED account name, stores it and returns it. */
+export async function storeUniqueEditedAccountName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED account name stored by the edit-account step. */
+export async function getStoredEditedAccountName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_NAME_KEY);
+  if (!name) throw new Error('No unique edited account name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped credit-card name, stores it and returns it. */
+export async function storeUniqueCardName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_CARD_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique credit-card name stored by the create-card step. */
+export async function getStoredCardName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_CARD_NAME_KEY);
+  if (!name) throw new Error('No unique credit-card name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED credit-card name, stores it and returns it. */
+export async function storeUniqueEditedCardName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_CARD_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED credit-card name stored by the edit-card step. */
+export async function getStoredEditedCardName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_CARD_NAME_KEY);
+  if (!name) throw new Error('No unique edited credit-card name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped savings-goal name, stores it and returns it. */
+export async function storeUniqueGoalName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_GOAL_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique savings-goal name stored by the create/edit-goal step. */
+export async function getStoredGoalName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_GOAL_NAME_KEY);
+  if (!name) throw new Error('No unique savings-goal name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped EDITED savings-goal name, stores it and returns it. */
+export async function storeUniqueEditedGoalName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_EDITED_GOAL_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique EDITED savings-goal name stored by the edit-goal step. */
+export async function getStoredEditedGoalName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_EDITED_GOAL_NAME_KEY);
+  if (!name) throw new Error('No unique edited savings-goal name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped fixed-expense name, stores it and returns it. */
+export async function storeUniqueFixedExpenseName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_FIXED_EXPENSE_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique fixed-expense name stored by the create-fixed-expense step. */
+export async function getStoredFixedExpenseName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_FIXED_EXPENSE_NAME_KEY);
+  if (!name) throw new Error('No unique fixed-expense name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped variable-expense definition name, stores it and returns it. */
+export async function storeUniqueVariableExpenseName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_VARIABLE_EXPENSE_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique variable-expense definition name stored by the create step. */
+export async function getStoredVariableExpenseName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_VARIABLE_EXPENSE_NAME_KEY);
+  if (!name) throw new Error('No unique variable-expense name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped variable-expense transaction note, stores it and returns it. */
+export async function storeUniqueVariableTxNote(page: Page, prefix: string): Promise<string> {
+  const note = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_VARIABLE_TX_NOTE_KEY, note);
+  return note;
+}
+
+/** Reads the unique variable-expense transaction note stored by the register step. */
+export async function getStoredVariableTxNote(page: Page): Promise<string> {
+  const note = await getWindowValue(page, UNIQUE_VARIABLE_TX_NOTE_KEY);
+  if (!note) throw new Error('No unique variable-expense transaction note stored on the page');
+  return note;
+}
+
+/** Generates a timestamped loan name, stores it and returns it. */
+export async function storeUniqueLoanName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_LOAN_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique loan name stored by the create step. */
+export async function getStoredLoanName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_LOAN_NAME_KEY);
+  if (!name) throw new Error('No unique loan name stored on the page');
+  return name;
+}

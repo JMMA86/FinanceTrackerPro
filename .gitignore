@@ -31,7 +31,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.e2e
 
 # vercel
 .vercel
@@ -42,7 +43,29 @@ next-env.d.ts
 
 # claude
 .claude/
+.agents/
 
 # prisma
 /src/generated/prisma
-/prisma/migrations
+
+# playwright bdd generated specs
+.features-gen/
+
+# env files for test database
+.env.test
+
+# sonarqube
+/.scannerwork
+
+# playwright mcp
+/.playwright-mcp
+
+# playwright e2e
+/playwright-report/
+/test-results/
+/blob-report/
+e2e-results.json
+test-output.txt
+
+# server start verification logs
+start-log*.txt

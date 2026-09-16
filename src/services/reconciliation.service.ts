@@ -5,29 +5,53 @@
  *
  * CRITICAL: Balance can drift due to race conditions or bugs
  * Reconciliation ensures cached balance matches computed history
+ *
+ * REFACTORED: Uses Repository Pattern with DI
  */
 
 import 'server-only';
-import { prisma } from '@/lib/db';
 import { addCents, subtractCents } from '@/lib/money';
+import { log } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
+import type { IAccountRepository } from '@/lib/repositories/interfaces/IAccountRepository';
+import type { ITransactionRepository } from '@/lib/repositories/interfaces/ITransactionRepository';
+
+/**
+ * Compute the TRUE balance of an account from the transactional snapshot.
+ * Must be called with the transaction client (tx), not the global prisma
+ * client, so concurrent committed operations are visible (used inside
+ * $transaction for TOCTOU-safe funds checks).
+ * @param tx Prisma transaction client
+ * @param accountId Account to compute balance for
+ * @returns True balance in cents
+ */
+export async function getTrueBalanceFromTx(
+  tx: Prisma.TransactionClient,
+  accountId: string
+): Promise<number> {
+  const transactions = await tx.transaction.findMany({
+    where: { accountId, isActive: true },
+    select: { amountCents: true },
+  });
+  let balance = 0;
+  for (const t of transactions) {
+    balance = addCents(balance, Number(t.amountCents));
+  }
+  return balance;
+}
 
 /**
  * Compute true balance from transaction history (SOURCE OF TRUTH)
  * @param accountId Account to compute balance for
+ * @param transactionRepo Transaction repository (DI)
  * @returns True balance in cents
  */
-export async function getTrueBalance(accountId: string): Promise<number> {
+export async function getTrueBalance(
+  accountId: string,
+  transactionRepo: ITransactionRepository
+): Promise<number> {
   // Fetch all active transactions for this account
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      accountId,
-      isActive: true,
-    },
-    select: {
-      amountCents: true,
-      type: true,
-    },
-  });
+  const transactions = await transactionRepo.findManyByAccountId(accountId);
 
   let balance = 0;
 
@@ -38,9 +62,13 @@ export async function getTrueBalance(accountId: string): Promise<number> {
     // - TRANSFER_IN: positive
     // - TRANSFER_OUT: negative
     // - INVESTMENT: negative
-    // - LOAN_PAYMENT: negative
-    // - CREDIT_PAYMENT: negative
-    balance = addCents(balance, tx.amountCents);
+    // - LOAN_PAYMENT: negative (outflow paying a PAYABLE installment)
+    // - LOAN_RECEIPT: positive (inflow collecting a RECEIVABLE installment)
+    // - CREDIT_PAYMENT: positive on the card (reduces debt; balance becomes less negative)
+    //
+    // Every amount already carries its sign, so the ledger balance is a plain
+    // signed sum (this is why LOAN_RECEIPT needs no special casing).
+    balance = addCents(balance, Number(tx.amountCents));
   }
 
   return balance;
@@ -51,9 +79,15 @@ export async function getTrueBalance(accountId: string): Promise<number> {
  * Updates cached balance if discrepancy found
  *
  * @param accountId Account to reconcile
+ * @param accountRepo Account repository (DI)
+ * @param transactionRepo Transaction repository (DI)
  * @returns Reconciliation result with any discrepancy
  */
-export async function reconcileAccount(accountId: string): Promise<{
+export async function reconcileAccount(
+  accountId: string,
+  accountRepo: IAccountRepository,
+  transactionRepo: ITransactionRepository
+): Promise<{
   success: boolean;
   cachedBalance: number;
   trueBalance: number;
@@ -61,43 +95,36 @@ export async function reconcileAccount(accountId: string): Promise<{
   wasUpdated: boolean;
 }> {
   // Get cached balance
-  const account = await prisma.account.findUnique({
-    where: { id: accountId },
-    select: { balanceCents: true, type: true },
-  });
+  const account = await accountRepo.findById(accountId);
 
   if (!account) {
     throw new Error(`Account ${accountId} not found`);
   }
 
-  const cachedBalance = account.balanceCents;
+  const cachedBalance = Number(account.balanceCents);
 
   // Compute true balance from transaction history
-  const trueBalance = await getTrueBalance(accountId);
+  const trueBalance = await getTrueBalance(accountId, transactionRepo);
 
   const discrepancy = subtractCents(cachedBalance, trueBalance);
 
   // Check for discrepancy
   if (cachedBalance !== trueBalance) {
     // Fix cached balance
-    await prisma.account.update({
-      where: { id: accountId },
-      data: {
-        balanceCents: trueBalance,
-        lastReconciled: new Date(),
-        lastModifiedBy: 'system-reconciliation',
-      },
-    });
+    await accountRepo.updateBalance(accountId, trueBalance, 'system-reconciliation');
+    await accountRepo.updateReconciliation(accountId, new Date());
 
     // Log critical discrepancy (should trigger alert)
-    console.error('[RECONCILIATION] Balance discrepancy detected', {
-      accountId,
-      accountType: account.type,
-      cached: cachedBalance,
-      computed: trueBalance,
-      diff: discrepancy,
-      timestamp: new Date().toISOString(),
-    });
+    log.error(
+      {
+        accountId,
+        accountType: account.type,
+        cached: cachedBalance,
+        computed: trueBalance,
+        diff: discrepancy,
+      },
+      '[RECONCILIATION] Balance discrepancy detected'
+    );
 
     return {
       success: true,
@@ -109,12 +136,7 @@ export async function reconcileAccount(accountId: string): Promise<{
   }
 
   // No discrepancy - update lastReconciled timestamp
-  await prisma.account.update({
-    where: { id: accountId },
-    data: {
-      lastReconciled: new Date(),
-    },
-  });
+  await accountRepo.updateReconciliation(accountId, new Date());
 
   return {
     success: true,
@@ -126,11 +148,19 @@ export async function reconcileAccount(accountId: string): Promise<{
 }
 
 /**
- * Reconcile multiple accounts in batch
+ * Reconcile multiple accounts in PARALLEL (OPTIMIZED)
+ * Uses Promise.allSettled for concurrent reconciliation
+ *
  * @param accountIds Array of account IDs to reconcile
+ * @param accountRepo Account repository (DI)
+ * @param transactionRepo Transaction repository (DI)
  * @returns Array of reconciliation results
  */
-export async function reconcileMultipleAccounts(accountIds: string[]): Promise<
+export async function reconcileMultipleAccounts(
+  accountIds: string[],
+  accountRepo: IAccountRepository,
+  transactionRepo: ITransactionRepository
+): Promise<
   Array<{
     accountId: string;
     success: boolean;
@@ -138,64 +168,68 @@ export async function reconcileMultipleAccounts(accountIds: string[]): Promise<
     error?: string;
   }>
 > {
-  const results = [];
+  // OPTIMIZED: Use Promise.allSettled for concurrent execution
+  const settledResults = await Promise.allSettled(
+    accountIds.map((accountId) => reconcileAccount(accountId, accountRepo, transactionRepo))
+  );
 
-  for (const accountId of accountIds) {
-    try {
-      const result = await reconcileAccount(accountId);
-      results.push({
+  // Map results to consistent format
+  return settledResults.map((result, index) => {
+    const accountId = accountIds[index];
+
+    if (result.status === 'fulfilled') {
+      return {
         accountId,
-        success: result.success,
-        discrepancy: result.discrepancy,
-      });
-    } catch (error) {
-      results.push({
+        success: result.value.success,
+        discrepancy: result.value.discrepancy,
+      };
+    } else {
+      // Rejected promise
+      return {
         accountId,
         success: false,
         discrepancy: 0,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+        error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+      };
     }
-  }
-
-  return results;
+  });
 }
 
 /**
- * Reconcile all active accounts for a user
+ * Reconcile all active accounts for a user (OPTIMIZED)
  * @param userId User ID
+ * @param accountRepo Account repository (DI)
+ * @param transactionRepo Transaction repository (DI)
  * @returns Summary of reconciliation results
  */
-export async function reconcileUserAccounts(userId: string): Promise<{
+export async function reconcileUserAccounts(
+  userId: string,
+  accountRepo: IAccountRepository,
+  transactionRepo: ITransactionRepository
+): Promise<{
   totalAccounts: number;
   reconciledCount: number;
   discrepanciesFound: number;
   totalDiscrepancy: number;
 }> {
   // Get all active accounts for user
-  const accounts = await prisma.account.findMany({
-    where: {
-      userId,
-      isActive: true,
-    },
-    select: { id: true },
-  });
+  const accounts = await accountRepo.findManyByUserId(userId);
+  const accountIds = accounts.map((account) => account.id);
+
+  // OPTIMIZED: Reconcile all accounts in parallel
+  const results = await reconcileMultipleAccounts(accountIds, accountRepo, transactionRepo);
 
   let reconciledCount = 0;
   let discrepanciesFound = 0;
   let totalDiscrepancy = 0;
 
-  for (const account of accounts) {
-    try {
-      const result = await reconcileAccount(account.id);
+  for (const result of results) {
+    if (result.success) {
       reconciledCount++;
-
       if (result.discrepancy !== 0) {
         discrepanciesFound++;
         totalDiscrepancy = addCents(totalDiscrepancy, Math.abs(result.discrepancy));
       }
-    } catch (error) {
-      console.error(`[RECONCILIATION] Failed for account ${account.id}`, error);
     }
   }
 
@@ -212,25 +246,28 @@ export async function reconcileUserAccounts(userId: string): Promise<{
  * Used for read-only balance verification
  *
  * @param accountId Account to check
+ * @param accountRepo Account repository (DI)
+ * @param transactionRepo Transaction repository (DI)
  * @returns Discrepancy in cents (positive = cached is higher)
  */
-export async function getBalanceDiscrepancy(accountId: string): Promise<{
+export async function getBalanceDiscrepancy(
+  accountId: string,
+  accountRepo: IAccountRepository,
+  transactionRepo: ITransactionRepository
+): Promise<{
   cachedBalance: number;
   trueBalance: number;
   discrepancy: number;
   needsReconciliation: boolean;
 }> {
-  const account = await prisma.account.findUnique({
-    where: { id: accountId },
-    select: { balanceCents: true },
-  });
+  const account = await accountRepo.findById(accountId);
 
   if (!account) {
     throw new Error(`Account ${accountId} not found`);
   }
 
-  const cachedBalance = account.balanceCents;
-  const trueBalance = await getTrueBalance(accountId);
+  const cachedBalance = Number(account.balanceCents);
+  const trueBalance = await getTrueBalance(accountId, transactionRepo);
   const discrepancy = subtractCents(cachedBalance, trueBalance);
 
   return {
@@ -244,8 +281,14 @@ export async function getBalanceDiscrepancy(accountId: string): Promise<{
 /**
  * Schedule: Run hourly for active accounts with recent activity
  * Alert ops team if discrepancy > $10 (1000 cents)
+ *
+ * @param accountRepo Account repository (DI)
+ * @param transactionRepo Transaction repository (DI)
  */
-export async function reconcileActiveAccounts(): Promise<{
+export async function reconcileActiveAccounts(
+  accountRepo: IAccountRepository,
+  transactionRepo: ITransactionRepository
+): Promise<{
   processed: number;
   discrepanciesFound: number;
   criticalAlerts: number;
@@ -254,25 +297,18 @@ export async function reconcileActiveAccounts(): Promise<{
   const oneDayAgo = new Date();
   oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-  const activeAccounts = await prisma.account.findMany({
-    where: {
-      isActive: true,
-      transactions: {
-        some: {
-          createdAt: { gte: oneDayAgo },
-        },
-      },
-    },
-    select: { id: true },
-  });
+  const activeAccounts = await accountRepo.findActiveWithRecentActivity(oneDayAgo);
+  const accountIds = activeAccounts.map((account) => account.id);
+
+  // OPTIMIZED: Reconcile all accounts in parallel
+  const results = await reconcileMultipleAccounts(accountIds, accountRepo, transactionRepo);
 
   let processed = 0;
   let discrepanciesFound = 0;
   let criticalAlerts = 0;
 
-  for (const account of activeAccounts) {
-    try {
-      const result = await reconcileAccount(account.id);
+  for (const result of results) {
+    if (result.success) {
       processed++;
 
       if (result.discrepancy !== 0) {
@@ -281,15 +317,15 @@ export async function reconcileActiveAccounts(): Promise<{
         // Alert if discrepancy > $10
         if (Math.abs(result.discrepancy) > 1000) {
           criticalAlerts++;
-          console.error('[CRITICAL] Large balance discrepancy', {
-            accountId: account.id,
-            discrepancy: result.discrepancy,
-          });
-          // TODO: Send alert to ops team (email, Slack, PagerDuty)
+          log.error(
+            {
+              accountId: result.accountId,
+              discrepancy: result.discrepancy,
+            },
+            '[CRITICAL] Large balance discrepancy - manual review required'
+          );
         }
       }
-    } catch (error) {
-      console.error(`[RECONCILIATION] Error for account ${account.id}`, error);
     }
   }
 

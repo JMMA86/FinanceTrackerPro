@@ -4,5 +4,7 @@ out
 dist
 build
 coverage
+.features-gen
+.opencode
 *.lock
 package-lock.json

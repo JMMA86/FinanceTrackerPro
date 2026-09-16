@@ -1,0 +1,3 @@
+# Normalize line endings to LF across all platforms
+# Prevents CRLF checkout (Windows autocrlf) from breaking prettier --check
+* text=auto eol=lf

@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "title": "Initial setup",
+    "description": "Set up your account in a few steps."
+  },
+  "title": "Set up your account",
+  "subtitle": "We will guide you through your first steps.",
+  "close": "Close",
+  "cancel": "Cancel",
+  "progress": {
+    "stepOf": "Step {current} of {total}",
+    "ariaLabel": "Setup progress",
+    "announce": "Step {current} of {total}: {title}"
+  },
+  "buttons": {
+    "next": "Continue",
+    "back": "Back",
+    "skip": "Skip",
+    "finish": "Go to dashboard",
+    "finishing": "Finishing...",
+    "saving": "Saving..."
+  },
+  "stepper": {
+    "welcome": "Welcome",
+    "account": "Account",
+    "modules": "Modules",
+    "finish": "Done"
+  },
+  "skip": {
+    "title": "Skip setup",
+    "message": "You can complete these steps later from Settings. Do you want to skip the walkthrough?",
+    "confirm": "Yes, skip",
+    "cancel": "Keep setting up"
+  },
+  "splash": {
+    "brand": "FinanceTrackerPro",
+    "tagline": "Your finances, in order"
+  },
+  "steps": {
+    "welcome": {
+      "title": "Welcome aboard!",
+      "greeting": "Hi, {name}!",
+      "intro": "In less than a minute we will show you how to start organizing your finances.",
+      "bullet1": "Choose your language",
+      "bullet2": "Create your first account",
+      "bullet3": "Discover the modules",
+      "languageLabel": "Language",
+      "languageHint": "You can change it later from Settings.",
+      "languageSaving": "Saving language..."
+    },
+    "account": {
+      "title": "Create your first account",
+      "subtitle": "An account represents the money you hold in a bank, in cash or in savings.",
+      "nameLabel": "Account name",
+      "namePlaceholder": "e.g. Payroll Bank",
+      "typeLabel": "Account type",
+      "currencyLabel": "Currency",
+      "balanceLabel": "Initial balance",
+      "balanceHint": "Enter the balance you are starting with. It can be 0.",
+      "submit": "Create account",
+      "submitting": "Creating...",
+      "successTitle": "Account created!",
+      "successMessage": "Your account \"{name}\" is ready.",
+      "continueHint": "Continue to discover your dashboard modules.",
+      "existingNote": "You already have accounts. You can continue or create a new one."
+    },
+    "modules": {
+      "title": "Explore the modules",
+      "subtitle": "These are the modules available in your panel. You can reach them from the sidebar.",
+      "hint": "There is nothing else to configure for now."
+    },
+    "finish": {
+      "title": "All set!",
+      "subtitle": "Your account is configured. Here is a summary of what you did.",
+      "summaryTitle": "Summary",
+      "language": "Language",
+      "account": "First account",
+      "currency": "Main currency",
+      "yes": "Yes",
+      "no": "Not yet",
+      "cta": "Go to dashboard"
+    }
+  },
+  "currency": {
+    "COP": "Colombian peso",
+    "USD": "US dollar",
+    "EUR": "Euro"
+  },
+  "accountTypes": {
+    "CHECKING": "Checking account",
+    "CASH": "Cash",
+    "SAVINGS": "Savings"
+  },
+  "errors": {
+    "sessionInvalid": "Your session expired. Please sign in again.",
+    "generic": "Something went wrong. Please try again.",
+    "nameRequired": "Enter a name for the account.",
+    "nameTooLong": "The name is too long.",
+    "nameInvalid": "The name contains unsupported characters.",
+    "accountCreateFailed": "The account could not be created.",
+    "stepSaveFailed": "Progress could not be saved.",
+    "completeFailed": "Setup could not be completed.",
+    "languageUpdateFailed": "The language could not be updated."
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "meta": {
+    "title": "FinanceTrackerPro — Gestión financiera con integridad de grado bancario",
+    "description": "Controla tus cuentas, transacciones, ahorros, inversiones y deudas con precisión de centavos, validación server-side y trazabilidad completa. Empieza gratis."
+  },
+  "skipToContent": "Saltar al contenido",
+  "nav": {
+    "features": "Módulos",
+    "benefits": "Beneficios",
+    "security": "Seguridad",
+    "faq": "Preguntas",
+    "login": "Iniciar sesión",
+    "register": "Crear cuenta",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
+    "mainNavLabel": "Navegación principal",
+    "productNavLabel": "Navegación del producto",
+    "accountNavLabel": "Navegación de cuenta",
+    "homeLabel": "FinanceTrackerPro — Inicio"
+  },
+  "hero": {
+    "badge": "Integridad financiera de grado bancario",
+    "titleLead": "Tus finanzas,",
+    "titleHighlight": "exactas al centavo",
+    "subtitle": "FinanceTrackerPro reúne cuentas, transacciones, transferencias, ahorro, inversiones y deudas en un solo panel. Cada cifra se calcula con precisión decimal y se respalda con un registro auditable.",
+    "ctaPrimary": "Crear cuenta gratis",
+    "ctaSecondary": "Iniciar sesión",
+    "trustLabel": "Diseñado para la exactitud",
+    "trust": ["Precisión Decimal.js", "Transacciones atómicas ACID", "Multi-divisa ISO 4217"],
+    "preview": {
+      "ariaLabel": "Vista previa del panel de FinanceTrackerPro con balance disponible, evolución diaria y tus cuentas principales.",
+      "title": "Resumen del patrimonio",
+      "balanceLabel": "Balance disponible",
+      "balanceValue": "$52.480.536,35",
+      "trend": "+4,8% este mes",
+      "chartLabel": "Flujo de los últimos 8 días",
+      "accountsLabel": "Cuentas principales",
+      "accounts": [
+        {
+          "name": "Cuenta corriente",
+          "value": "$858.240,00",
+          "delta": "+2,1%",
+          "tone": "positive"
+        },
+        {
+          "name": "Bolsillo de ahorro",
+          "value": "$35.359.120,35",
+          "delta": "+5,4%",
+          "tone": "positive"
+        },
+        {
+          "name": "Inversiones",
+          "value": "$11.120,00",
+          "delta": "+11,6%",
+          "tone": "positive"
+        }
+      ]
+    }
+  },
+  "stats": {
+    "title": "Métricas de integridad del sistema",
+    "items": [
+      {
+        "value": "14",
+        "label": "Reglas de integridad financiera"
+      },
+      {
+        "value": "20",
+        "label": "Decimales de precisión"
+      },
+      {
+        "value": "ISO 4217",
+        "label": "Divisas con trazabilidad"
+      },
+      {
+        "value": "100%",
+        "label": "Transacciones auditables"
+      }
+    ]
+  },
+  "features": {
+    "eyebrow": "Módulos",
+    "title": "Todo tu dinero, en un solo lugar",
+    "subtitle": "Desde el centro de control hasta la amortización de un préstamo, cada módulo comparte el mismo motor de cálculo y el mismo registro auditable.",
+    "items": [
+      {
+        "icon": "LayoutDashboard",
+        "title": "Centro de control",
+        "description": "Un panel con tu balance, liquidez, patrimonio y alertas críticas en tiempo real."
+      },
+      {
+        "icon": "Wallet",
+        "title": "Cuentas",
+        "description": "Organiza bancos, efectivo y bolsillos. Cada movimiento queda ligado a su cuenta."
+      },
+      {
+        "icon": "ReceiptText",
+        "title": "Transacciones y categorías",
+        "description": "Registra ingresos y gastos con categorías claras y consulta todo tu historial."
+      },
+      {
+        "icon": "ArrowLeftRight",
+        "title": "Transferencias atómicas",
+        "description": "Movimientos de partida doble que se completan enteros o no se aplican nunca."
+      },
+      {
+        "icon": "CreditCard",
+        "title": "Tarjetas de crédito",
+        "description": "Consulta cupo disponible, deuda y pagos sin perder de vista los intereses."
+      },
+      {
+        "icon": "PiggyBank",
+        "title": "Metas de ahorro",
+        "description": "Define objetivos y observa el avance real de cada bolsillo de ahorro."
+      },
+      {
+        "icon": "TrendingUp",
+        "title": "Inversiones",
+        "description": "Sigue tu portafolio y su rentabilidad con valores exactos, no aproximados."
+      },
+      {
+        "icon": "HandCoins",
+        "title": "Préstamos",
+        "description": "Controla cuotas y amortización, con el capital y los intereses separados."
+      },
+      {
+        "icon": "ShoppingBasket",
+        "title": "Gastos variables",
+        "description": "Agrupa el gasto cotidiano por categoría y descubre a dónde se va tu dinero."
+      },
+      {
+        "icon": "BarChart3",
+        "title": "Gastos fijos",
+        "description": "Programa los pagos recurrentes y anticipa tus compromisos de cada mes."
+      }
+    ]
+  },
+  "benefits": {
+    "eyebrow": "Por qué FinanceTrackerPro",
+    "title": "Ingeniería financiera que no deja los números al azar",
+    "subtitle": "Cada decisión de diseño está pensada para que tu información sea exacta, trazable y difícil de corromper.",
+    "items": [
+      {
+        "icon": "Calculator",
+        "title": "Exactitud sin errores de redondeo",
+        "description": "Los montos se guardan como centavos enteros y se calculan con Decimal.js y redondeo bancario (half-even). Nada de flotantes."
+      },
+      {
+        "icon": "FileCheck",
+        "title": "El historial es la fuente de verdad",
+        "description": "El saldo se reconcilia desde el historial de transacciones. Si algo no cuadra, la trazabilidad lo revela."
+      },
+      {
+        "icon": "Coins",
+        "title": "Multi-divisa con trazabilidad",
+        "description": "Cada operación conserva su monto original y la tasa de cambio aplicada, con códigos ISO 4217."
+      },
+      {
+        "icon": "Timer",
+        "title": "Sin cargos duplicados",
+        "description": "Las operaciones usan claves de idempotencia: reintentar nunca crea un movimiento repetido."
+      },
+      {
+        "icon": "ScrollText",
+        "title": "Borrado lógico y audit trail",
+        "description": "Los registros financieros no se destruyen: se desactivan y conservan quién, cuándo y desde dónde se modificaron."
+      },
+      {
+        "icon": "ShieldCheck",
+        "title": "Validación y seguridad",
+        "description": "Validación server-side con Zod, contraseñas con hash Argon2id, cookies httpOnly y límites de intentos."
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "Cómo empezar",
+    "title": "Empieza a registrar en tres pasos",
+    "subtitle": "Sin configuraciones complejas: crea tu cuenta y empieza a ordenar tus finanzas el mismo día.",
+    "items": [
+      {
+        "title": "Crea tu cuenta",
+        "description": "Regístrate en minutos y accede a tu espacio privado. No necesitas tarjeta."
+      },
+      {
+        "title": "Añade tus cuentas",
+        "description": "Da de alta tus bancos, efectivo y bolsillos con su divisa correspondiente."
+      },
+      {
+        "title": "Registra y crece",
+        "description": "Anota movimientos, fija metas y observa tu patrimonio crecer con datos exactos."
+      }
+    ]
+  },
+  "security": {
+    "eyebrow": "Seguridad y confianza",
+    "title": "Construido con mentalidad Zero Trust",
+    "description": "La seguridad no se añade al final: se diseña desde la primera línea. Toda entrada se valida y se autoriza en el servidor, y cada operación sensible deja rastro.",
+    "controls": [
+      {
+        "icon": "KeyRound",
+        "title": "Contraseñas con hash Argon2id",
+        "description": "Las credenciales nunca se almacenan en texto plano ni se comparan de forma insegura."
+      },
+      {
+        "icon": "Lock",
+        "title": "Cookies de sesión httpOnly",
+        "description": "La sesión viaja en cookies no accesibles desde JavaScript del navegador."
+      },
+      {
+        "icon": "Server",
+        "title": "Validación server-side",
+        "description": "Toda entrada se revalida y autoriza en el servidor, no solo en el navegador."
+      },
+      {
+        "icon": "Timer",
+        "title": "Límite de intentos",
+        "description": "Los puntos de acceso sensibles están protegidos frente a fuerza bruta y abuso."
+      }
+    ],
+    "note": "FinanceTrackerPro no custodia tu dinero: es la herramienta donde registras y entiendes tus finanzas. La autenticación multifactor se contempla como evolución del sistema de acceso."
+  },
+  "faq": {
+    "eyebrow": "Preguntas frecuentes",
+    "title": "Resolvemos las dudas más comunes",
+    "subtitle": "Si te queda alguna pregunta, crea tu cuenta y pruébalo sin compromiso.",
+    "items": [
+      {
+        "question": "¿Es gratis?",
+        "answer": "Puedes crear tu cuenta y empezar a registrar tus finanzas sin coste. El producto está pensado para usarse desde el primer minuto."
+      },
+      {
+        "question": "¿Mis datos están seguros?",
+        "answer": "Las contraseñas se protegen con Argon2id, la sesión usa cookies httpOnly y toda validación se repite en el servidor. Los registros financieros se conservan con borrado lógico y rastro de auditoría."
+      },
+      {
+        "question": "¿Soporta varias divisas?",
+        "answer": "Sí. Trabajamos con códigos ISO 4217 y conservamos el monto original y la tasa de cambio de cada operación para que puedas auditar cualquier conversión."
+      },
+      {
+        "question": "¿Puedo usarlo en el móvil?",
+        "answer": "Sí. La interfaz es responsive y está diseñada para funcionar con comodidad desde el teléfono, con objetivos táctiles y navegación adaptada."
+      },
+      {
+        "question": "¿Puedo controlar gastos fijos y variables?",
+        "answer": "Sí. El sistema separa los gastos recurrentes de los variables y los agrupa por categoría para que veas exactamente en qué se va tu dinero."
+      },
+      {
+        "question": "¿Qué pasa si me equivoco al registrar algo?",
+        "answer": "Los movimientos se corrigen sin destruir el historial: el borrado es lógico y cada cambio queda registrado con su rastro de auditoría."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Toma el control exacto de tus finanzas",
+    "description": "Crea tu cuenta gratis y comprueba cómo se siente trabajar con números que cuadran.",
+    "primary": "Crear cuenta gratis",
+    "secondary": "Iniciar sesión"
+  },
+  "footer": {
+    "tagline": "Gestión financiera personal con integridad de grado bancario.",
+    "product": "Producto",
+    "account": "Cuenta",
+    "rights": "Todos los derechos reservados."
+  }
+}

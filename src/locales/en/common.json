@@ -1,0 +1,48 @@
+{
+  "buttons": {
+    "next": "Next",
+    "previous": "Previous",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "submit": "Submit",
+    "reset": "Reset"
+  },
+  "language": {
+    "select": "Select language",
+    "spanish": "Español",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "navigation": {
+    "logout": "Sign Out",
+    "loggingOut": "Signing out...",
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "accounts": "Accounts",
+    "savings": "Savings",
+    "investments": "Investments",
+    "fixedExpenses": "Fixed Expenses",
+    "variableExpenses": "Variable Expenses",
+    "loans": "Loans",
+    "creditCards": "Credit Cards",
+    "settings": "Settings",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "dashboardDesc": "Financial overview",
+    "transactionsDesc": "Transaction history",
+    "accountsDesc": "Account management",
+    "savingsDesc": "Savings goals",
+    "investmentsDesc": "Investment portfolio",
+    "fixedExpensesDesc": "Recurring expenses",
+    "variableExpensesDesc": "Expenses by category",
+    "loansDesc": "Loan management",
+    "creditCardsDesc": "Credit card management",
+    "settingsDesc": "System preferences"
+  }
+}

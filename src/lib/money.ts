@@ -8,12 +8,22 @@
  */
 
 import { Decimal } from 'decimal.js';
+import { log } from '@/lib/logger';
 
 // Configure Decimal.js globally
 Decimal.set({
   precision: 20,
   rounding: Decimal.ROUND_HALF_EVEN, // Banker's rounding (IEEE 754)
 });
+
+/**
+ * Convert a Prisma BIGINT monetary field to a JS number.
+ * Safe because every valid amount is bounded by MAX_SAFE_CENTS
+ * (9_999_999_999_999), well below Number.MAX_SAFE_INTEGER.
+ */
+export function bigintToNumber(v: bigint | null | undefined): number {
+  return v == null ? 0 : Number(v);
+}
 
 /**
  * Add two amounts in cents
@@ -85,19 +95,38 @@ export function decimalToCents(amount: number | Decimal): number {
  * @param rateEA Effective Annual Rate (e.g., 12.5 for 12.5%)
  * @param periods Number of compounding periods
  * @returns Final amount in cents
+ *
+ * All arithmetic is delegated to Decimal.js (Rule 1); no native float math is
+ * performed. Inputs are validated so callers fail fast instead of silently
+ * producing a financially wrong result.
  */
 export function compoundInterest(
   principalCents: number,
   rateEA: number | Decimal,
   periods: number
 ): number {
+  if (new Decimal(principalCents).isNegative()) {
+    throw new Error(`principalCents must not be negative, got ${principalCents}`);
+  }
+
+  if (!new Decimal(periods).isInteger() || new Decimal(periods).isNegative()) {
+    throw new Error(`periods must be a non-negative integer, got ${periods}`);
+  }
+
+  // Decimal exponent (periods validated as a non-negative integer above).
   const rate = new Decimal(rateEA).dividedBy(100);
-  const multiplier = rate.plus(1).pow(periods);
+  const multiplier = rate.plus(1).pow(new Decimal(periods));
   return multiplyCents(principalCents, multiplier);
 }
 
 /**
  * Calculate monthly payment for loan (amortization)
+ *
+ * The input rate is an EFFECTIVE ANNUAL rate (E.A.), so it CANNOT be divided
+ * naively by 12. The equivalent periodic monthly rate is:
+ *
+ *   i = (1 + EA/100)^(1/12) - 1
+ *
  * @param principalCents Loan principal in cents
  * @param rateEA Effective Annual Rate (e.g., 12.5 for 12.5%)
  * @param termMonths Number of months
@@ -108,7 +137,13 @@ export function calculateMonthlyPayment(
   rateEA: number | Decimal,
   termMonths: number
 ): number {
-  const monthlyRate = new Decimal(rateEA).dividedBy(12).dividedBy(100);
+  if (!new Decimal(termMonths).isInteger() || termMonths <= 0) {
+    throw new Error(`termMonths must be a positive integer, got ${termMonths}`);
+  }
+
+  // Convert E.A. → equivalent periodic monthly rate (Rule 1, Decimal.js).
+  const annualRate = new Decimal(rateEA).dividedBy(100);
+  const monthlyRate = annualRate.plus(1).pow(new Decimal(1).dividedBy(12)).minus(1);
 
   if (monthlyRate.isZero()) {
     // No interest: simple division
@@ -127,7 +162,7 @@ export function calculateMonthlyPayment(
  * Format money for display with locale support
  * @param cents Amount in cents
  * @param currency ISO 4217 currency code
- * @param locale Locale string (e.g., 'es-CO', 'en-US', 'de-DE')
+ * @param locale Locale string (e.g., 'es-CO', 'en-US')
  * @returns Formatted currency string
  */
 export function formatMoney(cents: number, currency: string, locale: string = 'es-CO'): string {
@@ -142,6 +177,7 @@ export function formatMoney(cents: number, currency: string, locale: string = 'e
     }).format(amount);
   } catch (error) {
     // Fallback for invalid locale/currency
+    log.error({ error, locale, currency }, 'Failed to format money, using fallback');
     return `${currency} ${amount.toFixed(2)}`;
   }
 }
@@ -153,11 +189,11 @@ export function formatMoney(cents: number, currency: string, locale: string = 'e
  */
 export function parseMoney(moneyString: string): number | null {
   // Remove currency symbols, spaces, and thousand separators
-  const cleaned = moneyString.replace(/[^\d.,-]/g, '').replace(/,/g, '');
+  const cleaned = moneyString.replaceAll(/[^\d.,-]/g, '').replaceAll(',', '');
 
-  const parsed = parseFloat(cleaned);
+  const parsed = Number.parseFloat(cleaned);
 
-  if (isNaN(parsed)) {
+  if (Number.isNaN(parsed)) {
     return null;
   }
 

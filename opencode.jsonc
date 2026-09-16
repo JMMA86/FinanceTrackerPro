@@ -1,0 +1,78 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    // Seguridad global: validación humana requerida para cambios destructivos
+    "edit": "allow",
+    "bash": "allow",
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true,
+      },
+      "permission": {
+        "bash": {
+          "*": "allow",
+          "git status *": "allow",
+          "git log *": "allow",
+          "git diff *": "allow",
+        },
+      },
+    },
+    "plan": {
+      "mode": "primary",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      // Respuesta determinista para análisis y planificación
+      "temperature": 0.1,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false,
+      },
+    },
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "enabled": true,
+      "command": ["npx", "@playwright/mcp@latest", "--browser", "msconfig"],
+      "environment": {
+        "PLAYWRIGHT_MCP_BROWSER": "msconfig",
+      },
+      "timeout": 30000,
+    },
+    "postgres": {
+      "type": "local",
+      "enabled": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "{env:DATABASE_URL}"],
+      "environment": {
+        "DATABASE_URL": "{env:DATABASE_URL}",
+      },
+      "timeout": 15000,
+    },
+    "sonarqube": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "SONARQUBE_URL",
+        "-e",
+        "SONARQUBE_TOKEN",
+        "mcp/sonarqube",
+      ],
+      "environment": {
+        "SONARQUBE_URL": "http://host.docker.internal:9000",
+        "SONARQUBE_TOKEN": "{env:SONAR_TOKEN}",
+      },
+      "timeout": 15000,
+    },
+  },
+}

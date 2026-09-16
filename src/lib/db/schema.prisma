@@ -15,11 +15,9 @@ datasource db {
 // ============================================================================
 
 enum Currency {
+  COP // Colombian Peso
   USD // US Dollar
   EUR // Euro
-  GBP // British Pound
-  COP // Colombian Peso
-  MXN // Mexican Peso
 }
 
 enum Language {
@@ -35,10 +33,24 @@ enum Theme {
 }
 
 enum AccountType {
-  SAVINGS       // Cuenta de Ahorros
-  INVESTMENT    // Cuenta de Inversión
-  CREDIT_CARD   // Tarjeta de Crédito
-  POCKET        // Bolsillo (sub-account)
+  CHECKING      // Cuenta Corriente bancaria
+  CASH          // Efectivo en billetera
+  SAVINGS       // Cuenta de Ahorros bancaria
+  POCKET        // Bolsillo (sub-cuenta)
+  INVESTMENT    // Reservado — sección Inversiones
+  CREDIT_CARD   // Reservado — sección Tarjetas
+}
+
+enum AuthAttemptType {
+  LOGIN
+  REGISTER
+}
+
+enum CardNetwork {
+  NONE
+  VISA
+  MASTERCARD
+  AMEX
 }
 
 enum TransactionType {
@@ -47,7 +59,8 @@ enum TransactionType {
   TRANSFER_OUT  // Transferencia saliente (partida doble)
   TRANSFER_IN   // Transferencia entrante (partida doble)
   INVESTMENT    // Inversión
-  LOAN_PAYMENT  // Pago de préstamo
+  LOAN_PAYMENT  // Pago de préstamo (cuota de préstamo PAYABLE)
+  LOAN_RECEIPT  // Recibimiento de cuota de préstamo (préstamo RECEIVABLE)
   CREDIT_PAYMENT // Pago de tarjeta
 }
 
@@ -81,6 +94,118 @@ enum LoanType {
 }
 
 // ============================================================================
+// LOAN MODULE ENUMS (v2)
+// ============================================================================
+
+// A loan can be money the user owes (PAYABLE) or money the user lent (RECEIVABLE)
+enum LoanDirection {
+  RECEIVABLE
+  PAYABLE
+}
+
+enum LoanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DEFAULTED
+}
+
+// Interpretation of `interestRateValue`
+enum LoanRateType {
+  EA       // Efectiva Anual (%)
+  NAMV     // Nominal Anual Mes Vencido (%)
+  PERIODIC // Tasa periódica del frequency (%)
+  DAILY    // Tasa diaria (%)
+}
+
+enum LoanInterestMode {
+  COMPOUND
+  SIMPLE
+}
+
+enum LoanDayCountBasis {
+  ACTUAL_365
+  ACTUAL_360
+  THIRTY_360
+}
+
+enum LoanInterestAccrual {
+  PERIODIC
+  DAILY
+}
+
+enum LoanAmortizationType {
+  FRENCH
+  GERMAN
+  AMERICAN
+  CUSTOM
+}
+
+enum LoanPaymentFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum LoanInstallmentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum LoanAdjustmentType {
+  EXTRA_DISBURSEMENT
+  EXTRA_PAYMENT
+  RATE_CHANGE
+  RESCHEDULE
+  CUSTOM_INSTALLMENT
+  INTEREST_ONLY_PERIOD
+}
+
+enum InvestmentTransactionType {
+  DEPOSIT       // Depósito desde cuenta bancaria
+  WITHDRAWAL    // Retiro hacia cuenta bancaria
+  BUY           // Compra de activo
+  SELL          // Venta de activo
+  DIVIDEND      // Dividendo recibido
+}
+
+enum SavingsGoalType {
+  ANNUAL       // Meta anual
+  SHORT_TERM   // Meta a corto plazo
+  EMERGENCY    // Fondo de emergencia
+  CUSTOM       // Meta personalizada
+}
+
+enum SavingsGoalStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ApiAction {
+  TRANSACTION_CREATE
+  TRANSACTION_UPDATE
+  TRANSACTION_DELETE
+  TRANSFER_CREATE
+  TRANSFER_REVERSE
+  INVESTMENT_DEPOSIT
+  INVESTMENT_BUY
+  INVESTMENT_SELL
+  SAVINGS_CONTRIBUTE
+  CREDIT_CARD_PAYMENT
+  FIXED_EXPENSE_PAY
+  LOAN_CREATE
+  LOAN_UPDATE
+  LOAN_DELETE
+  LOAN_PAYMENT
+  LOAN_RECEIVE
+  LOAN_ADJUSTMENT
+}
+
+// ============================================================================
 // USER & SECURITY
 // ============================================================================
 
@@ -91,17 +216,25 @@ model User {
   passwordHash  String?  // Null if using only biometric auth
 
   // User Configuration
-  baseSalaryCents Int?         // Salario mensual en centavos
+  baseSalaryCents BigInt?        // Salario mensual en centavos
   baseCurrency    Currency     @default(COP)
   language        Language     @default(SPANISH)
   theme           Theme        @default(SYSTEM)
+
+  // Onboarding (first-run walkthrough)
+  onboardingCompletedAt DateTime?
+  onboardingStep        Int       @default(0)
 
   // Relations
   accounts          Account[]
   transactions      Transaction[]
   fixedExpenses     FixedExpense[]
   loans             Loan[]
+  savingsGoals      SavingsGoal[]
+  categories        Category[]
+  apiAttempts       ApiAttempt[]
   biometricCredentials BiometricCredential[]
+  variableExpenses  VariableExpense[]
 
   // Audit fields
   isActive          Boolean   @default(true)
@@ -153,14 +286,14 @@ model Account {
 
   // CACHE - Reconcile from transaction history (Rule 13)
   // For POCKET type: independent balance (sum only its own transactions)
-  balanceCents      Int         @default(0)
+  balanceCents      BigInt      @default(0)
   lastReconciled    DateTime?   // Last reconciliation timestamp
 
   // Interest rate for savings/investment accounts (E.A. - Efectiva Anual)
   interestRateEA    Decimal?    @db.Decimal(20, 8) // High precision
 
   // Credit Card specific
-  creditLimitCents  Int?        // Límite de crédito
+  creditLimitCents  BigInt?     // Límite de crédito
   cutoffDay         Int?        // Día de corte (1-31)
   paymentDueDay     Int?        // Día de pago (1-31)
 
@@ -170,8 +303,21 @@ model Account {
   parentAccount     Account?    @relation("AccountPockets", fields: [parentAccountId], references: [id], onDelete: Restrict)
   pockets           Account[]   @relation("AccountPockets")
 
+  // Investment holdings
+  assetHoldings     InvestmentAssetHolding[]
+
   // Relations
   transactions      Transaction[]
+  savingsGoals      SavingsGoal[]
+  savingsContributions SavingsContribution[]
+
+  // Card personalization
+  cardColor         String?     // Hex color or preset theme key
+  cardImageUrl      String?     // Custom background image URL
+  cardNetwork       CardNetwork @default(NONE)
+
+  // Idempotency (Rule 12)
+  idempotencyKey    String?     @unique
 
   // Audit fields (Rule 4)
   isActive          Boolean     @default(true)
@@ -207,11 +353,11 @@ model Transaction {
   date                DateTime          @default(now())
 
   // Money storage in cents - Final currency (Rule 1)
-  amountCents         Int
+  amountCents         BigInt
   currency            Currency
 
   // Currency conversion tracking (Rule 11)
-  originalAmountCents Int?              // Amount before conversion
+  originalAmountCents BigInt?             // Amount before conversion
   originalCurrency    Currency?         // Source currency
   exchangeRate        Decimal?          @db.Decimal(20, 8) // High precision rate
 
@@ -226,13 +372,28 @@ model Transaction {
   categoryId          String?
   category            Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
+  // Monitored variable expense definition link
+  variableExpenseId   String?
+  variableExpense     VariableExpense? @relation(fields: [variableExpenseId], references: [id], onDelete: SetNull)
+
   // Fixed expense payment link
   fixedExpensePaymentId String?         @unique
   fixedExpensePayment   FixedExpensePayment? @relation(fields: [fixedExpensePaymentId], references: [id], onDelete: SetNull)
 
-  // Loan installment payment link
-  loanInstallmentId   String?           @unique
+  // Loan installment payment link. Not unique: N payments/receipts can be
+  // linked to the same installment (partial payments, adjustments).
+  loanInstallmentId   String?
   loanInstallment     LoanInstallment?  @relation(fields: [loanInstallmentId], references: [id], onDelete: SetNull)
+
+  // Savings contribution link
+  savingsContributions SavingsContribution[]
+
+  // Loan module back-relations (payments and adjustments linked to transactions)
+  loanInstallmentPayments LoanInstallmentPayment[]
+  loanAdjustments         LoanAdjustment[]
+
+  // Opening balance flag — marks the initial balance transaction created on account creation
+  openingBalance      Boolean           @default(false)
 
   // Extended audit (Rule 14)
   ipAddress           String?
@@ -254,6 +415,9 @@ model Transaction {
   @@index([idempotencyKey])
   @@index([categoryId])
   @@index([transferId]) // Query paired transactions
+  @@index([userId, type, date]) // Variable expenses: EXPENSE aggregation by user/month
+  @@index([variableExpenseId])
+  @@index([loanInstallmentId]) // Loan installment payment/receipt lookups
 }
 
 // ============================================================================
@@ -266,13 +430,18 @@ model FixedExpense {
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name            String                  // e.g., "Arriendo", "Netflix"
-  amountCents     Int                     // Expected amount
+  description     String?                 // Optional description
+  amountCents     BigInt                  // Expected amount
   currency        Currency                @default(COP)
   frequency       FixedExpenseFrequency
   dayOfPayment    Int?                    // Day of month (1-31) or week (1-7)
 
   startDate       DateTime
   endDate         DateTime?               // Null = indefinite
+
+  // UI
+  color           String?                 // Hex color for card
+  icon            String?                 // Icon name for display
 
   // Relations
   payments        FixedExpensePayment[]
@@ -284,6 +453,9 @@ model FixedExpense {
   deletedAt       DateTime?
   createdBy       String?
   lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
 
   @@index([userId])
   @@index([isActive])
@@ -294,14 +466,20 @@ model FixedExpense {
 model FixedExpensePayment {
   id              String        @id @default(cuid())
   fixedExpenseId  String
-  fixedExpense    FixedExpense  @relation(fields: [fixedExpenseId], references: [id], onDelete: Cascade)
+  // ON DELETE RESTRICT: a template must never be physically deleted (soft delete
+  // only, Rule 6); restricting the FK guarantees historical payments survive.
+  fixedExpense    FixedExpense  @relation(fields: [fixedExpenseId], references: [id], onDelete: Restrict)
 
   dueDate         DateTime      // Expected payment date
   paidDate        DateTime?     // Actual payment date (null = unpaid)
 
-  expectedAmountCents Int
-  paidAmountCents     Int?
+  expectedAmountCents BigInt
+  paidAmountCents     BigInt?
   currency            Currency
+  notes               String?
+
+  // Idempotency (Rule 12): one payment per due date, keyed by UUID v4
+  idempotencyKey  String?       @unique
 
   // Link to actual transaction
   transaction     Transaction?
@@ -313,7 +491,12 @@ model FixedExpensePayment {
   deletedAt       DateTime?
   createdBy       String?
   lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
 
+  // One materialized payment per (template, due date) — makes generation idempotent
+  @@unique([fixedExpenseId, dueDate])
   @@index([fixedExpenseId])
   @@index([dueDate])
   @@index([isActive])
@@ -330,17 +513,70 @@ model Category {
   color           String?                   // Hex color for UI
   icon            String?                   // Icon identifier
 
+  // Ownership: null = system category (shared), userId = user-defined
+  userId          String?
+  user            User?                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Relations
   transactions    Transaction[]
+  variableExpenses VariableExpense[]
 
   // Audit (Rule 4)
   isActive        Boolean                   @default(true)
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
   deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
 
   @@index([isActive])
   @@index([type])
+  @@index([userId, isActive])
+}
+
+// ============================================================================
+// VARIABLE EXPENSE DEFINITIONS (Monitored variable expenses)
+// A user-defined, monitored bucket ("Fútbol", "Salidas Novia", ...). Transactions
+// are linked to it on registration; the module reports count/amount per
+// definition, month over month.
+// ============================================================================
+
+model VariableExpense {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                  String
+  description           String?
+  color                 String?
+  icon                  String?
+
+  // Configured category inherited by transactions registered for this definition
+  categoryId            String?
+  category              Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Optional monitoring targets
+  expectedTimesPerMonth Int?      // e.g. 4
+  expectedAmountCents   BigInt?   // e.g. 4000000 (=$40.000 COP)
+  currency              Currency  @default(COP)
+
+  idempotencyKey        String?   @unique // for idempotent seeds
+
+  transactions          Transaction[]
+
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  createdBy             String?
+  lastModifiedBy        String?
+  ipAddress             String?
+  userAgent             String?
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([userId, isActive])
+  @@index([categoryId])
 }
 
 // ============================================================================
@@ -353,24 +589,51 @@ model Loan {
   user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name                String            // e.g., "Préstamo Bancolombia"
-  type                LoanType
+  type                LoanType          // Propósito del préstamo (personal, hipoteca, ...)
+  direction           LoanDirection     // RECEIVABLE = me deben, PAYABLE = debo
+  status              LoanStatus        @default(ACTIVE)
+
+  counterpartyContact String?
+  notes               String?
 
   // Loan details
-  principalCents      Int               // Monto original del préstamo
+  principalCents      BigInt              // Monto original del préstamo
   currency            Currency          @default(COP)
-  interestRateEA      Decimal           @db.Decimal(20, 8) // High precision E.A.
-  termMonths          Int               // Plazo en meses
+  // Valor de la tasa según `rateType` (columna histórica "interestRateEA")
+  interestRateValue   Decimal           @db.Decimal(20, 8) @map("interestRateEA")
+  rateType            LoanRateType      @default(EA)
+  interestMode        LoanInterestMode  @default(COMPOUND)
+  interestAccrual     LoanInterestAccrual @default(PERIODIC)
+  dayCountBasis       LoanDayCountBasis @default(ACTUAL_365)
+  amortizationType    LoanAmortizationType @default(FRENCH)
+  paymentFrequency    LoanPaymentFrequency @default(MONTHLY)
+  termCount           Int               @map("termMonths") // Número de cuotas/períodos
+  installmentAmountCents BigInt?        // Cuota fija (override opcional para FRENCH/CUSTOM)
+  interestOnlyInstallments Int          @default(0) // Primeras N cuotas solo interés
+
+  // Derived totals (computed from the amortization schedule)
+  totalInterestCents  BigInt            @default(0)
+  totalPayableCents   BigInt            @default(0)
+  effectiveYieldPct   Decimal?          @db.Decimal(20, 8) // Rendimiento simple (%)
 
   // Dates
   startDate           DateTime
   firstPaymentDate    DateTime
 
   // Current state (computed from installments)
-  balanceCents        Int               @default(0) // CACHE - remaining balance
+  balanceCents        BigInt              @default(0) // CACHE - remaining balance
   lastReconciled      DateTime?
+
+  // UI
+  color               String?
+  icon                String?
+
+  // Idempotency (Rule 12)
+  idempotencyKey      String?           @unique
 
   // Relations
   installments        LoanInstallment[]
+  adjustments         LoanAdjustment[]
 
   // Audit (Rule 4)
   isActive            Boolean           @default(true)
@@ -379,9 +642,14 @@ model Loan {
   deletedAt           DateTime?
   createdBy           String?
   lastModifiedBy      String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress           String?
+  userAgent           String?
 
   @@index([userId])
   @@index([type])
+  @@index([direction])
+  @@index([status])
   @@index([isActive])
 }
 
@@ -389,24 +657,41 @@ model Loan {
 model LoanInstallment {
   id                  String       @id @default(cuid())
   loanId              String
-  loan                Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  // ON DELETE RESTRICT: a loan must never be physically deleted (soft delete
+  // only, Rule 6); restricting the FK guarantees the schedule survives.
+  loan                Loan         @relation(fields: [loanId], references: [id], onDelete: Restrict)
 
   installmentNumber   Int          // 1, 2, 3, ...
   dueDate             DateTime
 
   // Calculated amounts (at loan creation) - High precision
-  principalCents      Int          // Capital
-  interestCents       Int          // Intereses
-  totalCents          Int          // Total cuota
-  balanceCents        Int          // Saldo restante después de esta cuota
+  principalCents      BigInt          // Capital
+  interestCents       BigInt          // Intereses
+  totalCents          BigInt          // Total cuota
+  balanceCents        BigInt          // Saldo restante después de esta cuota
   currency            Currency
+
+  // Schedule metadata
+  isCustomTotal       Boolean      @default(false)
+  isInterestOnly      Boolean      @default(false)
+  status              LoanInstallmentStatus @default(PENDING)
+  notes               String?
+  source              String?      // Origen de la cuota (SCHEDULE, RESCHEDULE, ADJUSTMENT)
 
   // Payment tracking
   paidDate            DateTime?    // Fecha de pago real
-  paidAmountCents     Int?         // Monto pagado
+  paidAmountCents     BigInt?      // Monto pagado (total)
+  paidPrincipalCents  BigInt       @default(0)
+  paidInterestCents   BigInt       @default(0)
 
-  // Link to actual transaction
-  transaction         Transaction?
+  // Idempotency (Rule 12)
+  idempotencyKey      String?      @unique
+
+  // Link to the legacy transactions (N payments/receipts per installment)
+  transactions        Transaction[]
+
+  // Payments/Receipts applied to this installment
+  payments            LoanInstallmentPayment[]
 
   // Audit (Rule 4)
   isActive            Boolean      @default(true)
@@ -415,9 +700,256 @@ model LoanInstallment {
   deletedAt           DateTime?
   createdBy           String?
   lastModifiedBy      String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress           String?
+  userAgent           String?
 
   @@unique([loanId, installmentNumber])
   @@index([loanId])
   @@index([dueDate])
+  @@index([status])
   @@index([isActive])
+}
+
+// A single payment (PAYABLE) or receipt (RECEIVABLE) applied to an installment.
+// N payments can be applied to one installment (partial payments).
+model LoanInstallmentPayment {
+  id              String          @id @default(cuid())
+  installmentId   String
+  installment     LoanInstallment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+
+  // Optional link to the money movement transaction
+  transactionId   String?         @unique
+  transaction     Transaction?    @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  amountCents     BigInt          // Total aplicado
+  principalCents  BigInt          // Porción a capital
+  interestCents   BigInt          // Porción a intereses
+  currency        Currency
+  paidAt          DateTime        @default(now())
+  notes           String?
+
+  // Idempotency (Rule 12)
+  idempotencyKey  String          @unique
+
+  // Audit (Rule 4)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
+
+  @@index([installmentId])
+  @@index([transactionId])
+  @@index([paidAt])
+  @@index([isActive])
+}
+
+// Adjustments applied to a loan after creation (extra disbursement, extra
+// payment, rate change, reschedule, custom installment, interest-only period).
+model LoanAdjustment {
+  id              String              @id @default(cuid())
+  loanId          String
+  loan            Loan                @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  type            LoanAdjustmentType
+  effectiveDate   DateTime
+  amountCents     BigInt?
+  newRateValue    Decimal?            @db.Decimal(20, 8)
+  newTermCount    Int?
+  installmentNumber Int?
+  notes           String?
+
+  // Optional link to the money movement transaction
+  transactionId   String?             @unique
+  transaction     Transaction?        @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  // Idempotency (Rule 12)
+  idempotencyKey  String              @unique
+
+  // Audit (Rule 4)
+  isActive        Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress       String?
+  userAgent       String?
+
+  @@index([loanId])
+  @@index([effectiveDate])
+  @@index([type])
+  @@index([isActive])
+}
+
+// ============================================================================
+// INVESTMENT ASSET HOLDINGS (Stock tracking per investment account)
+// ============================================================================
+
+model InvestmentAssetHolding {
+  id                  String      @id @default(cuid())
+  accountId           String
+  account             Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  // Asset identification (Rule 11 — trazabilidad)
+  symbol              String      // e.g., "AAPL", "TSLA", "MSFT"
+  name                String      // e.g., "Apple Inc."
+  quantity            Decimal     @db.Decimal(20, 8) // Número de acciones (permite fraccionales)
+  avgCostCents        BigInt      // Costo promedio de compra en centavos
+  currency            Currency    // Moneda del activo (USD, EUR)
+  currentPriceCents   BigInt      @default(0) // Último precio de mercado en centavos
+  lastPriceUpdate     DateTime?   // Última actualización de precio
+
+  // Trazabilidad de moneda original (Rule 11)
+  originalCurrency    Currency?
+  originalCostCents   BigInt?
+  exchangeRate        Decimal?    @db.Decimal(20, 8)
+
+  // Audit (Rule 4)
+  isActive            Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  deletedAt           DateTime?
+  createdBy           String?
+  lastModifiedBy      String?
+
+  @@unique([accountId, symbol])  // No se puede tener el mismo símbolo 2 veces en la misma cuenta
+  @@index([accountId])
+  @@index([symbol])
+  @@index([isActive])
+}
+
+// ============================================================================
+// SAVINGS GOALS (Metas de Ahorro)
+// ============================================================================
+
+model SavingsGoal {
+  id                      String            @id @default(cuid())
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                    String            // "Vacaciones 2026", "Fondo de Emergencia"
+  description             String?           // Descripción opcional
+  type                    SavingsGoalType   @default(CUSTOM)
+
+  // Target
+  targetAmountCents       BigInt              // Meta en centavos
+  currency                Currency            @default(COP)
+  currentAmountCents      BigInt              @default(0) // CACHE - reconcile from contributions
+
+  // Timeline
+  deadline                DateTime?           // null = sin fecha límite
+  monthlyContributionCents BigInt?            // Contribución mensual planeada
+
+  // Linked savings account (optional)
+  linkedAccountId         String?
+  linkedAccount           Account?          @relation(fields: [linkedAccountId], references: [id], onDelete: SetNull)
+
+  // Progress
+  status                  SavingsGoalStatus @default(ACTIVE)
+  priority                Int               @default(0) // 0=normal, 1=high, 2=critical
+
+  // UI
+  color                   String?           // Hex color for card
+  icon                    String?           // Icon name for display
+
+  // Relations
+  contributions           SavingsContribution[]
+
+  // Idempotency
+  idempotencyKey          String?           @unique
+
+  // Audit (Rule 4)
+  isActive                Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  deletedAt               DateTime?
+  createdBy               String?
+  lastModifiedBy          String?
+  // Extended audit (Rule 14): last mutating request metadata
+  ipAddress               String?
+  userAgent               String?
+
+  @@index([userId])
+  @@index([status])
+  @@index([isActive])
+  @@index([deadline])
+}
+
+model SavingsContribution {
+  id                      String      @id @default(cuid())
+  goalId                  String
+  goal                    SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
+
+  amountCents             BigInt         // Monto contribuido en centavos
+  currency                Currency
+  date                    DateTime    @default(now())
+
+  // Source tracking
+  sourceAccountId         String?     // De qué cuenta bancaria salió
+  sourceAccount           Account?    @relation(fields: [sourceAccountId], references: [id], onDelete: SetNull)
+  transactionId           String?     // Link a Transaction si existe
+  transaction             Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  notes                   String?
+
+  // Idempotency
+  idempotencyKey          String?     @unique
+
+  // Audit
+  isActive                Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+  deletedAt               DateTime?
+  createdBy               String?
+  lastModifiedBy          String?
+  ipAddress               String?
+  userAgent               String?
+
+  @@index([goalId])
+  @@index([date])
+  @@index([isActive])
+  @@index([transactionId, isActive]) // Anti-join: exclude transactions linked to active savings contributions
+}
+
+// ============================================================================
+// LOGIN ATTEMPTS (Security audit & rate limiting)
+// ============================================================================
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  userId    String?  // null if email doesn't exist (anti-enumeration)
+  email     String   // normalized lowercase
+  ipAddress String
+  userAgent String?
+  success   Boolean
+  type      AuthAttemptType @default(LOGIN)
+  createdAt DateTime @default(now())
+
+  @@index([ipAddress, createdAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ============================================================================
+// API RATE LIMITING (Rule 10 — money actions)
+// ============================================================================
+
+model ApiAttempt {
+  id        String    @id @default(cuid())
+  userId    String    // Siempre autenticado en estas acciones
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    ApiAction
+  ipAddress String
+  success   Boolean   @default(false) // se marca true al completar con éxito
+  createdAt DateTime  @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([action, createdAt])
 }

@@ -1,0 +1,265 @@
+{
+  "meta": {
+    "title": "FinanceTrackerPro — Financial management with banking-grade integrity",
+    "description": "Track your accounts, transactions, savings, investments and debts with cent-level precision, server-side validation and full traceability. Start free."
+  },
+  "skipToContent": "Skip to content",
+  "nav": {
+    "features": "Modules",
+    "benefits": "Benefits",
+    "security": "Security",
+    "faq": "FAQ",
+    "login": "Sign in",
+    "register": "Create account",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "mainNavLabel": "Main navigation",
+    "productNavLabel": "Product navigation",
+    "accountNavLabel": "Account navigation",
+    "homeLabel": "FinanceTrackerPro — Home"
+  },
+  "hero": {
+    "badge": "Banking-grade financial integrity",
+    "titleLead": "Your finances,",
+    "titleHighlight": "accurate to the cent",
+    "subtitle": "FinanceTrackerPro brings accounts, transactions, transfers, savings, investments and debts into one dashboard. Every figure is computed with decimal precision and backed by an auditable record.",
+    "ctaPrimary": "Create free account",
+    "ctaSecondary": "Sign in",
+    "trustLabel": "Built for accuracy",
+    "trust": ["Decimal.js precision", "Atomic ACID transactions", "ISO 4217 multi-currency"],
+    "preview": {
+      "ariaLabel": "Preview of the FinanceTrackerPro dashboard with available balance, daily trend and your main accounts.",
+      "title": "Net worth summary",
+      "balanceLabel": "Available balance",
+      "balanceValue": "$52.480.536,35",
+      "trend": "+4.8% this month",
+      "chartLabel": "Flow over the last 8 days",
+      "accountsLabel": "Main accounts",
+      "accounts": [
+        {
+          "name": "Checking account",
+          "value": "$858.240,00",
+          "delta": "+2.1%",
+          "tone": "positive"
+        },
+        {
+          "name": "Savings pocket",
+          "value": "$35.359.120,35",
+          "delta": "+5.4%",
+          "tone": "positive"
+        },
+        {
+          "name": "Investments",
+          "value": "$11.120,00",
+          "delta": "+11.6%",
+          "tone": "positive"
+        }
+      ]
+    }
+  },
+  "stats": {
+    "title": "System integrity metrics",
+    "items": [
+      {
+        "value": "14",
+        "label": "Financial integrity rules"
+      },
+      {
+        "value": "20",
+        "label": "Decimal places of precision"
+      },
+      {
+        "value": "ISO 4217",
+        "label": "Traceable currencies"
+      },
+      {
+        "value": "100%",
+        "label": "Auditable transactions"
+      }
+    ]
+  },
+  "features": {
+    "eyebrow": "Modules",
+    "title": "All your money, in one place",
+    "subtitle": "From the control center to loan amortization, every module shares the same calculation engine and the same auditable record.",
+    "items": [
+      {
+        "icon": "LayoutDashboard",
+        "title": "Control center",
+        "description": "A dashboard with your balance, liquidity, net worth and critical alerts in real time."
+      },
+      {
+        "icon": "Wallet",
+        "title": "Accounts",
+        "description": "Organize banks, cash and pockets. Every movement stays linked to its account."
+      },
+      {
+        "icon": "ReceiptText",
+        "title": "Transactions & categories",
+        "description": "Record income and expenses with clear categories and browse your full history."
+      },
+      {
+        "icon": "ArrowLeftRight",
+        "title": "Atomic transfers",
+        "description": "Double-entry movements that either complete entirely or never apply at all."
+      },
+      {
+        "icon": "CreditCard",
+        "title": "Credit cards",
+        "description": "Check available credit, debt and payments without losing sight of interest."
+      },
+      {
+        "icon": "PiggyBank",
+        "title": "Savings goals",
+        "description": "Set targets and watch the real progress of every savings pocket."
+      },
+      {
+        "icon": "TrendingUp",
+        "title": "Investments",
+        "description": "Track your portfolio and its returns with exact values, not approximations."
+      },
+      {
+        "icon": "HandCoins",
+        "title": "Loans",
+        "description": "Manage installments and amortization with principal and interest kept separate."
+      },
+      {
+        "icon": "ShoppingBasket",
+        "title": "Variable expenses",
+        "description": "Group everyday spending by category and discover where your money goes."
+      },
+      {
+        "icon": "BarChart3",
+        "title": "Fixed expenses",
+        "description": "Schedule recurring payments and anticipate your monthly commitments."
+      }
+    ]
+  },
+  "benefits": {
+    "eyebrow": "Why FinanceTrackerPro",
+    "title": "Financial engineering that never leaves numbers to chance",
+    "subtitle": "Every design decision is meant to keep your information exact, traceable and hard to corrupt.",
+    "items": [
+      {
+        "icon": "Calculator",
+        "title": "Accuracy without rounding errors",
+        "description": "Amounts are stored as integer cents and computed with Decimal.js and banker's rounding (half-even). No floats."
+      },
+      {
+        "icon": "FileCheck",
+        "title": "History is the source of truth",
+        "description": "Balances are reconciled from transaction history. If something does not add up, traceability reveals it."
+      },
+      {
+        "icon": "Coins",
+        "title": "Traceable multi-currency",
+        "description": "Every operation keeps its original amount and the applied exchange rate, using ISO 4217 codes."
+      },
+      {
+        "icon": "Timer",
+        "title": "No duplicate charges",
+        "description": "Operations use idempotency keys: retrying never creates a repeated movement."
+      },
+      {
+        "icon": "ScrollText",
+        "title": "Soft deletes and audit trail",
+        "description": "Financial records are never destroyed: they are deactivated and keep who, when and where they were changed."
+      },
+      {
+        "icon": "ShieldCheck",
+        "title": "Validation and security",
+        "description": "Server-side validation with Zod, Argon2id password hashing, httpOnly cookies and attempt limits."
+      }
+    ]
+  },
+  "steps": {
+    "eyebrow": "How to start",
+    "title": "Start tracking in three steps",
+    "subtitle": "No complex setup: create your account and start organizing your finances the same day.",
+    "items": [
+      {
+        "title": "Create your account",
+        "description": "Sign up in minutes and access your private workspace. No card required."
+      },
+      {
+        "title": "Add your accounts",
+        "description": "Set up your banks, cash and pockets with their corresponding currency."
+      },
+      {
+        "title": "Record and grow",
+        "description": "Log movements, set goals and watch your net worth grow with exact data."
+      }
+    ]
+  },
+  "security": {
+    "eyebrow": "Security and trust",
+    "title": "Built with a Zero Trust mindset",
+    "description": "Security is not added at the end: it is designed from the first line. Every input is validated and authorized on the server, and every sensitive operation leaves a trail.",
+    "controls": [
+      {
+        "icon": "KeyRound",
+        "title": "Argon2id password hashing",
+        "description": "Credentials are never stored in plain text or compared insecurely."
+      },
+      {
+        "icon": "Lock",
+        "title": "httpOnly session cookies",
+        "description": "The session travels in cookies that are not accessible from browser JavaScript."
+      },
+      {
+        "icon": "Server",
+        "title": "Server-side validation",
+        "description": "Every input is revalidated and authorized on the server, not only in the browser."
+      },
+      {
+        "icon": "Timer",
+        "title": "Attempt limits",
+        "description": "Sensitive access points are protected against brute force and abuse."
+      }
+    ],
+    "note": "FinanceTrackerPro does not hold your money: it is the tool where you record and understand your finances. Multi-factor authentication is considered as a future evolution of the sign-in system."
+  },
+  "faq": {
+    "eyebrow": "Frequently asked questions",
+    "title": "Answers to the most common questions",
+    "subtitle": "If you still have a question, create your account and try it with no commitment.",
+    "items": [
+      {
+        "question": "Is it free?",
+        "answer": "You can create your account and start tracking your finances at no cost. The product is meant to be used from the very first minute."
+      },
+      {
+        "question": "Is my data safe?",
+        "answer": "Passwords are protected with Argon2id, the session uses httpOnly cookies and all validation is repeated on the server. Financial records are kept with soft deletes and an audit trail."
+      },
+      {
+        "question": "Does it support multiple currencies?",
+        "answer": "Yes. We work with ISO 4217 codes and keep each operation's original amount and exchange rate so you can audit any conversion."
+      },
+      {
+        "question": "Can I use it on my phone?",
+        "answer": "Yes. The interface is responsive and designed to work comfortably on a phone, with touch targets and adapted navigation."
+      },
+      {
+        "question": "Can I track fixed and variable expenses?",
+        "answer": "Yes. The system separates recurring expenses from variable ones and groups them by category so you can see exactly where your money goes."
+      },
+      {
+        "question": "What if I make a mistake when recording something?",
+        "answer": "Movements are corrected without destroying history: deletes are logical and every change keeps its audit trail."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Take exact control of your finances",
+    "description": "Create your free account and see what it feels like to work with numbers that add up.",
+    "primary": "Create free account",
+    "secondary": "Sign in"
+  },
+  "footer": {
+    "tagline": "Personal finance management with banking-grade integrity.",
+    "product": "Product",
+    "account": "Account",
+    "rights": "All rights reserved."
+  }
+}

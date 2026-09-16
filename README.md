@@ -1,278 +1,343 @@
 # FinanceTrackerPro
 
-Enterprise-grade financial management system with **ACID transactions**, **high-precision decimal calculations**, and **audit trail** for tracking banks, cash, loans, and investments.
+Enterprise-grade financial management system with **ACID transactions**, **high-precision decimal calculations**, and an **immutable audit trail** for multi-currency asset tracking.
 
-## Core Features
+![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-%23000000?logo=nextdotjs)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-%232D3748?logo=prisma)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-%2338B2AC?logo=tailwindcss)
+![SonarQube](https://img.shields.io/badge/SonarQube-Quality%20Gate-005A9C?logo=sonarqube)
+![Coverage](https://img.shields.io/badge/Coverage-%3E%3D70%25-green)
 
-### Financial Precision
+---
 
-- ✅ **Decimal.js precision** - Banker's rounding (ROUND_HALF_EVEN)
-- ✅ **Multi-currency support** - ISO 4217 codes with conversion tracking
-- ✅ **Exchange rate audit** - Preserves original amount + rate for every conversion
+## 🏗️ Core Architecture Principles
 
-### Banking-Grade Integrity
+To guarantee absolute financial integrity, FinanceTrackerPro adheres to strict banking-grade constraints:
 
-- ✅ **Idempotency** - Network retry protection via UUID keys
-- ✅ **Source of Truth** - Balance reconciliation from transaction history
-- ✅ **Atomic transfers** - Prisma transactions (ACID compliant)
+1. **Money as Integers:** All monetary values are processed and stored as **integer cents** (e.g., `$10.00` = `1000`) to eliminate IEEE 754 floating-point rounding errors.
+2. **High-Precision Calculations:** Complex math (conversions, interest) is handled via **Decimal.js** utilizing Banker's Rounding (`ROUND_HALF_EVEN`).
+3. **Single Source of Truth:** The transaction history is the **only** immutable source of truth. The `account.balanceCents` field acts strictly as a transaction-isolated cache optimized for read performance.
+4. **Double-Entry Accounting:** Internal transfers write symmetric `TRANSFER_OUT` (negative) and `TRANSFER_IN` (positive) entries wrapped in an atomic Prisma transaction (`$transaction`). Both share a unique `transferId`.
+5. **Soft Deletes Only:** Financial records are never physically purged. Deletions use the `deletedAt` timestamp to maintain historical audit continuity.
 
-### Security & Audit
+> See [`CLAUDE.md`](CLAUDE.md) for all 14 Financial Integrity Rules and Banking-Grade Integrity Pillars enforced across the codebase.
 
-- ✅ **Soft deletes** - Never lose financial data
-- ✅ **Extended audit** - IP address, user agent, timestamps
-- ✅ **Server-side validation** - Zero trust architecture
-- ✅ **80% test coverage** - Financial calculations tested
+---
 
-## Getting Started
+## ⚡ Quick Start
 
-### Prerequisites
+Get your local development environment up and running in under two minutes.
 
-- Node.js 20+
-- PostgreSQL 14+
+### 0. Prerequisites
 
-### Installation
+- **Node.js ≥ 20** (the CI runner uses 22)
+- **Docker Desktop** running (spins up PostgreSQL 16 + SonarQube containers)
+- **Java 17+** — required only for SonarQube static analysis (`npm run sonar`)
+- **Git** (Windows: works in PowerShell, git bash or WSL)
 
-Install dependencies:
+### 1. Clone & Install Dependencies
 
 ```bash
+git clone https://github.com/JMMA86/financetrackerpro.git
+cd financetrackerpro
 npm install
+npx playwright install
 ```
 
-Configure environment (`.env`):
+### 2. Configure Environment Variables
+
+Copy the pre-filled local Docker configurations:
+
+```bash
+# Linux / macOS / git bash
+cp .env.example .env          # Dev database (port 5432)
+cp .env.e2e.example .env.e2e  # E2E database (port 5433) — credentials pre-filled
+
+# Windows PowerShell
+Copy-Item .env.example .env
+Copy-Item .env.e2e.example .env.e2e
+```
+
+Fill in your credentials in `.env`:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/financetracker"
+POSTGRES_USER=<your_user>
+POSTGRES_PASSWORD=<your_password>
+POSTGRES_DB=<your_db_name>        # e.g. financetracker-postgres
+JWT_SECRET=<min_32_chars_secret>
 ```
 
-Setup database:
+> `.env.e2e` is pre-filled for the local Docker setup. Copy and use as-is.
+>
+> `.env.test` is **optional**: the integration test setup (`vitest.db-setup.ts`) falls back to the dedicated test container (`postgres:admin@localhost:5434/financetrackerpro_test`) when `TEST_DATABASE_URL` is not set.
+
+### 3. Spin Up Infrastructure & Initialize
 
 ```bash
-npm run db:push        # Dev: Quick schema sync
-npm run db:migrate     # Prod: Traceable migrations
-npm run db:generate    # Generate Prisma Client
+# Start all three Postgres containers (dev 5432, E2E 5433, test 5434)
+docker-compose -f docker-compose.postgres.yml up -d
+
+# Apply migrations to dev database (requires interactive terminal)
+npm run db:migrate
+
+# Generate Prisma Client
+npm run db:generate
+
+# Apply migrations to the TEST database (needed for integration tests)
+$env:PRISMA_E2E="1"; $env:DATABASE_URL="postgresql://postgres:admin@localhost:5434/financetrackerpro_test"; npx prisma migrate deploy
+
+# OPTIONAL — seed the dev database with system categories
+npm run db:seed
 ```
 
-Run development server:
+> The E2E database is initialized automatically by `globalSetup` on the first `npx playwright test` run.
+
+### 4. Run the Application
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
 
-## Available Scripts
+---
 
-### Development
+## 🗄️ Database Architecture
 
-- `npm run dev` - Start dev server
-- `npm run build` - Build production bundle
-- `npm run start` - Start production server
+FinanceTrackerPro uses **three fully isolated PostgreSQL containers** — dev data never leaks into tests.
 
-### Database
+| Container                      | Host Port | Database                      | Purpose                  |
+| ------------------------------ | --------- | ----------------------------- | ------------------------ |
+| `financetracker-postgres`      | `5432`    | Configurable via `.env`       | Development & production |
+| `financetracker-postgres-e2e`  | `5433`    | `financetracker-postgres-e2e` | E2E tests only           |
+| `financetracker-postgres-test` | `5434`    | `financetrackerpro_test`      | Integration tests only   |
 
-- `npm run db:generate` - Generate Prisma Client
-- `npm run db:push` - Push schema (dev only - no migration history)
-- `npm run db:migrate` - Create migration (prod - traceable changes)
-- `npm run db:studio` - Open Prisma Studio GUI
+Both use the `public` schema. There is no schema-based isolation — the E2E container is a fully independent PostgreSQL instance.
 
-### Testing
+**Prisma Studio access:**
 
-- `npm test` - Run tests (CI mode)
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:ui` - Run tests with Vitest UI
-- `npm run test:coverage` - Coverage report (80% minimum)
+```bash
+npm run db:studio        # Dev database  → http://localhost:5555
+npm run db:studio:e2e    # E2E database  → http://localhost:5556
+```
 
-### Code Quality
+> See [`DATABASE.md`](DATABASE.md) for the complete entity relationship diagram, double-entry bookkeeping implementation, reconciliation logic, and query examples.
 
-- `npm run lint` - ESLint with auto-fix
-- `npm run format` - Prettier format all files
-- `npm run format:check` - Check formatting
+---
 
-### Git Hooks
+## 🛠️ CLI Reference
 
-Pre-commit hook (Husky + lint-staged):
+### Database Management
 
-- ESLint on staged `.js`, `.jsx`, `.ts`, `.tsx`
-- Prettier on all staged files
+| Command                 | Environment | Description                                                                                                                                                                                   |
+| ----------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run db:generate`   | Dev / E2E   | Generates the type-safe Prisma Client.                                                                                                                                                        |
+| `npm run db:migrate`    | Dev         | Creates a new migration and applies it (interactive).                                                                                                                                         |
+| `npm run db:push`       | Dev         | Directly pushes schema changes without migration history.                                                                                                                                     |
+| `npm run db:reset`      | Dev         | Wipes the dev database and re-runs all migrations.                                                                                                                                            |
+| `npm run db:seed`       | Dev         | Seeds the dev database (system categories).                                                                                                                                                   |
+| `npm run db:setup:e2e`  | E2E         | Applies pending migrations to the E2E database.                                                                                                                                               |
+| `npm run db:reset:e2e`  | E2E         | Wipes and re-migrates the E2E database.                                                                                                                                                       |
+| `npm run db:seed:e2e`   | E2E         | Seeds the E2E database with test user and accounts.                                                                                                                                           |
+| `npm run db:studio`     | Dev         | Opens Prisma Studio for the dev database (port 5555).                                                                                                                                         |
+| `npm run db:studio:e2e` | E2E         | Opens Prisma Studio for the E2E database (port 5556).                                                                                                                                         |
+| — (test DB)             | Test        | `$env:PRISMA_E2E="1"; $env:DATABASE_URL="postgresql://postgres:admin@localhost:5434/financetrackerpro_test"; npx prisma migrate deploy` — applies migrations to the integration test database |
 
-## Tech Stack
+### Quality Assurance & Testing
 
-### Core
+| Command                 | Scope              | Description                                                            |
+| ----------------------- | ------------------ | ---------------------------------------------------------------------- |
+| `npm test`              | Unit / Integration | Runs tests in headless CI mode.                                        |
+| `npm run test:watch`    | Unit / Integration | Launches interactive Vitest watch runner.                              |
+| `npm run test:ui`       | Unit / Integration | Opens the Vitest graphical interface.                                  |
+| `npm run test:coverage` | Code Coverage      | Generates coverage report (enforces **70%** global floor).             |
+| `npm run test:e2e`      | E2E                | Compiles Gherkin features and runs the full Playwright suite headless. |
+| `npm run test:e2e:ui`   | E2E                | Compiles Gherkin features and opens the Playwright interactive UI.     |
+| `npm run lint`          | Code Style         | Validates code standards via ESLint with auto-fix.                     |
+| `npm run format:check`  | Code Style         | Verifies formatting via Prettier without writing.                      |
 
-- **Framework**: Next.js 16 + React 19 (App Router)
-- **Language**: TypeScript 5 (strict mode)
-- **Database**: PostgreSQL + Prisma ORM
+---
 
-### Financial Precision
+## 🧪 Testing Workflows
 
-- **Calculations**: Decimal.js (20-digit precision, Banker's rounding)
-- **Storage**: Integer cents (no float precision issues)
-- **Currency**: Multi-currency with ISO 4217 codes
+### End-to-End (Playwright + Cucumber BDD)
 
-### Validation & Security
+> ⚠️ **Important:** Shut down any active `npm run dev` before launching E2E tests. Playwright builds and mounts its own **production server** on port `3000` pointed at the isolated E2E database (port `5433`).
 
-- **Validation**: Zod (server-side + client hints)
-- **Server Actions**: `server-only` package
-- **ACID Transactions**: Prisma `$transaction`
+The E2E database is **automatically wiped, re-migrated, and re-seeded** before each test run via `e2e/global-setup.ts`. No manual reset needed.
 
-### State & Styling
+```bash
+# Headless (CI mode) — compiles features + runs suite
+npm run test:e2e
 
-- **State**: Zustand (UI state only - NO business logic)
-- **Styling**: Tailwind CSS 4
+# Interactive Playwright UI — compiles features + opens UI runner
+npm run test:e2e:ui
 
-### Quality & Testing
+# Headed mode (visual browser walkthrough)
+npx bddgen && npx playwright test --headed
 
-- **Testing**: Vitest + React Testing Library
-- **Coverage**: 80% minimum enforced
-- **Linting**: ESLint + TypeScript ESLint
-- **Formatting**: Prettier
-- **Git Hooks**: Husky + lint-staged
+# Target specific feature by string match
+npx bddgen && npx playwright test --grep "Autenticación"
 
-## Project Structure
+# Step-by-step debug
+npx bddgen && npx playwright test --debug
+
+# View last test report
+npx playwright show-report
+```
+
+**First-time E2E setup:**
+
+```bash
+docker-compose -f docker-compose.postgres.yml up -d postgres-e2e
+npm run test:e2e
+```
+
+### Static Analysis via SonarQube
+
+SonarQube handles full-scope code safety gates through the native **SonarQube MCP Server** (`@sonarqube/mcp-server`) configured in `opencode.jsonc`.
+
+> Requires **Java 17+** on the machine (sonar-scanner runs on the JVM).
+
+```bash
+# 1. Start SonarQube container
+docker-compose -f docker-compose.sonarqube.yml up -d
+
+# 2. Verify connectivity
+npm run sonar:check
+
+# 3. Generate coverage reports (required for Quality Gate)
+npm run test:coverage
+
+# 4. Trigger analysis (requires OS-level $env:SONAR_TOKEN)
+npm run sonar
+```
+
+- **Web Dashboard:** [http://localhost:9000/dashboard?id=financetrackerpro](http://localhost:9000/dashboard?id=financetrackerpro)
+- **Default credentials:** `admin` / `admin` _(password change forced on first login)_
+- **Generate your token:** SonarQube → My Account → Security → Generate Tokens (name it e.g. `local-ci`) → set it as an OS environment variable: `$env:SONAR_TOKEN = "<token>"` (or set it permanently via System Properties).
+
+**Quality Gate blocks merge if:**
+
+- Quality Gate status is `ERROR`
+- Overall coverage drops below `70%`
+- TypeScript strict `any` count rises above zero
+- Any `BLOCKER` or `CRITICAL` vulnerability is detected
+
+---
+
+## 🤖 Agent System
+
+FinanceTrackerPro uses a **hierarchical agent orchestration model** for AI-assisted development. A single primary agent (`tech-lead`) coordinates all work and delegates to specialized subagents.
+
+```
+tech-lead (primary — orchestrator)
+  ├── dev-backend    → Server Actions, Prisma, Zod validation
+  ├── dev-frontend   → Next.js UI, Tailwind, accessibility
+  ├── dev-tester     → Vitest unit/integration, coverage ≥ 70%
+  ├── dev-e2e        → Playwright + Cucumber BDD, isolated E2E DB
+  ├── qa-lead        → 14 financial integrity rules, SonarQube gates
+  ├── sec-ops        → OWASP Top 10 audit, dependency scan
+  └── audit-finance  → Decimal.js usage, ledger integrity (read-only)
+```
+
+> See [`AGENTS.md`](AGENTS.md) for full agent responsibilities, workflows, and quality gate criteria.
+
+---
+
+## 🗂️ Directory Layout
 
 ```
 src/
-├── actions/          # Server Actions (validated mutations)
-│   ├── account.actions.ts
-│   └── transfer.actions.ts
-├── app/              # Next.js App Router (pages)
-├── components/
-│   └── ui/           # Reusable UI components
-├── db/
-│   └── seed/         # Database seed scripts
-├── hooks/            # Custom React hooks
-├── lib/
-│   ├── db/           # Prisma client + schema
-│   │   ├── index.ts      # Singleton client
-│   │   └── schema.prisma # Database schema
-│   ├── money.ts      # Decimal.js financial utils
-│   └── validations/  # Zod schemas
-│       └── finance.ts
-├── services/         # Business logic (server-only)
-│   └── financial.service.ts
-├── store/            # Zustand stores (UI state only)
-│   ├── useAccountStore.ts
-│   └── useTransactionStore.ts
-├── types/            # TypeScript definitions
-│   └── finance.d.ts
-├── utils/            # Pure helper functions
-│   └── formatCurrency.ts
-└── __tests__/        # Test files (co-located)
-    └── unit/
+├── actions/          # Server Actions (Zod-validated mutation layer)
+├── app/              # Next.js App Router (pages & layouts)
+├── components/       # Component library
+│   └── ui/           # Atomic reusable presentation elements
+├── db/               # Database seed scripts
+├── hooks/            # Encapsulated stateful React UI hooks
+├── lib/              # Core singletons & framework setup
+│   ├── db/           # Prisma Client instantiation & schema
+│   ├── money.ts      # Decimal.js financial arithmetic wrappers
+│   └── validations/  # Centralized Zod schema models
+├── services/         # Pure business logic (server-only)
+├── store/            # UI state machines via Zustand (no business logic)
+├── types/            # Global TypeScript type declarations
+└── utils/            # Stateless pure functional helpers
+
+e2e/                  # Playwright BDD suite
+├── features/         # Gherkin Cucumber business criteria (.feature)
+├── steps/            # TypeScript BDD step definitions
+├── helpers/          # Shared auth and navigation helpers
+├── fixtures/         # Test data constants
+└── global-setup.ts   # Auto reset + seed E2E DB before each run
 ```
 
-## Database Architecture
+---
 
-See [DATABASE.md](DATABASE.md) for complete entity relationship diagram, reconciliation logic, query examples, and architecture details.
+## 🔒 CI/CD Pipeline
 
-### Double-Entry Bookkeeping
+The full quality suite runs on **every push or PR to `main`/`dev`** using a **self-hosted GitHub Actions runner** (Windows, on the developer machine) because SonarQube runs locally — not in the cloud.
 
-**Transfer Logic**: Transfers implemented using double-entry accounting principles.
+### Workflow: `.github/workflows/quality.yml`
 
-When transferring money between accounts:
-
-1. **Transaction 1** (Source Account):
-   - Type: `TRANSFER_OUT`
-   - Amount: Negative (debit)
-   - Account: Source
-
-2. **Transaction 2** (Destination Account):
-   - Type: `TRANSFER_IN`
-   - Amount: Positive (credit)
-   - Account: Destination
-
-Both transactions share same `transferId` (UUID) for audit trail. This ensures:
-
-- ✅ Balance integrity (sum always zero across paired transactions)
-- ✅ Audit trail (both entries linked)
-- ✅ Reconciliation accuracy (each account has complete history)
-- ✅ Rollback safety (delete both or neither)
-
-**Example**:
-
-```typescript
-// Transfer $100 from Savings to Investment
-const transferId = crypto.randomUUID();
-
-// Debit source (TRANSFER_OUT)
-await prisma.transaction.create({
-  data: {
-    accountId: savingsId,
-    type: 'TRANSFER_OUT',
-    amountCents: -10000, // Negative
-    transferId,
-    transferToAccountId: investmentId,
-  },
-});
-
-// Credit destination (TRANSFER_IN)
-await prisma.transaction.create({
-  data: {
-    accountId: investmentId,
-    type: 'TRANSFER_IN',
-    amountCents: 10000, // Positive
-    transferId,
-    transferFromAccountId: savingsId,
-  },
-});
+```yaml
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+runs-on: [self-hosted, windows, x64]
 ```
 
-### Precision & Rounding
+| Step                                  | Command / Action                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| Env setup                             | Creates `.env`, `.env.e2e`, `.env.test` from secrets                                 |
+| Infrastructure                        | `docker compose` up: Postgres dev (5432), e2e (5433), test (5434) + SonarQube (9000) |
+| Dependencies                          | `npm ci` + `npx prisma generate`                                                     |
+| Migrations (test DB)                  | `prisma migrate deploy` against `financetrackerpro_test`                             |
+| Lint                                  | `eslint . --max-warnings=0`                                                          |
+| Format                                | `npm run format:check`                                                               |
+| TypeScript                            | `npm run type-check`                                                                 |
+| Tests + coverage (unit + integration) | `vitest run --coverage` → integration uses DB test (5434)                            |
+| E2E                                   | `npm run test:e2e` (Playwright + BDD, DB e2e 5433)                                   |
+| SonarQube                             | `npm run sonar` + Quality Gate API check                                             |
+| Build                                 | `npm run build`                                                                      |
 
-All monetary calculations use:
+### Self-hosted runner setup
 
-- **Storage**: Integer cents (no floats)
-- **Calculations**: Decimal.js with Banker's rounding
-- **Exchange rates**: `Decimal(20, 8)` precision
-- **Interest rates**: `Decimal(20, 8)` for compound interest accuracy
+1. GitHub → **Settings → Actions → Runners → New self-hosted runner** → Windows x64.
+2. Extract to e.g. `C:\actions-runner` and register:
+   ```powershell
+   .\config.cmd --url https://github.com/JMMA86/FinanceTrackerPro --token <REG_TOKEN> --labels self-hosted,windows,x64 --name financetracker-runner
+   .\svc.cmd install   # run as a user account with Docker Desktop access
+   ```
+3. Add repository **variables** (Settings → Variables) and **secrets** (Settings → Secrets):
 
-## Architecture Rules
+   | Type     | Name                | Value (local defaults)    |
+   | -------- | ------------------- | ------------------------- |
+   | Variable | `POSTGRES_HOST`     | `localhost`               |
+   | Variable | `POSTGRES_PORT`     | `5432`                    |
+   | Variable | `POSTGRES_USER`     | `postgres`                |
+   | Variable | `POSTGRES_DB`       | `financetracker-postgres` |
+   | Variable | `POSTGRES_SCHEMA`   | `public`                  |
+   | Secret   | `POSTGRES_PASSWORD` | `admin`                   |
+   | Secret   | `JWT_SECRET`        | random (see below)        |
+   | Secret   | `SONAR_TOKEN`       | generated in SonarQube    |
 
-See `CLAUDE.md` for complete financial integrity rules.
+   `DATABASE_URL` is **computed by the workflow** from the values above — no need to store it.
 
-### Key Principles
+   Generate a strong `JWT_SECRET` with Python:
 
-1. **Money = Integers (cents)** - Store as cents, calculate with Decimal.js
-2. **Multi-currency by design** - Every amount has ISO 4217 currency code
-3. **Atomic transactions** - Use `prisma.$transaction()` for transfers
-4. **Soft deletes only** - Financial records never physically deleted
-5. **Server-side validation** - Never trust client input
-6. **Banker's rounding** - IEEE 754 ROUND_HALF_EVEN standard
-7. **Audit trail** - Track `createdBy`, `lastModifiedBy`, `deletedAt`
+   ```powershell
+   python -c "import secrets; print(secrets.token_urlsafe(64))"
+   ```
 
-### Example: Atomic Transfer
+### Prerequisites on the runner machine
 
-```typescript
-// src/actions/transfer.actions.ts
-await prisma.$transaction(async (tx) => {
-  // Deduct from source
-  await tx.account.update({
-    where: { id: fromId },
-    data: { balanceCents: subtract(balance, amount) },
-  });
+- Node.js 22, Docker Desktop running, Java (sonar-scanner), Playwright browsers (`npx playwright install`)
+- **Port 3000 free** while the pipeline runs (the E2E suite builds and starts its own production server; stop `npm run dev` first)
+- SonarQube container up with a valid `SONAR_TOKEN` (generate at SonarQube → My Account → Security)
 
-  // Add to destination
-  await tx.account.update({
-    where: { id: toId },
-    data: { balanceCents: add(balance, amount) },
-  });
-
-  // Audit trail
-  await tx.transfer.create({ data: transferRecord });
-});
-```
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> ⚠️ **Security**: fork PRs are skipped (`head.repo.full_name` guard) — never run untrusted code on a self-hosted runner.

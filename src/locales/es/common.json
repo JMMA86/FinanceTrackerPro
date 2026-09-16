@@ -1,0 +1,48 @@
+{
+  "buttons": {
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "back": "Volver",
+    "submit": "Enviar",
+    "reset": "Restablecer"
+  },
+  "language": {
+    "select": "Seleccionar idioma",
+    "spanish": "Español",
+    "english": "English",
+    "german": "Deutsch"
+  },
+  "navigation": {
+    "logout": "Cerrar Sesión",
+    "loggingOut": "Cerrando sesión...",
+    "dashboard": "Dashboard",
+    "transactions": "Transacciones",
+    "accounts": "Cuentas",
+    "savings": "Ahorros",
+    "investments": "Inversiones",
+    "fixedExpenses": "Gastos Fijos",
+    "variableExpenses": "Gastos Variables",
+    "loans": "Préstamos",
+    "creditCards": "Tarjetas de Crédito",
+    "settings": "Configuración",
+    "expandSidebar": "Expandir barra lateral",
+    "collapseSidebar": "Contraer barra lateral",
+    "dashboardDesc": "Vista general de finanzas",
+    "transactionsDesc": "Historial de movimientos",
+    "accountsDesc": "Gestión de cuentas",
+    "savingsDesc": "Metas de ahorro",
+    "investmentsDesc": "Portfolio de inversiones",
+    "fixedExpensesDesc": "Gastos recurrentes",
+    "variableExpensesDesc": "Gastos por categoría",
+    "loansDesc": "Gestión de préstamos",
+    "creditCardsDesc": "Gestión de tarjetas de crédito",
+    "settingsDesc": "Preferencias del sistema"
+  }
+}

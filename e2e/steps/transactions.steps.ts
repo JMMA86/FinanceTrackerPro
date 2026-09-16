@@ -7,6 +7,7 @@ import { createBdd } from 'playwright-bdd';
 const { Given, When, Then } = createBdd();
 import { expect, type Page, type Locator } from '@playwright/test';
 import { loginAs } from '../helpers/auth';
+import { skipOnboardingIfPresent } from '../helpers/onboarding';
 import { getStoredAccountName } from '../helpers/unique';
 import { selectAccount } from '../helpers/select';
 
@@ -587,8 +588,15 @@ When('inicia sesión con el email recién registrado', async ({ page }) => {
   const loginForm = page.locator('form').first();
   await loginForm.getByPlaceholder('Ingresa tu correo').fill(email as string);
   await loginForm.getByPlaceholder('Ingresa tu contraseña').fill(E2E_PASSWORD);
-  await page.getByRole('button', { name: 'Iniciar Sesión', exact: true }).click();
-  // 60s: covers cold JIT-compile of the login action AND slow Argon2id on a loaded machine.
+  // Scope the submit to the login form: the desktop panel renders its own
+  // "Iniciar Sesión" button in register mode, which would otherwise cause a
+  // strict-mode violation.
+  await loginForm.getByRole('button', { name: 'Iniciar Sesión' }).click();
+  // A freshly-registered user has onboardingCompletedAt = null, so the dashboard
+  // layout redirects to /es/onboarding. Wait for either landing route, then skip
+  // the walkthrough so the scenario finds the dashboard it expects.
+  await page.waitForURL(/\/es\/(dashboard|onboarding)/, { timeout: 60000 });
+  await skipOnboardingIfPresent(page);
   await page.waitForURL(/\/es\/dashboard/, { timeout: 60000 });
 });
 

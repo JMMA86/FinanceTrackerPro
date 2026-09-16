@@ -34,7 +34,10 @@ export async function loginAs(page: Page, email: string, password: string): Prom
   const loginForm = page.locator('form').first();
   await loginForm.getByPlaceholder('Ingresa tu correo').fill(email);
   await loginForm.getByPlaceholder('Ingresa tu contraseña').fill(password);
-  await page.getByRole('button', { name: 'Iniciar Sesión', exact: true }).click();
+  // Scope the submit to the login form: the desktop panel renders its own
+  // "Iniciar Sesión" button in register mode, which would otherwise cause a
+  // strict-mode violation.
+  await loginForm.getByRole('button', { name: 'Iniciar Sesión' }).click();
   // 60s: covers cold JIT-compile of the login action AND slow Argon2id on a loaded machine.
   await page.waitForURL(/\/es\/dashboard/, { timeout: 60000 });
 }

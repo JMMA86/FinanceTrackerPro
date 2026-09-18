@@ -9,6 +9,10 @@ Feature: Onboarding de primer uso
   # para no interferir entre sí; los escenarios de solo lectura reutilizan esos
   # mismos usuarios antes de que completen el onboarding (orden del archivo).
   #
+  # El recorrido tiene 5 pasos: welcome → account → salary → modules → finish.
+  # El paso `salary` es OPCIONAL: "Continuar" guarda el sueldo cuando hay un monto
+  # y avanza sin guardar cuando el formulario está vacío.
+  #
   # Nota: el tag es @skip-flow (no @skip) porque Playwright reserva "@skip" y
   # generaría el escenario como test.skip automáticamente.
 
@@ -23,7 +27,7 @@ Feature: Onboarding de primer uso
   Scenario: Un usuario sin onboarding es enviado al onboarding al iniciar sesión
     When inicia sesión por primera vez el usuario de onboarding "1"
     Then debe estar en el onboarding en español
-    And debe ver el contador de progreso "Paso 1 de 4"
+    And debe ver el contador de progreso "Paso 1 de 5"
 
   @onboarding @guard
   Scenario: Un usuario ya onboardeado entra directo al dashboard
@@ -40,7 +44,7 @@ Feature: Onboarding de primer uso
     Given que el usuario de onboarding "2" ha iniciado sesión por primera vez
     Then debe ver el saludo del usuario de onboarding "2"
     And debe ver las 2 opciones de idioma
-    And debe ver el contador de progreso "Paso 1 de 4"
+    And debe ver el contador de progreso "Paso 1 de 5"
 
   @onboarding @i18n
   Scenario: Cambiar a inglés desde el paso 1 recarga el onboarding en inglés
@@ -66,11 +70,34 @@ Feature: Onboarding de primer uso
     Then la cuenta "Cuenta Onboarding E2E" debe existir en la página de cuentas
 
   # ============================================================================
-  # PASO 3 — MÓDULOS
+  # PASO 3 — SUELDO (OPCIONAL)
+  # ============================================================================
+
+  @onboarding @salary
+  Scenario: El paso 3 guarda el sueldo al pulsar Continuar y lo conserva al volver
+    Given que el usuario de onboarding "2" ha iniciado sesión por primera vez
+    When avanza al paso de sueldo
+    And ingresa "300000000" centavos como monto de sueldo con día de pago "10"
+    And pulsa "Continuar"
+    Then debe estar en el paso "Paso 4 de 5"
+    When pulsa "Atrás"
+    Then el formulario de sueldo debe mostrar el monto "300000000" centavos y día "10"
+
+  @onboarding @salary @optional
+  Scenario: Continuar con el sueldo vacío avanza sin guardar
+    Given que el usuario de onboarding "1" ha iniciado sesión por primera vez
+    When avanza al paso de sueldo
+    And pulsa "Continuar"
+    Then debe estar en el paso "Paso 4 de 5"
+    When pulsa "Atrás"
+    Then el formulario de sueldo debe estar sin monto
+
+  # ============================================================================
+  # PASO 4 — MÓDULOS
   # ============================================================================
 
   @onboarding @modules
-  Scenario: El paso 3 lista los módulos esperados
+  Scenario: El paso 4 lista los módulos esperados
     Given que el usuario de onboarding "1" ha iniciado sesión por primera vez
     When avanza hasta el paso de módulos
     Then debe ver los siguientes módulos:
@@ -85,7 +112,7 @@ Feature: Onboarding de primer uso
       | Configuración |
 
   # ============================================================================
-  # PASO 4 — FINALIZAR
+  # PASO 5 — FINALIZAR
   # ============================================================================
 
   @onboarding @finish

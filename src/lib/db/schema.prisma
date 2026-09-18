@@ -83,6 +83,28 @@ enum VariableExpenseCategory {
   SHOPPING        // Compras
   DINING          // Restaurantes
   OTHER           // Otros
+  SALARY          // Sueldo (system-only: auto-assigned to INCOME without category)
+  BONUS           // Prima/Bono (system-only)
+}
+
+// ============================================================================
+// SALARY & PROJECTION ENUMS
+// ============================================================================
+
+// Recurrence of `SalaryConfiguration.amountCents` (amount PER period).
+enum SalaryFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+// Recurrence of a `SalaryBonus` anchored on `anchorMonth` (1-12).
+enum BonusFrequency {
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
 }
 
 enum LoanType {
@@ -216,7 +238,6 @@ model User {
   passwordHash  String?  // Null if using only biometric auth
 
   // User Configuration
-  baseSalaryCents BigInt?        // Salario mensual en centavos
   baseCurrency    Currency     @default(COP)
   language        Language     @default(SPANISH)
   theme           Theme        @default(SYSTEM)
@@ -235,6 +256,10 @@ model User {
   apiAttempts       ApiAttempt[]
   biometricCredentials BiometricCredential[]
   variableExpenses  VariableExpense[]
+
+  // Salary & end-of-period projection (1:1 per user)
+  salaryConfiguration SalaryConfiguration?
+  projectionSettings  ProjectionSettings?
 
   // Audit fields
   isActive          Boolean   @default(true)
@@ -916,6 +941,111 @@ model SavingsContribution {
   @@index([date])
   @@index([isActive])
   @@index([transactionId, isActive]) // Anti-join: exclude transactions linked to active savings contributions
+}
+
+// ============================================================================
+// SALARY CONFIGURATION & PROJECTION SETTINGS
+//
+// Replaces the legacy `User.baseSalaryCents` scalar with a dedicated 1:1 model
+// (amount PER period + payment days PER frequency + declared bonuses). The
+// end-of-period projection (`projection.service.ts`) expands these recurrence
+// rules; the savings target is a SEPARATE configurable MONTHLY setting
+// (`ProjectionSettings.monthlySavingsTargetCents`). It is NOT one of the
+// existing SavingsGoal rows — confirmed product decision.
+// ============================================================================
+
+model SalaryConfiguration {
+  id          String          @id @default(cuid())
+  userId      String          @unique
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amountCents BigInt          // Monto POR período (centavos, Rule 2)
+  currency    Currency        @default(COP)
+  frequency   SalaryFrequency @default(MONTHLY)
+  // Payment days for the salary recurrence. The meaning depends on `frequency`
+  // (Rule 9 — integrity enforced by the `SalaryConfiguration_payDays_frequency_check`
+  // DB CHECK constraint, see `prisma/migrations/*_salary_pay_days`):
+  //   WEEKLY   -> exactly 1 value 1..7  (ISO weekday: 1=Monday … 7=Sunday)
+  //   BIWEEKLY -> exactly 2 values 1..31 (days of the MONTH, clamped to end of month)
+  //   MONTHLY  -> exactly 1 value 1..31 (day of the MONTH, clamped to end of month)
+  // The expansion rules live in `expandIncomeOccurrences` (`src/lib/projection.ts`).
+  // NO DB default: an empty array violates the CHECK (see migration
+  // `*_salary_pay_days_drop_default`) and the app ALWAYS writes `payDays`
+  // (required by `SaveSalaryConfigurationSchema`), so a fallback default would
+  // only be misleading.
+  payDays     Int[]
+
+  bonuses     SalaryBonus[]
+
+  // Audit (Rule 4)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  createdBy      String?
+  lastModifiedBy String?
+  // Extended audit (Rule 14)
+  ipAddress      String?
+  userAgent      String?
+
+  @@index([userId, isActive])
+}
+
+model SalaryBonus {
+  id              String          @id @default(cuid())
+  salaryConfigId  String
+  // ON DELETE CASCADE: a bonus has no meaning without its salary configuration.
+  // The config itself is NEVER physically deleted (soft delete, Rule 6), so the
+  // cascade only runs on a deliberate hard delete of the parent row.
+  salaryConfig    SalaryConfiguration @relation(fields: [salaryConfigId], references: [id], onDelete: Cascade)
+
+  name            String
+  amountCents     BigInt          // Monto POR ocurrencia (centavos, Rule 2)
+  currency        Currency        @default(COP)
+  frequency       BonusFrequency
+  anchorMonth     Int             // 1-12 (mes de la primera ocurrencia del año)
+  dayOfMonth      Int?            // 1-31 (clamp a fin de mes)
+
+  // Idempotency (Rule 12): UUID v4 generated server-side on create
+  idempotencyKey  String? @unique
+
+  // Audit (Rule 4)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+  // Extended audit (Rule 14)
+  ipAddress       String?
+  userAgent       String?
+
+  @@index([salaryConfigId, isActive])
+}
+
+model ProjectionSettings {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Savings target (COP cents): the MONTHLY amount the projection spreads over
+  // the remaining months. It is stored exactly as entered (no round-trip drift).
+  // The projection is COP-only (product decision), hence the COP-only currency.
+  monthlySavingsTargetCents BigInt   @default(0)
+  currency                  Currency @default(COP)
+
+  // Audit (Rule 4)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  lastModifiedBy  String?
+  // Extended audit (Rule 14)
+  ipAddress       String?
+  userAgent       String?
+
+  @@index([userId, isActive])
 }
 
 // ============================================================================

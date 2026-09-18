@@ -135,7 +135,6 @@ async function main() {
       email: 'demo@financetracker.com',
       name: 'Juan Manuel Demo',
       passwordHash,
-      baseSalaryCents: 500000000, // $5,000,000 COP
       baseCurrency: 'COP',
       language: 'SPANISH',
       theme: 'SYSTEM',
@@ -145,6 +144,87 @@ async function main() {
     },
   });
   console.log(`✓ User created: ${user.email}`);
+
+  // 1b. Salary configuration (replaces the legacy `User.baseSalaryCents` scalar).
+  // `amountCents` is the amount PER PERIOD: the demo salary is BIWEEKLY (paid on
+  // the 15th and 30th of each month) for $5.000.000 COP. Upsert is keyed by the
+  // 1:1 `userId` so re-seeding is a no-op.
+  console.log('Creating salary configuration...');
+  const salaryConfig = await prisma.salaryConfiguration.upsert({
+    where: { userId: user.id },
+    update: {
+      amountCents: 500000000, // $5,000,000 COP
+      currency: 'COP',
+      frequency: 'BIWEEKLY',
+      payDays: [15, 30],
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: user.id,
+    },
+    create: {
+      userId: user.id,
+      amountCents: 500000000, // $5,000,000 COP
+      currency: 'COP',
+      frequency: 'BIWEEKLY',
+      // Two pay days per month (15th and 30th; the 30th is clamped to the end of
+      // short months by the projection engine).
+      payDays: [15, 30],
+      createdBy: user.id,
+      lastModifiedBy: user.id,
+    },
+  });
+
+  // Half-yearly bonus ("Prima de servicios"): months 6 and 12 (SEMIANNUAL,
+  // anchored on June). Deterministic idempotency key so re-seeding is a no-op.
+  const bonusKey = 'seed-salary-bonus-prima-servicios';
+  await prisma.salaryBonus.upsert({
+    where: { idempotencyKey: bonusKey },
+    update: {
+      name: 'Prima de servicios',
+      amountCents: 250000000, // $2,500,000 COP
+      currency: 'COP',
+      frequency: 'SEMIANNUAL',
+      anchorMonth: 6,
+      dayOfMonth: 30,
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: user.id,
+    },
+    create: {
+      salaryConfigId: salaryConfig.id,
+      name: 'Prima de servicios',
+      amountCents: 250000000, // $2,500,000 COP
+      currency: 'COP',
+      frequency: 'SEMIANNUAL',
+      anchorMonth: 6,
+      dayOfMonth: 30,
+      idempotencyKey: bonusKey,
+      createdBy: user.id,
+      lastModifiedBy: user.id,
+    },
+  });
+
+  // Projection settings (configurable savings target — NOT a SavingsGoal). The
+  // MONTHLY amount is kept modest for the demo so the projection is meaningful.
+  await prisma.projectionSettings.upsert({
+    where: { userId: user.id },
+    update: {
+      monthlySavingsTargetCents: 50000000, // $500,000 COP per month
+      currency: 'COP',
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: user.id,
+    },
+    create: {
+      userId: user.id,
+      monthlySavingsTargetCents: 50000000, // $500,000 COP per month
+      currency: 'COP',
+      createdBy: user.id,
+      lastModifiedBy: user.id,
+    },
+  });
+
+  console.log('✓ Salary configuration + half-yearly bonus + projection settings seeded');
 
   // 2. Create 4 accounts
   console.log('Creating accounts...');
@@ -1084,6 +1164,23 @@ async function main() {
       color: '#64748B',
       icon: 'more-horizontal',
     },
+    // System-only income categories (SALARY / BONUS). They must NEVER be exposed
+    // as creatable categories in the UI; the backend auto-assigns SALARY to an
+    // INCOME transaction created without a category when a salary is configured.
+    {
+      id: 'csalary000000000000000000',
+      name: 'Sueldo',
+      type: 'SALARY' as const,
+      color: '#0EA5E9',
+      icon: 'banknote',
+    },
+    {
+      id: 'cbonus0000000000000000000',
+      name: 'Prima/Bono',
+      type: 'BONUS' as const,
+      color: '#8B5CF6',
+      icon: 'gift',
+    },
   ];
 
   // Migrate legacy system category rows that used non-CUID ids (cat-*) before the
@@ -1117,6 +1214,15 @@ async function main() {
     });
   }
   console.log(`✓ Seeded ${systemCategories.length} system categories`);
+
+  // Register the demo salary INCOME rows under the system SALARY category. The
+  // category is a FK target, so this runs AFTER the categories exist (the salary
+  // transactions themselves are created earlier in the script).
+  const salaryUpdate = await prisma.transaction.updateMany({
+    where: { userId: user.id, type: 'INCOME', description: { startsWith: 'Salario' } },
+    data: { categoryId: 'csalary000000000000000000', lastModifiedBy: user.id },
+  });
+  console.log(`✓ Assigned SALARY category to ${salaryUpdate.count} salary transactions`);
 
   // Savings goals
   console.log('Creating savings goals...');

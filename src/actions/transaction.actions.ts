@@ -133,6 +133,33 @@ export const getAllTransactions = safeAction(getAllTransactionsInternal);
 // createTransaction — Create INCOME or EXPENSE transaction atomically
 // ============================================================================
 
+/**
+ * Resolve the default category of an INCOME transaction created without an
+ * explicit category: the system `SALARY` category, but ONLY when the user has an
+ * ACTIVE `SalaryConfiguration`. Without a configured salary the previous
+ * "no category" behavior is preserved.
+ *
+ * The system category is looked up by TYPE + `userId: null` (never a hardcoded
+ * id), so a seed id change can never silently break the mapping.
+ */
+async function resolveDefaultIncomeCategoryId(
+  tx: Prisma.TransactionClient,
+  userId: string
+): Promise<string | null> {
+  const salaryConfig = await tx.salaryConfiguration.findUnique({
+    where: { userId },
+    select: { isActive: true },
+  });
+  if (salaryConfig?.isActive !== true) return null;
+
+  const salaryCategory = await tx.category.findFirst({
+    where: { type: 'SALARY', userId: null, isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  return salaryCategory?.id ?? null;
+}
+
 async function createTransactionInternal(input: unknown) {
   const session = await getSession();
   if (!session?.userId) throw new UnauthorizedError();
@@ -206,7 +233,16 @@ async function createTransactionInternal(input: unknown) {
     // unless the caller set one explicitly.
     const resolvedCategoryId = validated.categoryId ?? variableExpenseLink?.categoryId ?? null;
 
-    await validateCategoryForUpdate(tx, resolvedCategoryId, session.userId);
+    // INCOME auto-categorization: an INCOME with no explicit (or inherited)
+    // category is filed under the system SALARY category when the user has an
+    // ACTIVE salary configuration. EXPENSE and the monitored VariableExpense
+    // flow are untouched (they resolve their own category above).
+    const resolvedIncomeCategoryId =
+      validated.type === 'INCOME' && resolvedCategoryId === null
+        ? await resolveDefaultIncomeCategoryId(tx, session.userId)
+        : resolvedCategoryId;
+
+    await validateCategoryForUpdate(tx, resolvedIncomeCategoryId, session.userId);
     await validateExpenseFundsForCreate(validated.amountCents, account);
 
     // Create transaction record (Rule 2: integer cents)
@@ -223,7 +259,7 @@ async function createTransactionInternal(input: unknown) {
         originalAmountCents: validated.originalAmountCents ?? null,
         originalCurrency: validated.originalCurrency ?? null,
         exchangeRate: validated.exchangeRate ?? null,
-        categoryId: resolvedCategoryId,
+        categoryId: resolvedIncomeCategoryId,
         variableExpenseId: validated.variableExpenseId ?? null,
         ipAddress,
         userAgent,

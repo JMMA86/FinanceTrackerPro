@@ -24,6 +24,21 @@ export function DashboardSkeleton() {
         ))}
       </div>
 
+      {/* Proyección de fin de período (mes + año) */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {['projection-month', 'projection-year'].map((key) => (
+          <div key={key} className="app-shell rounded-2xl p-5 animate-pulse">
+            <div className="mb-4 h-4 w-28 rounded bg-gray-700" />
+            <div className="mb-4 h-8 w-40 rounded bg-gray-700" />
+            <div className="mb-4 h-2 w-full rounded-full bg-gray-700" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-12 rounded-xl bg-gray-700/70" />
+              <div className="h-12 rounded-xl bg-gray-700/70" />
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2 animate-pulse">
         {['action-1', 'action-2', 'action-3', 'action-4'].map((key) => (

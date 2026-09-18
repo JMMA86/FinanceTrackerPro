@@ -21,7 +21,6 @@ describe('PrismaUserRepository', () => {
     email: 'test@example.com',
     name: 'Test User',
     passwordHash: '$argon2id$hashed',
-    baseSalaryCents: BigInt(500000),
     baseCurrency: 'COP' as Currency,
     language: 'SPANISH' as Language,
     theme: 'SYSTEM' as Theme,
@@ -133,7 +132,6 @@ describe('PrismaUserRepository', () => {
         email: 'new@example.com',
         name: 'New User',
         passwordHash: '$argon2id$hash',
-        baseSalaryCents: 500000,
         baseCurrency: 'COP' as Currency,
         language: 'SPANISH' as Language,
         theme: 'DARK' as Theme,
@@ -146,7 +144,6 @@ describe('PrismaUserRepository', () => {
           email: 'new@example.com',
           name: 'New User',
           passwordHash: '$argon2id$hash',
-          baseSalaryCents: BigInt(500000),
           baseCurrency: 'COP',
           language: 'SPANISH',
           theme: 'DARK',
@@ -156,7 +153,7 @@ describe('PrismaUserRepository', () => {
 
     it('should create user with only required fields', async () => {
       // Given
-      const minimalUser = { ...mockUser, passwordHash: null, baseSalaryCents: null };
+      const minimalUser = { ...mockUser, passwordHash: null };
       vi.mocked(prisma.user.create).mockResolvedValue(minimalUser);
 
       // When

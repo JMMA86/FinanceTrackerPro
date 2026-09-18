@@ -20,11 +20,13 @@ const {
   mockSaveOnboardingStep,
   mockUpdatePreferences,
   mockChangeLanguage,
+  mockGetSalaryConfiguration,
 } = vi.hoisted(() => ({
   mockCompleteOnboarding: vi.fn(),
   mockSaveOnboardingStep: vi.fn(),
   mockUpdatePreferences: vi.fn(),
   mockChangeLanguage: vi.fn(),
+  mockGetSalaryConfiguration: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -39,6 +41,10 @@ vi.mock('@/actions/onboarding.actions', () => ({
 
 vi.mock('@/actions/language.actions', () => ({
   changeLanguageAction: (...args: unknown[]) => mockChangeLanguage(...args),
+}));
+
+vi.mock('@/actions/salary.actions', () => ({
+  getSalaryConfiguration: (...args: unknown[]) => mockGetSalaryConfiguration(...args),
 }));
 
 vi.mock('@/actions/account.actions', () => ({ createBankAccount: vi.fn() }));
@@ -106,6 +112,10 @@ describe('OnboardingWizard', () => {
       data: { baseCurrency: 'COP', language: 'ENGLISH' },
     });
     mockChangeLanguage.mockResolvedValue({ success: true, data: { locale: 'en' } });
+    mockGetSalaryConfiguration.mockResolvedValue({
+      success: true,
+      data: { configured: false, configuration: null },
+    });
   });
 
   afterEach(() => {
@@ -155,7 +165,7 @@ describe('OnboardingWizard', () => {
     render(<OnboardingWizard {...makeProps()} />);
 
     expect(screen.getByRole('button', { name: 'Atrás' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Paso 1 de 4: ¡Te damos la bienvenida!');
+    expect(screen.getByRole('status')).toHaveTextContent('Paso 1 de 5: ¡Te damos la bienvenida!');
   });
 
   it('switches language: saves the preference, the cookie and pushes the localized route', async () => {
@@ -209,7 +219,7 @@ describe('OnboardingWizard', () => {
   });
 
   it('completes the walkthrough from the last-step CTA', async () => {
-    render(<OnboardingWizard {...makeProps({ initialStep: 3 })} />);
+    render(<OnboardingWizard {...makeProps({ initialStep: 4 })} />);
 
     expect(screen.getByRole('heading', { name: '¡Todo listo!' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ir al dashboard' }));
@@ -228,7 +238,7 @@ describe('OnboardingWizard', () => {
       code: 'INTERNAL_SERVER_ERROR',
       error: 'boom',
     });
-    render(<OnboardingWizard {...makeProps({ initialStep: 3 })} />);
+    render(<OnboardingWizard {...makeProps({ initialStep: 4 })} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ir al dashboard' }));
 

@@ -6,7 +6,7 @@
  * client walkthrough UI can import the exact same step list and length.
  */
 
-export const ONBOARDING_STEPS = ['welcome', 'account', 'modules', 'finish'] as const;
+export const ONBOARDING_STEPS = ['welcome', 'account', 'salary', 'modules', 'finish'] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 

@@ -59,6 +59,13 @@ vi.mock('@/services/exchange-rate.service', () => ({
   getExchangeRate: vi.fn(),
 }));
 
+// The end-of-period projection is a self-contained server-only read with its own
+// Prisma access. Mock the whole service so this composition suite stays focused
+// on data.ts (and so the projection never touches the minimal Prisma mock).
+vi.mock('@/services/projection.service', () => ({
+  getNetProjection: vi.fn(),
+}));
+
 // Keep the real Decimal-based money helpers (addCents/subtractCents/…) so the
 // composition arithmetic is exercised for real; only spy on `formatMoney`.
 vi.mock('@/lib/money', async (importOriginal) => {
@@ -88,8 +95,10 @@ import { getLoansSummary, getLoansForPayment } from '@/services/loan.service';
 import { getInvestmentPerformance } from '@/services/investment-performance.service';
 import { getVariableExpensesOverview } from '@/services/variable-expense.service';
 import { getExchangeRate } from '@/services/exchange-rate.service';
+import { getNetProjection } from '@/services/projection.service';
 import { formatMoney } from '@/lib/money';
 import type { Currency } from '@prisma/client';
+import type { DashboardProjection, ProjectionPeriod } from '@/types/dashboard';
 
 // ── Typed mocks ───────────────────────────────────────────────────────────────
 
@@ -113,11 +122,59 @@ const mockGetLoansForPayment = vi.mocked(getLoansForPayment);
 const mockGetInvestmentPerformance = vi.mocked(getInvestmentPerformance);
 const mockGetVariableExpensesOverview = vi.mocked(getVariableExpensesOverview);
 const mockGetExchangeRate = vi.mocked(getExchangeRate);
+const mockGetNetProjection = vi.mocked(getNetProjection);
 
 // ── Fixtures helpers ──────────────────────────────────────────────────────────
 
 const FIXED_NOW = new Date('2024-06-15T12:00:00.000Z');
 const USER_ID = 'user-dashboard-1';
+
+/**
+ * Zeroed projection fixture: the dashboard composition treats it as an opaque
+ * module payload, so only the contract shape matters here.
+ */
+function makeEmptyProjection(): DashboardProjection {
+  const emptyPeriod = (period: 'month' | 'year'): ProjectionPeriod => ({
+    period,
+    asOf: FIXED_NOW,
+    periodStart: FIXED_NOW,
+    periodEnd: FIXED_NOW,
+    currentCashCents: 0,
+    investmentValueCents: 0,
+    remainingIncomeCents: 0,
+    remainingFixedCents: 0,
+    remainingLoanPaymentsCents: 0,
+    remainingLoanPrincipalCents: 0,
+    remainingLoanInterestCents: 0,
+    remainingLoanReceivableCents: 0,
+    remainingLoanReceivablePrincipalCents: 0,
+    remainingLoanReceivableInterestCents: 0,
+    remainingVariableBudgetCents: 0,
+    remainingSavingsTargetCents: 0,
+    projectedEndCents: 0,
+    remainingToSpendCents: 0,
+    projectedSurplusCents: 0,
+    overBudget: false,
+    salaryReceivedCents: 0,
+    salaryPendingCents: 0,
+    salaryStatus: 'NOT_CONFIGURED',
+    nextSalaryDate: null,
+    nextSalaryAmountCents: null,
+    salaryOccurrences: [],
+    breakdown: [],
+  });
+
+  return {
+    configured: false,
+    targetConfigured: false,
+    currency: 'COP',
+    month: emptyPeriod('month'),
+    year: emptyPeriod('year'),
+    exchangeRatesUsed: {},
+    unconverted: false,
+    unconvertedByCurrency: {},
+  };
+}
 
 type SavingsSummaryData = Awaited<ReturnType<typeof getSavingsSummary>>;
 type MaxSpendableData = Awaited<ReturnType<typeof getMaxSpendable>>;
@@ -248,6 +305,8 @@ describe('dashboard/data.ts', () => {
       if (from === to) return 1;
       return DEFAULT_RATES[`${from}->${to}`] ?? null;
     });
+
+    mockGetNetProjection.mockResolvedValue(makeEmptyProjection());
   });
 
   // ── getDashboardMetrics (session resolution) ──────────────────────────────

@@ -46,6 +46,9 @@ export const UNIQUE_VARIABLE_TX_NOTE_KEY = '__e2eUniqueVariableTxNote';
 /** localStorage key where the unique loan name is stored for the current scenario. */
 export const UNIQUE_LOAN_NAME_KEY = '__e2eUniqueLoanName';
 
+/** localStorage key where the unique salary-bonus name is stored (settings scenario). */
+export const UNIQUE_BONUS_NAME_KEY = '__e2eUniqueBonusName';
+
 export async function setWindowValue(page: Page, key: string, value: string): Promise<void> {
   await page.evaluate(
     ({ k, v }) => {
@@ -212,5 +215,19 @@ export async function storeUniqueLoanName(page: Page, prefix: string): Promise<s
 export async function getStoredLoanName(page: Page): Promise<string> {
   const name = await getWindowValue(page, UNIQUE_LOAN_NAME_KEY);
   if (!name) throw new Error('No unique loan name stored on the page');
+  return name;
+}
+
+/** Generates a timestamped salary-bonus name, stores it and returns it. */
+export async function storeUniqueBonusName(page: Page, prefix: string): Promise<string> {
+  const name = `${prefix} ${Date.now()}`;
+  await setWindowValue(page, UNIQUE_BONUS_NAME_KEY, name);
+  return name;
+}
+
+/** Reads the unique salary-bonus name stored by the add-bonus step. */
+export async function getStoredBonusName(page: Page): Promise<string> {
+  const name = await getWindowValue(page, UNIQUE_BONUS_NAME_KEY);
+  if (!name) throw new Error('No unique salary bonus name stored on the page');
   return name;
 }

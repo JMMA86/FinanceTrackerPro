@@ -10,6 +10,7 @@ import { loginAs } from '../helpers/auth';
 import { skipOnboardingIfPresent } from '../helpers/onboarding';
 import { getStoredAccountName } from '../helpers/unique';
 import { selectAccount } from '../helpers/select';
+import { DASHBOARD_TEST_USER } from '../fixtures';
 
 // ============================================================================
 // CONSTANTS
@@ -145,6 +146,15 @@ async function openCreateModal(page: Page) {
 
 Given('que el usuario de transacciones ha iniciado sesión', async ({ page }) => {
   await loginAs(page, TRANSACTIONS_USER.email, TRANSACTIONS_USER.password);
+});
+
+/**
+ * The dashboard user owns a salary configuration, so the INCOME form must be
+ * prefilled from it. Kept as a separate Given instead of mutating the
+ * transactions user (whose scenarios assert the NO-prefill behaviour).
+ */
+Given('que el usuario con sueldo configurado ha iniciado sesión', async ({ page }) => {
+  await loginAs(page, DASHBOARD_TEST_USER.email, DASHBOARD_TEST_USER.password);
 });
 
 Given('navega a la página de transacciones', async ({ page }) => {
@@ -1065,4 +1075,69 @@ Then('las celdas de fecha deben mostrar fecha y hora', async ({ page }) => {
   // require the "·" separator followed by an HH:MM time without depending on
   // the exact date/month/24h-vs-12h representation.
   expect(text).toMatch(/·\s*\d{1,2}:\d{2}/);
+});
+
+// ============================================================================
+// CREATE - INCOME PREFILL FROM THE SALARY CONFIGURATION
+// ============================================================================
+
+/**
+ * INCOME prefill is an OPTIONAL convenience: the modal fetches the salary
+ * configuration once per opening and seeds amount, description and category. All
+ * three fields stay editable, and a user WITHOUT a salary configuration must get
+ * no prefill at all.
+ */
+
+/** es-CO formatted cents, mirroring `FormattedNumericInput.format`. */
+function formattedCents(cents: number): string {
+  return (cents / 100).toLocaleString('es-CO', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Bounded settle window for the NEGATIVE ("nothing was prefilled") assertions:
+ * the prefill is an async Server Action, so a value could still arrive after the
+ * dialog opens. 2s is the same bounded window used elsewhere in this suite for
+ * post-action settle checks.
+ */
+async function settlePrefill(page: Page): Promise<void> {
+  await page.waitForTimeout(2000);
+}
+
+Then('la descripción debe precargarse con {string}', async ({ page }, description: string) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('textbox', { name: 'Descripción' })).toHaveValue(description, {
+    timeout: 15000,
+  });
+});
+
+Then('el valor debe precargarse con {int} centavos', async ({ page }, cents: number) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('textbox', { name: 'Valor' })).toHaveValue(formattedCents(cents), {
+    timeout: 15000,
+  });
+});
+
+Then('la categoría {string} debe estar seleccionada', async ({ page }, category: string) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('radio', { name: category })).toBeChecked({ timeout: 15000 });
+});
+
+Then('la descripción no debe precargarse', async ({ page }) => {
+  await settlePrefill(page);
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('textbox', { name: 'Descripción' })).toHaveValue('');
+});
+
+Then('el valor no debe precargarse', async ({ page }) => {
+  await settlePrefill(page);
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('textbox', { name: 'Valor' })).toHaveValue(formattedCents(0));
+});
+
+Then('la categoría {string} no debe estar seleccionada', async ({ page }, category: string) => {
+  const dialog = getOpenDialog(page);
+  await expect(dialog.getByRole('radio', { name: category })).not.toBeChecked();
 });

@@ -43,7 +43,7 @@
 import 'server-only';
 
 import { Decimal } from 'decimal.js';
-import { addDays, endOfMonth, startOfMonth, subMonths } from 'date-fns';
+import { addDays, endOfMonth, endOfYear, startOfMonth, startOfYear, subMonths } from 'date-fns';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import {
@@ -63,6 +63,7 @@ import {
 } from '@/services/investment-performance.service';
 import { getVariableExpensesOverview } from '@/services/variable-expense.service';
 import { getExchangeRate } from '@/services/exchange-rate.service';
+import { getNetProjection } from '@/services/projection.service';
 import {
   computeAvailableCredit,
   computeNextDueDate,
@@ -84,6 +85,7 @@ import type {
   DashboardFixedExpenseBucket,
   DashboardLoanBucket,
   DashboardMetrics,
+  DashboardProjection,
   DashboardSavingsGoal,
   DashboardUpcomingFixedExpense,
   DashboardVariableExpenseBucket,
@@ -96,6 +98,8 @@ import type {
   ExchangeRateUsed,
   InvestmentBreakdownAccount,
   MoneyBucket,
+  ProjectionPeriod,
+  ProjectionPeriodKey,
   UnconvertedCurrencyBucket,
 } from '@/types/dashboard';
 
@@ -341,6 +345,58 @@ function emptyCurrencyBuckets(): DashboardCurrencyBuckets {
   };
 }
 
+/**
+ * Zeroed projection period. The real window bounds are still computed so the UI
+ * can render the period labels (e.g. "Septiembre 2026") even when there is no
+ * data at all.
+ */
+function emptyProjectionPeriod(period: ProjectionPeriodKey, now: Date): ProjectionPeriod {
+  return {
+    period,
+    asOf: now,
+    periodStart: period === 'month' ? startOfMonth(now) : startOfYear(now),
+    periodEnd: period === 'month' ? endOfMonth(now) : endOfYear(now),
+    currentCashCents: 0,
+    investmentValueCents: 0,
+    salaryReceivedCents: 0,
+    salaryPendingCents: 0,
+    salaryStatus: 'NOT_CONFIGURED',
+    nextSalaryDate: null,
+    nextSalaryAmountCents: null,
+    salaryOccurrences: [],
+    remainingIncomeCents: 0,
+    remainingFixedCents: 0,
+    remainingLoanPaymentsCents: 0,
+    remainingLoanPrincipalCents: 0,
+    remainingLoanInterestCents: 0,
+    remainingLoanReceivableCents: 0,
+    remainingLoanReceivablePrincipalCents: 0,
+    remainingLoanReceivableInterestCents: 0,
+    remainingVariableBudgetCents: 0,
+    remainingSavingsTargetCents: 0,
+    projectedEndCents: 0,
+    remainingToSpendCents: 0,
+    projectedSurplusCents: 0,
+    overBudget: false,
+    breakdown: [],
+  };
+}
+
+/** Coherent empty projection (nothing configured, every amount zero, COP). */
+function emptyProjection(): DashboardProjection {
+  const now = new Date();
+  return {
+    configured: false,
+    targetConfigured: false,
+    currency: 'COP',
+    month: emptyProjectionPeriod('month', now),
+    year: emptyProjectionPeriod('year', now),
+    exchangeRatesUsed: {},
+    unconverted: false,
+    unconvertedByCurrency: {},
+  };
+}
+
 function getEmptyMetrics(): DashboardMetrics {
   const defaultCurrency: Currency = 'COP';
   return {
@@ -396,6 +452,7 @@ function getEmptyMetrics(): DashboardMetrics {
     variableExpenses: { byCurrency: [] },
     savingsGoals: [],
     alerts: [],
+    projection: emptyProjection(),
   };
 }
 
@@ -1541,6 +1598,7 @@ async function loadDashboardModuleData(
     eurLive,
     fallbackRatesRaw,
     fixedOverdueCountsRaw,
+    projection,
   ] = await Promise.all([
     getFixedExpensesSummary(userId, targetMonth, targetYear),
     getFixedExpensesWithPayments(
@@ -1588,6 +1646,11 @@ async function loadDashboardModuleData(
       _count: { _all: true },
       _sum: { expectedAmountCents: true },
     }),
+    // End-of-period projection (month + year) in COP. The service resolves its
+    // own FX rates (live → stored fallback) so it stays a self-contained,
+    // traceable read; the dashboard could reuse `fallbackRates` but the
+    // projection must also work outside the dashboard.
+    getNetProjection(userId, now),
   ]);
 
   // Keep only the most recent PLAUSIBLE stored rate per currency. Rows arrive
@@ -1625,6 +1688,7 @@ async function loadDashboardModuleData(
     eurRate: resolveRate('EUR', eurLive, fallbackRates.EUR),
     fallbackRates,
     fixedOverdueByCurrency,
+    projection,
   };
 }
 
@@ -2203,6 +2267,9 @@ export async function getDashboardMetricsByUser(
     },
     savingsGoals,
     alerts,
+
+    // Proyección de fin de período (mes + año), en COP.
+    projection: moduleData.projection,
   };
 }
 

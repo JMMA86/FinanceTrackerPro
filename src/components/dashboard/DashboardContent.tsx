@@ -31,6 +31,7 @@ import {
   Info,
 } from 'lucide-react';
 import { PieChartComponent } from '@/components/dashboard/PieChartComponent';
+import { ProjectionSection } from '@/components/dashboard/ProjectionSection';
 import { ExpandableMetricSection } from '@/components/dashboard/ExpandableMetricSection';
 import { InlineMetric } from '@/components/dashboard/InlineMetric';
 import { SparklineChart } from '@/components/dashboard/SparklineChart';
@@ -2073,6 +2074,13 @@ export function DashboardContent({
       />
 
       <CriticalIndicatorsSection metrics={metrics} lang={lang} t={t} isMasked={isMasked} />
+
+      <ProjectionSection
+        projection={metrics.projection}
+        lang={lang}
+        dictionary={dashboard}
+        locale={locale}
+      />
 
       <QuickActionsSection
         t={t}

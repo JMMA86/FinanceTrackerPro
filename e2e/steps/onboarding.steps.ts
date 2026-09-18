@@ -1,12 +1,16 @@
 /**
  * Onboarding Step Definitions
  *
- * Covers the first-run walkthrough at `/[lang]/onboarding`: language selection,
- * first account creation, module tour, completion, skip and the first-run guard.
+ * Covers the 5-step first-run walkthrough at `/[lang]/onboarding`:
+ *   welcome (1) → account (2) → salary (3, OPTIONAL) → modules (4) → finish (5)
+ *
+ * Language selection, first account creation, the optional salary/bonus step,
+ * the module tour, completion, skip and the first-run guard are all exercised.
  *
  * Three isolated non-onboarded users are seeded in `prisma/seed.e2e.ts`:
- *   - "1" → read-only walkthrough (redirect / welcome / i18n / modules)
- *   - "2" → first-account creation, then skip
+ *   - "1" → read-only walkthrough (redirect / welcome / i18n / modules) and the
+ *           empty-salary path (never persists a salary configuration)
+ *   - "2" → first-account creation + salary save, then skip
  *   - "3" → full walkthrough completion
  * The already-onboarded auth user verifies the dashboard guard.
  */
@@ -139,11 +143,21 @@ async function closeOnboardingDb(): Promise<void> {
  * retried scenario would log in straight into the dashboard and fail
  * deterministically. A single `updateMany` per scenario makes every onboarding
  * scenario idempotent and retry-safe.
+ *
+ * The @onboarding @salary scenarios also depend on a CLEAN salary state: the
+ * salary configuration of these three users is deleted here (hard delete inside
+ * the isolated `?schema=e2e` database — the `SalaryBonus` rows cascade) so the
+ * walkthrough always starts without a persisted salary. These users are used by
+ * no other feature file, so the cleanup can never affect another suite.
  */
 Before({ tags: '@onboarding', name: 'Restore non-onboarded state of seeded users' }, async () => {
-  await getOnboardingDb().user.updateMany({
+  const db = getOnboardingDb();
+  await db.user.updateMany({
     where: { email: { in: NON_ONBOARDED_EMAILS } },
     data: { onboardingCompletedAt: null, onboardingStep: 0 },
+  });
+  await db.salaryConfiguration.deleteMany({
+    where: { user: { email: { in: NON_ONBOARDED_EMAILS } } },
   });
 });
 
@@ -195,6 +209,25 @@ When('avanza al paso de crear cuenta', async ({ page }) => {
   });
 });
 
+/**
+ * Advances from the welcome step (1) or the account step (2) to the OPTIONAL
+ * salary step (3). The account step is skippable: "Continuar" advances even when
+ * no account has been created.
+ */
+When('avanza al paso de sueldo', async ({ page }) => {
+  const continueButton = page.getByRole('button', { name: 'Continuar', exact: true });
+  const salaryHeading = page.getByRole('heading', { name: 'Configura tu sueldo' });
+  // At most two clicks: welcome → account and account → salary.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (await salaryHeading.isVisible().catch(() => false)) return;
+    await continueButton.click();
+    await expect(page.getByText(/^Paso \d de 5$/))
+      .toBeVisible({ timeout: 10000 })
+      .catch(() => {});
+  }
+  await expect(salaryHeading).toBeVisible({ timeout: 10000 });
+});
+
 When(
   'crea la cuenta {string} de tipo {string} con saldo {string}',
   async ({ page }, name: string, type: string, balance: string) => {
@@ -211,18 +244,24 @@ When(
 );
 
 When('avanza hasta el paso de módulos', async ({ page }) => {
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByText('Paso 2 de 4', { exact: true })).toBeVisible({ timeout: 10000 });
-  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Explora los módulos' })).toBeVisible({
-    timeout: 10000,
-  });
+  const continueButton = page.getByRole('button', { name: 'Continuar', exact: true });
+  const modulesHeading = page.getByRole('heading', { name: 'Explora los módulos' });
+  // Advance one step at a time until the modules step (4) is reached. The salary
+  // step (3) in between is optional: an untouched form advances without saving.
+  for (let step = 1; step < 4; step += 1) {
+    if (await modulesHeading.isVisible().catch(() => false)) return;
+    await continueButton.click();
+    await expect(page.getByText(`Paso ${step + 1} de 5`, { exact: true })).toBeVisible({
+      timeout: 15000,
+    });
+  }
+  await expect(modulesHeading).toBeVisible({ timeout: 15000 });
 });
 
-/** Reads the current "Paso N de 4" indicator (1-based). */
+/** Reads the current "Paso N de 5" indicator (1-based). */
 async function currentOnboardingStep(page: Page): Promise<number> {
   const label = await page
-    .getByText(/^Paso \d de 4$/)
+    .getByText(/^Paso \d de 5$/)
     .first()
     .innerText();
   const match = /\d/.exec(label);
@@ -234,11 +273,12 @@ When('avanza hasta el último paso', async ({ page }) => {
   const ctaButton = page.getByRole('button', { name: 'Ir al dashboard', exact: true });
   // The walkthrough can start at welcome (step 1) or at the account step (step 2)
   // depending on what the scenario already did, so advance one step at a time.
+  // The salary step (3) auto-submits: an empty form advances without persisting.
   const start = await currentOnboardingStep(page);
-  for (let step = start; step < 4; step += 1) {
+  for (let step = start; step < 5; step += 1) {
     await continueButton.click();
-    await expect(page.getByText(`Paso ${step + 1} de 4`, { exact: true })).toBeVisible({
-      timeout: 10000,
+    await expect(page.getByText(`Paso ${step + 1} de 5`, { exact: true })).toBeVisible({
+      timeout: 20000,
     });
   }
   await expect(ctaButton).toBeVisible({ timeout: 10000 });
@@ -259,6 +299,26 @@ When('pulsa {string} y confirma en el modal', async ({ page }, label: string) =>
   await expect(dialog).toBeVisible({ timeout: 10000 });
   await dialog.getByRole('button', { name: 'Sí, omitir', exact: true }).click();
 });
+
+When('pulsa {string}', async ({ page }, label: string) => {
+  await page.getByRole('button', { name: label, exact: true }).click();
+});
+
+/**
+ * Fills the OPTIONAL salary step: it types the amount digit by digit (the field
+ * is a `FormattedNumericInput` whose value is updated on keyDown, in cents) and
+ * sets the day of the month for the default MONTHLY frequency.
+ */
+When(
+  'ingresa {string} centavos como monto de sueldo con día de pago {string}',
+  async ({ page }, amountCents: string, payDay: string) => {
+    const amount = page.locator('#onboarding-salary-amount');
+    await expect(amount).toBeVisible({ timeout: 15000 });
+    await amount.click();
+    await amount.pressSequentially(amountCents);
+    await page.locator('#onboarding-salary-pay-day').fill(payDay);
+  }
+);
 
 When('recarga el dashboard', async ({ page }) => {
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -283,6 +343,38 @@ Then('debe estar en el dashboard en español', async ({ page }) => {
 
 Then('debe ver el contador de progreso {string}', async ({ page }, text: string) => {
   await expect(page.getByText(text, { exact: true }).first()).toBeVisible({ timeout: 10000 });
+});
+
+Then('debe estar en el paso {string}', async ({ page }, text: string) => {
+  await expect(page.getByText(text, { exact: true }).first()).toBeVisible({ timeout: 15000 });
+});
+
+/** es-CO formatted cents, mirroring `FormattedNumericInput.format`. */
+function formattedCents(cents: number): string {
+  return (cents / 100).toLocaleString('es-CO', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+Then(
+  'el formulario de sueldo debe mostrar el monto {string} centavos y día {string}',
+  async ({ page }, amountCents: string, payDay: string) => {
+    await expect(page.getByRole('heading', { name: 'Configura tu sueldo' })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.locator('#onboarding-salary-amount')).toHaveValue(
+      formattedCents(Number(amountCents))
+    );
+    await expect(page.locator('#onboarding-salary-pay-day')).toHaveValue(payDay);
+  }
+);
+
+Then('el formulario de sueldo debe estar sin monto', async ({ page }) => {
+  await expect(page.getByRole('heading', { name: 'Configura tu sueldo' })).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(page.locator('#onboarding-salary-amount')).toHaveValue(formattedCents(0));
 });
 
 Then('debe ver el saludo del usuario de onboarding {string}', async ({ page }, key: string) => {

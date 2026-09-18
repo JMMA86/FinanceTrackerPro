@@ -10,6 +10,8 @@ import {
   updateOnboardingPreferences,
 } from '@/actions/onboarding.actions';
 import { changeLanguageAction } from '@/actions/language.actions';
+import { getSalaryConfiguration } from '@/actions/salary.actions';
+import type { SalaryFormHandle } from '@/components/settings/SalaryForm';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/steps';
 import type { OnboardingStep } from '@/lib/onboarding/steps';
 import type { Locale } from '@/lib/i18n';
@@ -18,6 +20,7 @@ import { AnimatedBackground } from '@/components/auth/AnimatedBackground';
 import { OnboardingProgress } from './OnboardingProgress';
 import { StepWelcome } from './StepWelcome';
 import { StepFirstAccount } from './StepFirstAccount';
+import { StepSalary } from './StepSalary';
 import { StepExploreModules } from './StepExploreModules';
 import { StepFinish } from './StepFinish';
 import type { OnboardingAccountSummary } from './types';
@@ -111,15 +114,19 @@ export function OnboardingWizard({
   const [isSavingLanguage, setIsSavingLanguage] = useState(false);
   const [languageError, setLanguageError] = useState<string | null>(null);
   const [account, setAccount] = useState<OnboardingAccountSummary | null>(null);
+  const [salaryConfigured, setSalaryConfigured] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
   const [skipOpen, setSkipOpen] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
+  // Guards the primary CTA while the salary step saves before advancing.
+  const [isAdvancing, setIsAdvancing] = useState(false);
 
   // Stable idempotency key for the whole session: retries reuse the same UUID.
   const [accountIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const salaryFormRef = useRef<SalaryFormHandle | null>(null);
   const isFirstRender = useRef(true);
 
   // Reduced-motion preference via an external store (no setState-in-effect).
@@ -138,6 +145,22 @@ export function OnboardingWizard({
     const timer = window.setTimeout(() => setSplashDismissed(true), SPLASH_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [prefersReducedMotion]);
+
+  // Seed the summary with an already-existing salary configuration so the
+  // final step reports the truth even when the walkthrough resumes at `finish`.
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const result = await getSalaryConfiguration({});
+      if (!active) return;
+      setSalaryConfigured(result.success ? (result.data?.configured ?? false) : false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Move focus to the step heading whenever the step changes (WCAG 2.4.3).
   useEffect(() => {
@@ -239,16 +262,35 @@ export function OnboardingWizard({
   }
 
   function handleBack() {
-    if (currentStep === 0 || isCompleting) return;
+    if (currentStep === 0 || isCompleting || isAdvancing) return;
     goToStep(currentStep - 1);
   }
 
-  function handleNext() {
-    if (isCompleting) return;
+  /**
+   * Primary CTA handler.
+   *
+   * On the `salary` step the form is saved first when it holds real data:
+   * `requestSubmit` resolves `'saved'`/`'skipped'` to continue, or `'invalid'`
+   * to stay put with the validation errors visible. The step remains optional —
+   * an empty form never blocks the walkthrough.
+   */
+  async function handleNext() {
+    if (isAdvancing || isCompleting) return;
     if (isLastStep) {
       void finish();
       return;
     }
+
+    if (ONBOARDING_STEPS[currentStep] === 'salary') {
+      setIsAdvancing(true);
+      try {
+        const outcome = (await salaryFormRef.current?.requestSubmit()) ?? 'skipped';
+        if (outcome === 'invalid') return;
+      } finally {
+        setIsAdvancing(false);
+      }
+    }
+
     goToStep(currentStep + 1);
   }
 
@@ -281,6 +323,17 @@ export function OnboardingWizard({
             onCreated={setAccount}
           />
         );
+      case 'salary':
+        return (
+          <StepSalary
+            headingRef={headingRef}
+            titleId={STEP_HEADING_ID}
+            dictionary={onboarding}
+            lang={selectedLocale}
+            onConfigured={setSalaryConfigured}
+            submitRef={salaryFormRef}
+          />
+        );
       case 'modules':
         return (
           <StepExploreModules
@@ -300,6 +353,7 @@ export function OnboardingWizard({
             baseCurrency={baseCurrency}
             account={account}
             lang={selectedLocale}
+            salaryConfigured={salaryConfigured}
           />
         );
       default:
@@ -331,7 +385,7 @@ export function OnboardingWizard({
           <button
             type="button"
             onClick={() => setSkipOpen(true)}
-            disabled={isCompleting}
+            disabled={isCompleting || isAdvancing}
             className="btn-secondary shrink-0 transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-50"
           >
             {t(onboarding, 'buttons.skip')}
@@ -377,16 +431,16 @@ export function OnboardingWizard({
           <button
             type="button"
             onClick={handleBack}
-            disabled={currentStep === 0 || isCompleting}
+            disabled={currentStep === 0 || isCompleting || isAdvancing}
             className="btn-secondary transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t(onboarding, 'buttons.back')}
           </button>
           <button
             type="button"
-            onClick={handleNext}
-            disabled={isCompleting}
-            aria-busy={isCompleting}
+            onClick={() => void handleNext()}
+            disabled={isCompleting || isAdvancing}
+            aria-busy={isCompleting || isAdvancing}
             className="btn-primary group relative min-w-[9rem] overflow-hidden disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isLastStep && (

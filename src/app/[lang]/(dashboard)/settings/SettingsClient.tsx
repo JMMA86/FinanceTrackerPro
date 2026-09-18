@@ -7,6 +7,7 @@ import { logoutAction } from '@/actions/auth.actions';
 import { get, SUPPORTED_LOCALES } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 import { Globe, LogOut, CheckCircle, Loader2 } from 'lucide-react';
+import { SalarySettingsSection } from '@/components/settings/SalarySettingsSection';
 
 interface SettingsClientProps {
   lang: Locale;
@@ -101,6 +102,9 @@ export default function SettingsClient({
           </div>
         </div>
       </div>
+
+      {/* Income & savings target */}
+      <SalarySettingsSection dictionary={settings} lang={lang} />
 
       {/* Account Settings - Logout */}
       <div className="app-shell rounded-2xl p-6">

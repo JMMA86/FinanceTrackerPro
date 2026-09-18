@@ -1,6 +1,6 @@
 /**
  * StepFinish tests: the summary shows the chosen language, the created account
- * (or the "not yet" fallback) and the main currency.
+ * (or the "not yet" fallback), the main currency and the salary status.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -30,6 +30,7 @@ function makeProps(overrides: Partial<StepFinishProps> = {}): StepFinishProps {
     common,
     baseCurrency: 'COP',
     account: ACCOUNT,
+    salaryConfigured: false,
     lang: 'es',
     ...overrides,
   };
@@ -60,10 +61,26 @@ describe('StepFinish', () => {
     expect(screen.getByText('🇬🇧 English')).toBeInTheDocument();
   });
 
+  it('summarizes the salary as not configured by default', () => {
+    render(<StepFinish {...makeProps()} />);
+
+    expect(screen.getByText('Sueldo configurado')).toBeInTheDocument();
+    // The account exists, so only the salary row renders the "not yet" fallback.
+    expect(screen.getAllByText('Aún no')).toHaveLength(1);
+  });
+
+  it('marks the salary row as done when a salary was configured', () => {
+    render(<StepFinish {...makeProps({ salaryConfigured: true })} />);
+
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+    expect(screen.queryByText('Aún no')).not.toBeInTheDocument();
+  });
+
   it('falls back to the "not yet" copy when no account was created', () => {
     render(<StepFinish {...makeProps({ account: null })} />);
 
-    expect(screen.getByText('Aún no')).toBeInTheDocument();
+    // Account row + salary row (not configured) both fall back to "not yet".
+    expect(screen.getAllByText('Aún no')).toHaveLength(2);
     expect(screen.queryByText(ACCOUNT.name)).not.toBeInTheDocument();
   });
 });

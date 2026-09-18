@@ -146,5 +146,6 @@
   "loanInstallmentDue": "Vence",
   "loanInstallmentRemaining": "Saldo",
   "capitalPaymentAmount": "Monto del abono a capital",
-  "loanCapitalPaymentSuccess": "Abono a capital registrado"
+  "loanCapitalPaymentSuccess": "Abono a capital registrado",
+  "salaryPrefillDescription": "Sueldo"
 }

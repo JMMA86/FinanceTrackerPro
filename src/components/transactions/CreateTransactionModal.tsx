@@ -27,6 +27,7 @@ import type {
 } from '@/types/fixed-expense';
 import type { VariableExpenseDefinition } from '@/types/variable-expense';
 import type { LoanPaymentOption, LoanPaymentOptionInstallment } from '@/types/loans';
+import { getSalaryPrefill, type SalaryPrefill } from '@/actions/salary.actions';
 
 // ---------------------------------------------------------------------------
 // Expense nature (create + EXPENSE only)
@@ -57,6 +58,20 @@ type Notify = (type: 'success' | 'error' | 'warning' | 'info', message: string) 
 interface IdempotencyKeyRef {
   current: string | null;
 }
+
+/**
+ * Form values captured when INCOME was selected. They are compared with the
+ * live form values before applying the salary prefill, so anything the user
+ * changed while the request was in flight is never overwritten.
+ */
+interface SalaryPrefillSnapshot {
+  amountCents: number;
+  description: string;
+  categoryId: string;
+}
+
+/** Lifecycle of the per-opening salary prefill: fetch at most once per open. */
+type SalaryPrefillState = 'idle' | 'loading' | 'done';
 
 // ---------------------------------------------------------------------------
 // Client-side validation schema
@@ -1389,12 +1404,17 @@ export function CreateTransactionModal({
   const [loanAction, setLoanAction] = useState<LoanAction>('PAGAR_CUOTA');
   const loanIdempotencyKeyRef = useRef<string | null>(null);
 
+  // Salary prefill lifecycle for the current modal opening (never re-fetched on
+  // every render; reset only when the modal opens/closes).
+  const salaryPrefillRef = useRef<SalaryPrefillState>('idle');
+
   const {
     register,
     handleSubmit,
     reset,
     control,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<CreateTransactionFormData>({
     resolver: zodResolver(CreateTransactionFormSchema),
@@ -1654,6 +1674,84 @@ export function CreateTransactionModal({
       queueMicrotask(() => setSelectedLoanId(''));
     }
   }, [effectiveNature, selectedAccount, loansForPayment, selectedLoanId]);
+
+  // Reset the prefill lifecycle exactly when the modal (re)opens — never when
+  // unrelated props change, so a user edit is never overwritten by a refetch.
+  useEffect(() => {
+    salaryPrefillRef.current = 'idle';
+  }, [isOpen, editingTransaction]);
+
+  /**
+   * Seeds the amount, description and category from the salary configuration.
+   * Every value stays EDITABLE: only fields still holding the snapshot captured
+   * when INCOME was selected are written, and the whole apply bails out when the
+   * type is no longer INCOME (stale render / user switched back).
+   */
+  const applySalaryPrefill = useCallback(
+    (prefill: SalaryPrefill, snapshot: SalaryPrefillSnapshot): void => {
+      if (getValues('type') !== 'INCOME') {
+        // The form was reset or the user moved on: allow a future INCOME
+        // selection within this opening to try again.
+        salaryPrefillRef.current = 'idle';
+        return;
+      }
+
+      const account = accounts.find((item) => item.id === getValues('accountId'));
+      const amountUntouched = (getValues('amountCents') ?? 0) === snapshot.amountCents;
+      const descriptionUntouched = (getValues('description') ?? '') === snapshot.description;
+      const categoryUntouched = (getValues('categoryId') ?? '') === snapshot.categoryId;
+
+      // Currencies are never mixed: only seed the amount when the selected
+      // account (if any) shares the salary currency.
+      const canSeedAmount = !account || account.currency === prefill.currency;
+      if (amountUntouched && canSeedAmount && prefill.amountCents > 0) {
+        setValue('amountCents', prefill.amountCents, { shouldValidate: false });
+        setAmountCents(prefill.amountCents);
+      }
+
+      if (descriptionUntouched) {
+        setValue('description', get(dictionary, 'salaryPrefillDescription'), {
+          shouldValidate: false,
+        });
+      }
+
+      if (categoryUntouched && prefill.categoryId) {
+        setValue('categoryId', prefill.categoryId, { shouldValidate: false });
+      }
+    },
+    [accounts, dictionary, getValues, setValue]
+  );
+
+  // INCOME prefill from the salary configuration: fetched ONCE per opening,
+  // only when the user picks INCOME, and always after the type is in place.
+  useEffect(() => {
+    if (!isOpen || isEditing) return;
+    if (selectedType !== 'INCOME') return;
+    if (salaryPrefillRef.current !== 'idle') return;
+
+    salaryPrefillRef.current = 'loading';
+
+    const snapshot: SalaryPrefillSnapshot = {
+      amountCents: getValues('amountCents') ?? 0,
+      description: getValues('description') ?? '',
+      categoryId: getValues('categoryId') ?? '',
+    };
+
+    void (async () => {
+      try {
+        const result = await getSalaryPrefill({});
+        // The modal was closed/reset while the request was in flight.
+        if (salaryPrefillRef.current !== 'loading') return;
+        const prefill = result.success ? result.data : undefined;
+        if (!prefill?.configured) return;
+        applySalaryPrefill(prefill, snapshot);
+      } catch {
+        // Prefill is an optional convenience; a failure must never block the form.
+      } finally {
+        if (salaryPrefillRef.current === 'loading') salaryPrefillRef.current = 'done';
+      }
+    })();
+  }, [isOpen, isEditing, selectedType, getValues, applySalaryPrefill]);
 
   const handleClose = useCallback(() => {
     const dialog = dialogRef.current;

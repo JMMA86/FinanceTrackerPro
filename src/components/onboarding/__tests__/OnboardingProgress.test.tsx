@@ -1,5 +1,5 @@
 /**
- * OnboardingProgress tests: accessible stepper rendering (4 items, aria-current
+ * OnboardingProgress tests: accessible stepper rendering (5 items, aria-current
  * on the active step, done/current/pending visuals and localized labels).
  */
 
@@ -11,6 +11,7 @@ import { ONBOARDING_STEPS } from '@/lib/onboarding/steps';
 const LABELS = {
   welcome: 'Bienvenida',
   account: 'Cuenta',
+  salary: 'Sueldo',
   modules: 'Módulos',
   finish: 'Listo',
 } as const;
@@ -23,8 +24,8 @@ describe('OnboardingProgress', () => {
   it('renders one item per onboarding step', () => {
     renderProgress(0);
 
-    expect(ONBOARDING_STEPS).toHaveLength(4);
-    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(ONBOARDING_STEPS).toHaveLength(5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(5);
   });
 
   it('exposes an accessible navigation landmark', () => {
@@ -41,6 +42,7 @@ describe('OnboardingProgress', () => {
     expect(items[0]).not.toHaveAttribute('aria-current');
     expect(items[1]).not.toHaveAttribute('aria-current');
     expect(items[3]).not.toHaveAttribute('aria-current');
+    expect(items[4]).not.toHaveAttribute('aria-current');
   });
 
   it('renders the localized label for every step', () => {
@@ -58,10 +60,12 @@ describe('OnboardingProgress', () => {
     // Steps 0 and 1 are done → check icon, no number.
     expect(items[0].querySelector('svg')).not.toBeNull();
     expect(items[1].querySelector('svg')).not.toBeNull();
-    // Step 2 is current and step 3 is pending → their ordinal is displayed.
+    // Step 2 is current and steps 3 & 4 are pending → their ordinal is displayed.
     expect(items[2].querySelector('svg')).toBeNull();
     expect(items[2]).toHaveTextContent('3');
     expect(items[3].querySelector('svg')).toBeNull();
     expect(items[3]).toHaveTextContent('4');
+    expect(items[4].querySelector('svg')).toBeNull();
+    expect(items[4]).toHaveTextContent('5');
   });
 });

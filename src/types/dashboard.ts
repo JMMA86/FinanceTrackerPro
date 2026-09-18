@@ -111,6 +111,201 @@ export interface UnconvertedCurrencyBucket {
   amountCents: number;
 }
 
+/** Which calendar window a projection covers. */
+export type ProjectionPeriodKey = 'month' | 'year';
+
+/**
+ * ONE explainable projection line. The frontend can render the full calculation
+ * without re-deriving anything:
+ *
+ * - `key`          stable component slug (cash, investments, salary, bonus,
+ *                  fixed, loan-principal, loan-interest,
+ *                  loan-receivable-principal, loan-receivable-interest,
+ *                  variable, savings-target).
+ * - `source`       origin system (CURRENT_CASH, SALARY_SCHEDULE, …) used to
+ *                  group/label lines.
+ * - `amountCents`  ALWAYS a NON-NEGATIVE magnitude in COP cents (0 when the item
+ *                  could not be converted). `buildComponent` never emits a sign:
+ *                  the DIRECTION (inflow vs outflow) is derived from `key`/
+ *                  `source`, not from the sign of this field.
+ * - `sourceCurrency` / `originalAmountCents` / `exchangeRate`  Rule 9 FX
+ *                  traceability: `originalAmountCents` is ALWAYS expressed in
+ *                  `sourceCurrency` (never a cross-currency sum); `exchangeRate`
+ *                  is the COP-per-unit multiplier actually applied (null for COP).
+ * - `count`        how many underlying items produced the line (occurrences,
+ *                  payments, installments, months).
+ * - `detail`       human-readable explanation (machine-parseable prose).
+ *
+ * Lines are emitted per component AND per source currency, so a multi-currency
+ * component yields one line per currency and `originalAmountCents` never mixes
+ * currencies.
+ */
+export interface ProjectionBreakdownLine {
+  key: string;
+  amountCents: number;
+  currency: 'COP';
+  sourceCurrency: Currency;
+  originalAmountCents: number;
+  exchangeRate: number | null;
+  source: string;
+  count: number;
+  detail: string;
+}
+
+/**
+ * Salary status for ONE projection window. "Pending" only ever refers to
+ * occurrences STILL AHEAD (from today to the end of the window): a payday that
+ * already passed is never reported as pending.
+ *
+ * - `NOT_CONFIGURED`: no ACTIVE `SalaryConfiguration` exists.
+ * - `PENDING`: future occurrences remain and NONE was received yet.
+ * - `PARTIAL`: future occurrences remain and SOME salary was already received.
+ * - `RECEIVED`: no occurrence remains pending and at least one was received.
+ * - `NO_PENDING`: no occurrence remains pending and none was received (e.g. the
+ *   account was created after this window's payday). Prevents rendering a
+ *   misleading "pending $0" or a false "received".
+ */
+export type ProjectionSalaryStatus =
+  | 'NOT_CONFIGURED'
+  | 'RECEIVED'
+  | 'PARTIAL'
+  | 'PENDING'
+  | 'NO_PENDING';
+
+/**
+ * ONE expected salary occurrence of the window with its received flag. Only
+ * occurrences from TODAY to the end of the window are exposed (past paydays are
+ * omitted), so a stale payday never shows up as pending.
+ *
+ * `amountCents`/`currency` are the ORIGINAL expected amount (Rules 2/4) so the UI
+ * can format each payment faithfully; the COP aggregates live in the period
+ * (`salaryReceivedCents`/`salaryPendingCents`/`nextSalaryAmountCents`).
+ */
+export interface ProjectionSalaryOccurrence {
+  date: Date;
+  amountCents: number;
+  currency: Currency;
+  /**
+   * `true` when a real salary INCOME transaction was matched to this occurrence
+   * by NEAREST-OCCURRENCE proximity (smallest absolute calendar-day distance,
+   * within a 15-day tolerance). Each occurrence is matched at most once; see
+   * `matchSalaryOccurrences` in `projection.service.ts`.
+   */
+  received: boolean;
+}
+
+/**
+ * End-of-period projection for ONE calendar window (`month` = current calendar
+ * month, `year` = current calendar year). Every amount is COP cents (product
+ * decision) after explicit, traceable FX conversion.
+ */
+export interface ProjectionPeriod {
+  period: ProjectionPeriodKey;
+  asOf: Date;
+  periodStart: Date;
+  periodEnd: Date;
+  /** Liquid cash today (CHECKING + CASH + SAVINGS + POCKET) from the ledger. */
+  currentCashCents: number;
+  /**
+   * Current value of the INVESTMENT accounts, in COP cents: ledger cash of the
+   * account + market value of its active holdings (Σ quantity ×
+   * currentPriceCents). Reuses `getInvestmentPerformance`'s `totalValueCents`
+   * formula (Rule 13 — cash from the ledger) with a traceable FX conversion to
+   * COP; an investment account without a usable rate is excluded and flagged.
+   *
+   * It participates ONLY in `projectedEndCents` (end-of-period net worth) and
+   * NEVER in `remainingToSpendCents`/`projectedSurplusCents`: the value is not
+   * spendable until liquidated.
+   */
+  investmentValueCents: number;
+  /**
+   * Salary already RECEIVED inside the window, in COP cents (Σ real salary INCOME
+   * transactions converted with a traceable FX rate). It is already inside
+   * `currentCashCents` and is NEVER added to `remainingIncomeCents`.
+   */
+  salaryReceivedCents: number;
+  /**
+   * Salary expected but NOT yet received, in COP cents. Pending = ONLY the FUTURE
+   * occurrences inside the window (from today to the period end); paydays that
+   * already passed are never generated and therefore never counted. It IS part of
+   * `remainingIncomeCents`.
+   */
+  salaryPendingCents: number;
+  /** Derived salary state for the window (see {@link ProjectionSalaryStatus}). */
+  salaryStatus: ProjectionSalaryStatus;
+  /**
+   * First NOT-received salary occurrence at/after `asOf`. Every pending
+   * occurrence is >= today; if none qualifies, the OLDEST pending one. Null when
+   * nothing is pending.
+   */
+  nextSalaryDate: Date | null;
+  /** COP cents of `nextSalaryDate`'s occurrence (null when unconvertible/none). */
+  nextSalaryAmountCents: number | null;
+  /** Every expected occurrence of the window with its received flag (sorted). */
+  salaryOccurrences: ProjectionSalaryOccurrence[];
+  /**
+   * Expected INFLOWS still ahead in the window: salary occurrences NOT yet
+   * received + bonus occurrences + the RECEIVABLE loan collections
+   * (`remainingLoanReceivableCents`). Salary already received is EXCLUDED to
+   * avoid double counting it (it is already in `currentCashCents`).
+   */
+  remainingIncomeCents: number;
+  /** Unpaid fixed-expense payments due in the window. */
+  remainingFixedCents: number;
+  /** Remaining PAYABLE loan installments (principal + interest) — OUTFLOW. */
+  remainingLoanPaymentsCents: number;
+  remainingLoanPrincipalCents: number;
+  remainingLoanInterestCents: number;
+  /**
+   * Remaining RECEIVABLE loan collections (principal + interest) — INFLOW. Money
+   * the user lent out and will COLLECT. Its principal is not accounting "income"
+   * (it is the return of an asset) but it IS real cash flow, so it is added to
+   * `remainingIncomeCents` by product decision.
+   */
+  remainingLoanReceivableCents: number;
+  /** Capital por cobrar de cuotas RECEIVABLE (entrada de caja). */
+  remainingLoanReceivablePrincipalCents: number;
+  /** Interés por cobrar de cuotas RECEIVABLE (entrada de caja). */
+  remainingLoanReceivableInterestCents: number;
+  /** Prorated variable-spend estimate for the rest of the window. */
+  remainingVariableBudgetCents: number;
+  /** Monthly savings target × remaining months of the window. */
+  remainingSavingsTargetCents: number;
+  /**
+   * `currentCash + investmentValue + income − fixed − loans − variable −
+   * savings`. Investment value is included here (end-of-period net position)
+   * but NOT in `remainingToSpendCents` (not spendable).
+   */
+  projectedEndCents: number;
+  /** `income − fixed − loans − savings` (what is left to spend). */
+  remainingToSpendCents: number;
+  /** `remainingToSpend − variable` (positive = target met with margin). */
+  projectedSurplusCents: number;
+  /** `true` when `projectedSurplusCents < 0`. */
+  overBudget: boolean;
+  breakdown: ProjectionBreakdownLine[];
+}
+
+/**
+ * End-of-period projection exposed to the dashboard. `configured`/`targetConfigured`
+ * distinguish "no salary configured"/"no savings target set" from a genuine zero,
+ * so the UI can prompt the user instead of rendering a misleading flat result.
+ */
+export interface DashboardProjection {
+  /** An ACTIVE `SalaryConfiguration` exists for the user. */
+  configured: boolean;
+  /** An ACTIVE `ProjectionSettings` (monthly savings target) exists. */
+  targetConfigured: boolean;
+  currency: 'COP';
+  month: ProjectionPeriod;
+  year: ProjectionPeriod;
+  /** Rule 9 traceability: rates actually applied, keyed by SOURCE currency. */
+  exchangeRatesUsed: Partial<Record<Currency, ExchangeRateUsed>>;
+  /** `true` when at least one amount could not be converted (excluded). */
+  unconverted: boolean;
+  unconvertedByCurrency: Partial<Record<Currency, UnconvertedCurrencyBucket>>;
+}
+
 /** Per-currency bucket of a single investment account performance report. */
 export interface InvestmentBreakdownAccount {
   accountId: string;
@@ -455,4 +650,11 @@ export interface DashboardMetrics {
 
   /** Aggregated, data-only alerts for the frontend to localize. */
   alerts: DashboardAlert[];
+
+  /**
+   * End-of-period projection (month + year) in COP, including the configurable
+   * monthly savings target and the loan principal/interest split. See
+   * {@link DashboardProjection}.
+   */
+  projection: DashboardProjection;
 }

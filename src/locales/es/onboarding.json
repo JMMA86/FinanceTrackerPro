@@ -23,6 +23,7 @@
   "stepper": {
     "welcome": "Bienvenida",
     "account": "Cuenta",
+    "salary": "Ingresos",
     "modules": "Módulos",
     "finish": "Listo"
   },
@@ -64,6 +65,75 @@
       "continueHint": "Continúa para descubrir los módulos de tu panel.",
       "existingNote": "Ya tienes cuentas creadas. Puedes continuar o crear una nueva."
     },
+    "salary": {
+      "title": "Configura tu sueldo",
+      "subtitle": "Con tu sueldo y tus primas proyectamos cómo cerrará tu mes y tu año.",
+      "optionalNote": "Este paso es opcional: si ingresas un monto, Continuar lo guarda; si lo dejas vacío, Continuar avanza sin guardar. También puedes configurarlo más tarde desde Ajustes.",
+      "loading": "Cargando tu configuración actual...",
+      "successTitle": "¡Sueldo configurado!",
+      "successMessage": "Tu proyección de fin de período ya está activa en el dashboard.",
+      "continueHint": "Usa Continuar para seguir con el recorrido.",
+      "form": {
+        "amountLabel": "Monto por período",
+        "currencyLabel": "Moneda",
+        "frequencyLabel": "Frecuencia de pago",
+        "payDayOfMonthLabel": "Día del mes",
+        "payDayOfMonthHint": "Día del mes en que recibes tu sueldo (1–31).",
+        "firstPayDayLabel": "Primer día del mes",
+        "secondPayDayLabel": "Segundo día del mes",
+        "weekdayLabel": "Día de la semana",
+        "weekdayHint": "Día de la semana en que recibes tu sueldo.",
+        "weekdayMonday": "Lunes",
+        "weekdayTuesday": "Martes",
+        "weekdayWednesday": "Miércoles",
+        "weekdayThursday": "Jueves",
+        "weekdayFriday": "Viernes",
+        "weekdaySaturday": "Sábado",
+        "weekdaySunday": "Domingo",
+        "frequencyMonthly": "Mensual",
+        "frequencyBiweekly": "Quincenal",
+        "frequencyWeekly": "Semanal",
+        "bonusesTitle": "Primas y bonos",
+        "bonusesDescription": "Agrega tus primas para incluirlas en la proyección.",
+        "bonusesEmpty": "Todavía no has agregado primas.",
+        "addBonus": "Añadir prima",
+        "removeBonus": "Quitar",
+        "bonusName": "Nombre",
+        "bonusNamePlaceholder": "Ej. Prima de servicios",
+        "bonusAmount": "Monto",
+        "bonusCurrency": "Moneda",
+        "bonusFrequency": "Frecuencia",
+        "bonusAnchorMonth": "Mes",
+        "bonusDay": "Día (opcional)",
+        "bonusItemTitle": "Prima {index}",
+        "bonusFrequencyMonthly": "Mensual",
+        "bonusFrequencyBimonthly": "Bimestral",
+        "bonusFrequencyQuarterly": "Trimestral",
+        "bonusFrequencySemiannual": "Semestral",
+        "bonusFrequencyAnnual": "Anual",
+        "submit": "Guardar sueldo",
+        "submitting": "Guardando...",
+        "errors": {
+          "amountRequired": "Ingresa un monto mayor que cero.",
+          "amountWhole": "El monto debe expresarse en centavos enteros.",
+          "amountMax": "El monto excede el máximo permitido.",
+          "nameRequired": "Ingresa un nombre para la prima.",
+          "nameTooLong": "El nombre de la prima es demasiado largo.",
+          "monthInvalid": "Selecciona un mes válido.",
+          "dayInvalid": "El día debe estar entre 1 y 31.",
+          "payDayRequired": "Ingresa un día de pago válido.",
+          "payDayRange": "El día de pago debe estar entre 1 y 31.",
+          "weekdayRange": "El día de la semana debe estar entre lunes y domingo.",
+          "weeklyOneDay": "Para pago semanal debes indicar exactamente 1 día de la semana.",
+          "biweeklyTwoDays": "Para pago quincenal debes indicar exactamente 2 días del mes (1-31).",
+          "monthlyOneDay": "Para pago mensual debes indicar exactamente 1 día del mes (1-31).",
+          "payDaysRequired": "Debes indicar al menos un día de pago.",
+          "payDaysMax": "Se permiten como máximo 2 días de pago.",
+          "maxBonuses": "No se permiten más de {max} primas.",
+          "saveFailed": "No se pudo guardar el sueldo."
+        }
+      }
+    },
     "modules": {
       "title": "Explora los módulos",
       "subtitle": "Estos son los módulos disponibles en tu panel. Podrás acceder a ellos desde la barra lateral.",
@@ -76,6 +146,7 @@
       "language": "Idioma",
       "account": "Primera cuenta",
       "currency": "Moneda principal",
+      "salary": "Sueldo configurado",
       "yes": "Sí",
       "no": "Aún no",
       "cta": "Ir al dashboard"
@@ -87,9 +158,9 @@
     "EUR": "Euro"
   },
   "accountTypes": {
+    "SAVINGS": "Cuenta de ahorros",
     "CHECKING": "Cuenta corriente",
-    "CASH": "Efectivo",
-    "SAVINGS": "Ahorros"
+    "CASH": "Efectivo"
   },
   "errors": {
     "sessionInvalid": "Tu sesión expiró. Inicia sesión nuevamente.",
@@ -98,6 +169,7 @@
     "nameTooLong": "El nombre es demasiado largo.",
     "nameInvalid": "El nombre contiene caracteres no permitidos.",
     "accountCreateFailed": "No se pudo crear la cuenta.",
+    "salarySaveFailed": "No se pudo guardar el sueldo.",
     "stepSaveFailed": "No se pudo guardar el progreso.",
     "completeFailed": "No se pudo finalizar la configuración.",
     "languageUpdateFailed": "No se pudo actualizar el idioma."

@@ -146,5 +146,6 @@
   "loanInstallmentDue": "Due",
   "loanInstallmentRemaining": "Balance",
   "capitalPaymentAmount": "Extra principal payment amount",
-  "loanCapitalPaymentSuccess": "Extra principal payment recorded"
+  "loanCapitalPaymentSuccess": "Extra principal payment recorded",
+  "salaryPrefillDescription": "Salary"
 }

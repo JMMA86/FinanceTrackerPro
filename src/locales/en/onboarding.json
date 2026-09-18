@@ -23,6 +23,7 @@
   "stepper": {
     "welcome": "Welcome",
     "account": "Account",
+    "salary": "Income",
     "modules": "Modules",
     "finish": "Done"
   },
@@ -64,6 +65,75 @@
       "continueHint": "Continue to discover your dashboard modules.",
       "existingNote": "You already have accounts. You can continue or create a new one."
     },
+    "salary": {
+      "title": "Set up your salary",
+      "subtitle": "With your salary and bonuses we project how your month and year will close.",
+      "optionalNote": "This step is optional: if you enter an amount, Continue saves it; if you leave it empty, Continue moves on without saving. You can also set it up later from Settings.",
+      "loading": "Loading your current configuration...",
+      "successTitle": "Salary configured!",
+      "successMessage": "Your end-of-period projection is already live on the dashboard.",
+      "continueHint": "Use Continue to keep going through the walkthrough.",
+      "form": {
+        "amountLabel": "Amount per period",
+        "currencyLabel": "Currency",
+        "frequencyLabel": "Pay frequency",
+        "payDayOfMonthLabel": "Day of the month",
+        "payDayOfMonthHint": "Day of the month you receive your salary (1–31).",
+        "firstPayDayLabel": "First day of the month",
+        "secondPayDayLabel": "Second day of the month",
+        "weekdayLabel": "Day of the week",
+        "weekdayHint": "Day of the week you receive your salary.",
+        "weekdayMonday": "Monday",
+        "weekdayTuesday": "Tuesday",
+        "weekdayWednesday": "Wednesday",
+        "weekdayThursday": "Thursday",
+        "weekdayFriday": "Friday",
+        "weekdaySaturday": "Saturday",
+        "weekdaySunday": "Sunday",
+        "frequencyMonthly": "Monthly",
+        "frequencyBiweekly": "Biweekly",
+        "frequencyWeekly": "Weekly",
+        "bonusesTitle": "Bonuses",
+        "bonusesDescription": "Add your bonuses so they are included in the projection.",
+        "bonusesEmpty": "You have not added bonuses yet.",
+        "addBonus": "Add bonus",
+        "removeBonus": "Remove",
+        "bonusName": "Name",
+        "bonusNamePlaceholder": "e.g. Services bonus",
+        "bonusAmount": "Amount",
+        "bonusCurrency": "Currency",
+        "bonusFrequency": "Frequency",
+        "bonusAnchorMonth": "Month",
+        "bonusDay": "Day (optional)",
+        "bonusItemTitle": "Bonus {index}",
+        "bonusFrequencyMonthly": "Monthly",
+        "bonusFrequencyBimonthly": "Bimonthly",
+        "bonusFrequencyQuarterly": "Quarterly",
+        "bonusFrequencySemiannual": "Semiannual",
+        "bonusFrequencyAnnual": "Annual",
+        "submit": "Save salary",
+        "submitting": "Saving...",
+        "errors": {
+          "amountRequired": "Enter an amount greater than zero.",
+          "amountWhole": "The amount must be whole cents.",
+          "amountMax": "The amount exceeds the allowed maximum.",
+          "nameRequired": "Enter a name for the bonus.",
+          "nameTooLong": "The bonus name is too long.",
+          "monthInvalid": "Select a valid month.",
+          "dayInvalid": "The day must be between 1 and 31.",
+          "payDayRequired": "Enter a valid pay day.",
+          "payDayRange": "The pay day must be between 1 and 31.",
+          "weekdayRange": "The weekday must be between Monday and Sunday.",
+          "weeklyOneDay": "For a weekly salary you must set exactly 1 weekday.",
+          "biweeklyTwoDays": "For a biweekly salary you must set exactly 2 days of the month (1-31).",
+          "monthlyOneDay": "For a monthly salary you must set exactly 1 day of the month (1-31).",
+          "payDaysRequired": "You must set at least one pay day.",
+          "payDaysMax": "No more than 2 pay days are allowed.",
+          "maxBonuses": "No more than {max} bonuses are allowed.",
+          "saveFailed": "The salary could not be saved."
+        }
+      }
+    },
     "modules": {
       "title": "Explore the modules",
       "subtitle": "These are the modules available in your panel. You can reach them from the sidebar.",
@@ -76,6 +146,7 @@
       "language": "Language",
       "account": "First account",
       "currency": "Main currency",
+      "salary": "Salary configured",
       "yes": "Yes",
       "no": "Not yet",
       "cta": "Go to dashboard"
@@ -87,9 +158,9 @@
     "EUR": "Euro"
   },
   "accountTypes": {
+    "SAVINGS": "Savings account",
     "CHECKING": "Checking account",
-    "CASH": "Cash",
-    "SAVINGS": "Savings"
+    "CASH": "Cash"
   },
   "errors": {
     "sessionInvalid": "Your session expired. Please sign in again.",
@@ -98,6 +169,7 @@
     "nameTooLong": "The name is too long.",
     "nameInvalid": "The name contains unsupported characters.",
     "accountCreateFailed": "The account could not be created.",
+    "salarySaveFailed": "The salary could not be saved.",
     "stepSaveFailed": "Progress could not be saved.",
     "completeFailed": "Setup could not be completed.",
     "languageUpdateFailed": "The language could not be updated."

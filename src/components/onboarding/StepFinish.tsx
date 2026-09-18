@@ -15,6 +15,8 @@ interface StepFinishProps {
   baseCurrency: Currency;
   account: OnboardingAccountSummary | null;
   lang: Locale;
+  /** Whether an ACTIVE salary configuration exists when the walkthrough ends. */
+  salaryConfigured: boolean;
 }
 
 interface SummaryRow {
@@ -32,6 +34,7 @@ export function StepFinish({
   baseCurrency,
   account,
   lang,
+  salaryConfigured,
 }: Readonly<StepFinishProps>) {
   const no = t(dictionary, 'steps.finish.no');
   const languageLabel = t(common, `language.${lang === 'en' ? 'english' : 'spanish'}`);
@@ -54,6 +57,11 @@ export function StepFinish({
       label: t(dictionary, 'steps.finish.currency'),
       value: `${baseCurrency} · ${currencyName}`,
       done: true,
+    },
+    {
+      label: t(dictionary, 'steps.finish.salary'),
+      value: salaryConfigured ? t(dictionary, 'steps.finish.yes') : no,
+      done: salaryConfigured,
     },
   ];
 

@@ -165,17 +165,17 @@ describe('Onboarding Actions Integration', () => {
 
     const completed = await completeOnboarding({});
     expect(completed.success).toBe(true);
-    expect(completed.data?.step).toBe(3);
+    expect(completed.data?.step).toBe(4);
     expect(completed.data?.completedAt).toEqual(expect.any(String));
 
     const dbAfterComplete = await prisma.user.findUniqueOrThrow({ where: { id: TEST_USER_ID } });
-    expect(dbAfterComplete.onboardingStep).toBe(3);
+    expect(dbAfterComplete.onboardingStep).toBe(4);
     expect(dbAfterComplete.onboardingCompletedAt).not.toBeNull();
 
     const final = await getOnboardingState({});
     expect(final.success).toBe(true);
     expect(final.data?.completed).toBe(true);
-    expect(final.data?.step).toBe(3);
+    expect(final.data?.step).toBe(4);
   });
 
   it('counts only active accounts in the onboarding state', async () => {

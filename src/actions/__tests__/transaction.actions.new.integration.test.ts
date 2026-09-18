@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
-import { PrismaClient, Currency, AccountType, Language, Theme } from '@prisma/client';
+import {
+  PrismaClient,
+  Currency,
+  AccountType,
+  Language,
+  Theme,
+  VariableExpenseCategory,
+} from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ZodError } from 'zod';
@@ -313,6 +320,180 @@ describe('Transaction Actions — New Features', () => {
 
       expect(result.success).toBe(false);
       expect(result.code).toBe('RATE_LIMITED');
+    });
+  });
+
+  // ==========================================================================
+  // INCOME auto-categorization (system SALARY category)
+  // ==========================================================================
+
+  describe('createTransaction INCOME auto-categorization', () => {
+    let createdSystemCategoryId: string | null = null;
+
+    // The test DB is not seeded, so make sure a system SALARY category exists
+    // (the action resolves it by TYPE, never by a hardcoded id).
+    beforeAll(async () => {
+      const existing = await prisma.category.findFirst({
+        where: { type: VariableExpenseCategory.SALARY, userId: null, isActive: true },
+        select: { id: true },
+      });
+      if (!existing) {
+        const created = await prisma.category.create({
+          data: {
+            name: `tx-new-system-${Date.now()}`,
+            type: VariableExpenseCategory.SALARY,
+            userId: null,
+            isActive: true,
+            createdBy: 'system',
+            lastModifiedBy: 'system',
+          },
+        });
+        createdSystemCategoryId = created.id;
+      }
+    });
+
+    afterAll(async () => {
+      if (createdSystemCategoryId) {
+        await prisma.category
+          .delete({ where: { id: createdSystemCategoryId } })
+          .catch(() => undefined);
+      }
+    });
+
+    async function configureSalary() {
+      await prisma.salaryConfiguration.create({
+        data: {
+          userId: TEST_USER_ID,
+          amountCents: BigInt(2_000_000),
+          currency: Currency.COP,
+          frequency: 'MONTHLY',
+          payDays: [15],
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+    }
+
+    it('leaves the category null when the user has no active salary configuration', async () => {
+      const account = await createTestAccount(TEST_USER_ID);
+
+      const result = await transactionActions.createTransaction({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: account.id,
+        type: 'INCOME',
+        amountCents: 10_000,
+        currency: Currency.COP,
+      });
+
+      expect(result.success).toBe(true);
+      const stored = await prisma.transaction.findUniqueOrThrow({
+        where: { id: result.data!.transaction.id },
+      });
+      expect(stored.categoryId).toBeNull();
+    });
+
+    it('files an uncategorized INCOME under the system SALARY category when a salary is configured', async () => {
+      const account = await createTestAccount(TEST_USER_ID);
+      await configureSalary();
+      const salaryCategory = await prisma.category.findFirstOrThrow({
+        where: { type: VariableExpenseCategory.SALARY, userId: null, isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+
+      const result = await transactionActions.createTransaction({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: account.id,
+        type: 'INCOME',
+        amountCents: 10_000,
+        currency: Currency.COP,
+      });
+
+      expect(result.success).toBe(true);
+      const stored = await prisma.transaction.findUniqueOrThrow({
+        where: { id: result.data!.transaction.id },
+      });
+      expect(stored.categoryId).toBe(salaryCategory.id);
+    });
+
+    it('preserves an explicit category on an INCOME (never overrides it)', async () => {
+      const account = await createTestAccount(TEST_USER_ID);
+      await configureSalary();
+      const ownCategory = await prisma.category.create({
+        data: {
+          name: `tx-auto-${Date.now()}`,
+          type: VariableExpenseCategory.OTHER,
+          userId: TEST_USER_ID,
+          isActive: true,
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+
+      const result = await transactionActions.createTransaction({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: account.id,
+        type: 'INCOME',
+        amountCents: 10_000,
+        currency: Currency.COP,
+        categoryId: ownCategory.id,
+      });
+
+      expect(result.success).toBe(true);
+      const stored = await prisma.transaction.findUniqueOrThrow({
+        where: { id: result.data!.transaction.id },
+      });
+      expect(stored.categoryId).toBe(ownCategory.id);
+    });
+
+    it('does NOT auto-categorize an EXPENSE even when a salary is configured', async () => {
+      const account = await createTestAccount(TEST_USER_ID);
+      await configureSalary();
+
+      const result = await transactionActions.createTransaction({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: account.id,
+        type: 'EXPENSE',
+        amountCents: -5_000,
+        currency: Currency.COP,
+      });
+
+      expect(result.success).toBe(true);
+      const stored = await prisma.transaction.findUniqueOrThrow({
+        where: { id: result.data!.transaction.id },
+      });
+      expect(stored.categoryId).toBeNull();
+    });
+
+    it('does NOT auto-categorize an INCOME when the salary configuration is inactive', async () => {
+      const account = await createTestAccount(TEST_USER_ID);
+      await prisma.salaryConfiguration.create({
+        data: {
+          userId: TEST_USER_ID,
+          amountCents: BigInt(2_000_000),
+          currency: Currency.COP,
+          frequency: 'MONTHLY',
+          payDays: [15],
+          isActive: false,
+          deletedAt: new Date(),
+          createdBy: TEST_USER_ID,
+          lastModifiedBy: TEST_USER_ID,
+        },
+      });
+
+      const result = await transactionActions.createTransaction({
+        idempotencyKey: crypto.randomUUID(),
+        accountId: account.id,
+        type: 'INCOME',
+        amountCents: 10_000,
+        currency: Currency.COP,
+      });
+
+      expect(result.success).toBe(true);
+      const stored = await prisma.transaction.findUniqueOrThrow({
+        where: { id: result.data!.transaction.id },
+      });
+      expect(stored.categoryId).toBeNull();
     });
   });
 });

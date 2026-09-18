@@ -25,6 +25,8 @@ erDiagram
     User ||--o{ BiometricCredential : authenticates
     User ||--o{ SavingsGoal : sets
     User ||--o{ InvestmentAssetHolding : "holds (via Account)"
+    User ||--o| SalaryConfiguration : configures
+    User ||--o| ProjectionSettings : configures
 
     Account ||--o{ Transaction : records
     Account ||--o{ Account : "contains (pockets)"
@@ -42,6 +44,8 @@ erDiagram
 
     Loan ||--o{ LoanInstallment : "amortization schedule"
 
+    SalaryConfiguration ||--o{ SalaryBonus : declares
+
     SavingsGoal ||--o{ SavingsContribution : "tracks progress"
 
     User {
@@ -49,7 +53,6 @@ erDiagram
         string email UK
         string name
         string passwordHash
-        int baseSalaryCents
         enum baseCurrency
         enum language
         enum theme
@@ -274,6 +277,58 @@ erDiagram
         string ipAddress
         string userAgent
     }
+
+    SalaryConfiguration {
+        string id PK
+        string userId FK UK
+        int amountCents "amount PER period"
+        enum currency
+        enum frequency "WEEKLY | BIWEEKLY | MONTHLY"
+        int[] payDays "meaning depends on frequency"
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+        string ipAddress
+        string userAgent
+    }
+
+    SalaryBonus {
+        string id PK
+        string salaryConfigId FK
+        string name
+        int amountCents "amount PER occurrence"
+        enum currency
+        enum frequency "MONTHLY | BIMONTHLY | QUARTERLY | SEMIANNUAL | ANNUAL"
+        int anchorMonth "1-12"
+        int dayOfMonth "1-31, nullable"
+        string idempotencyKey UK
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+        string ipAddress
+        string userAgent
+    }
+
+    ProjectionSettings {
+        string id PK
+        string userId FK UK
+        int monthlySavingsTargetCents "MONTHLY COP cents"
+        enum currency
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+        string createdBy
+        string lastModifiedBy
+        string ipAddress
+        string userAgent
+    }
 ```
 
 ## Core Models
@@ -284,10 +339,13 @@ Central entity for authentication and configuration.
 
 **Key Fields**:
 
-- `baseSalaryCents`: Monthly salary in cents for budget calculations
 - `baseCurrency`: Primary currency (COP, USD, EUR)
 - `language`: UI language preference
 - `theme`: Dark/Light/System
+
+> NOTE: the legacy `baseSalaryCents` scalar was REMOVED (migration
+> `20260917120000_salary_projection`); the salary now lives in the 1:1
+> `SalaryConfiguration` model (see [Salary & Projection Settings](#salary--projection-settings)).
 
 **Relations**:
 
@@ -295,6 +353,7 @@ Central entity for authentication and configuration.
 - Creates all transactions
 - Manages fixed expenses and loans
 - Authenticates via biometric credentials
+- Owns at most one `SalaryConfiguration` and one `ProjectionSettings` (1:1)
 
 ### Account
 
@@ -392,6 +451,76 @@ Individual deposits into a savings goal.
 - `idempotencyKey`: UUID v4 for network safety
 
 **Note**: `currentAmountCents` is a cache — the true balance is the sum of active contributions (Rule 13).
+
+### Salary & Projection Settings
+
+Salary recurrence, declared bonuses and the end-of-period savings target are
+persisted in three dedicated models (they REPLACE the removed
+`User.baseSalaryCents` scalar). The projection engine
+(`src/lib/projection.ts`) expands the recurrence rules and
+`projection.service.ts` gathers the inputs.
+
+#### SalaryConfiguration
+
+1:1 with `User` (`userId` is `@unique`). Absent or `isActive: false` means "no
+salary configured", so the UI prompts the user instead of rendering a misleading
+zero.
+
+**Key Fields**:
+
+- `amountCents`: Salary amount **PER period** (integer cents, Rule 2)
+- `currency`: ISO 4217 code travelling with the amount (Rule 4)
+- `frequency`: `WEEKLY` | `BIWEEKLY` | `MONTHLY`
+- `payDays`: payment days whose meaning depends on `frequency` (Rule 9):
+  - `WEEKLY` → exactly 1 value `1..7` (ISO weekday: 1=Monday … 7=Sunday)
+  - `BIWEEKLY` → exactly 2 values `1..31` (day of month, clamped to month end)
+  - `MONTHLY` → exactly 1 value `1..31` (day of month, clamped to month end)
+
+  There is **NO DB default**: an empty array is invalid and the app always writes
+  `payDays`. The `SalaryConfiguration_payDays_frequency_check` CHECK constraint
+  enforces the shape above (migrations `20260917130000_salary_pay_days` +
+  `20260917160000_salary_pay_days_drop_default`). Expansion lives in
+  `expandIncomeOccurrences`.
+
+- Audit (Rule 4/14): `isActive`, `deletedAt`, `createdBy`, `lastModifiedBy`,
+  `ipAddress`, `userAgent`.
+
+#### SalaryBonus
+
+0..n per `SalaryConfiguration` (`ON DELETE CASCADE`; the configuration itself is
+only ever soft-deleted, Rule 6).
+
+**Key Fields**:
+
+- `name`: bonus label (used in the projection breakdown)
+- `amountCents`: amount **PER occurrence** (integer cents)
+- `currency`: ISO 4217 code
+- `frequency`: `MONTHLY` | `BIMONTHLY` | `QUARTERLY` | `SEMIANNUAL` | `ANNUAL`
+- `anchorMonth`: first occurrence month of the year (1-12)
+- `dayOfMonth`: day of the month (1-31, clamped to month end; nullable → 1)
+- `idempotencyKey`: UUID v4 generated server-side on create (Rule 12, `@unique`)
+- Audit (Rule 4/14): `isActive`, `deletedAt`, `createdBy`, `lastModifiedBy`,
+  `ipAddress`, `userAgent`.
+
+Toggling a bonus off is a SOFT delete and re-adding it reactivates the same row
+(audit trail preserved).
+
+#### ProjectionSettings
+
+1:1 with `User` (`userId` is `@unique`). Absent or `isActive: false` means "no
+savings target configured".
+
+**Key Fields**:
+
+- `monthlySavingsTargetCents`: the **MONTHLY** savings target in COP cents. The
+  projection spreads it over the remaining months of each window; it is NOT an
+  annual figure and NOT a `SavingsGoal` — the two are independent by product
+  decision (there is no `targetAmountCents`/`targetFrequency` here: the
+  intermediate `20260917140000`/`20260917150000` migrations collapsed it back to a
+  single monthly value).
+- `currency`: COP by product decision (the projection is COP-only)
+- Audit (Rule 4/14): `isActive`, `deletedAt`, `createdBy`, `lastModifiedBy`,
+  `ipAddress`, `userAgent`.
 
 ## Double-Entry Bookkeeping
 

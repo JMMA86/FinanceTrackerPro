@@ -68,7 +68,6 @@ async function upsertUserAndGet(email: string, name: string, onboardingCompleted
       baseCurrency: 'COP',
       language: 'SPANISH',
       theme: 'SYSTEM',
-      baseSalaryCents: 500000000,
       // Onboarded by default: regular E2E users must never enter the first-run
       // walkthrough. The dedicated onboarding users below pass `false`.
       onboardingCompletedAt: onboardingCompleted ? new Date() : null,
@@ -94,6 +93,81 @@ async function main() {
     process.env.E2E_DASHBOARD_USER || 'dashboard@e2e.financetrackerpro.com',
     'Dashboard E2E User' // dashboard.feature (seeded non-empty patrimony, see block below)
   );
+
+  // Salary configuration + half-yearly bonus + projection target for the
+  // dashboard user (replaces the legacy `User.baseSalaryCents` scalar). `upsert`
+  // is keyed by the 1:1 `userId` / deterministic idempotency key so re-seeding
+  // without a DB reset stays idempotent.
+  const e2eSalaryConfig = await prisma.salaryConfiguration.upsert({
+    where: { userId: dashboardUser.id },
+    update: {
+      amountCents: 500000000, // $5,000,000 COP per payday
+      currency: 'COP',
+      frequency: 'BIWEEKLY',
+      payDays: [15, 30],
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: dashboardUser.id,
+    },
+    create: {
+      userId: dashboardUser.id,
+      amountCents: 500000000, // $5,000,000 COP per payday
+      currency: 'COP',
+      frequency: 'BIWEEKLY',
+      // Two pay days per month (15th and 30th; the 30th is clamped to the end of
+      // short months by the projection engine).
+      payDays: [15, 30],
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+    },
+  });
+
+  await prisma.salaryBonus.upsert({
+    where: { idempotencyKey: 'e2e-salary-bonus-prima-servicios' },
+    update: {
+      name: 'Prima de servicios',
+      amountCents: 250000000,
+      currency: 'COP',
+      frequency: 'SEMIANNUAL',
+      anchorMonth: 6,
+      dayOfMonth: 30,
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: dashboardUser.id,
+    },
+    create: {
+      salaryConfigId: e2eSalaryConfig.id,
+      name: 'Prima de servicios',
+      amountCents: 250000000,
+      currency: 'COP',
+      frequency: 'SEMIANNUAL',
+      anchorMonth: 6,
+      dayOfMonth: 30,
+      idempotencyKey: 'e2e-salary-bonus-prima-servicios',
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+    },
+  });
+
+  await prisma.projectionSettings.upsert({
+    where: { userId: dashboardUser.id },
+    update: {
+      monthlySavingsTargetCents: 50000000,
+      currency: 'COP',
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: dashboardUser.id,
+    },
+    create: {
+      userId: dashboardUser.id,
+      monthlySavingsTargetCents: 50000000,
+      currency: 'COP',
+      createdBy: dashboardUser.id,
+      lastModifiedBy: dashboardUser.id,
+    },
+  });
+
+  console.log('✓ Dashboard user seeded with salary configuration, bonus and projection settings');
 
   // Investments E2E user with pre-seeded COP bank account for deposit tests
   const invUserEmail = process.env.E2E_INVESTMENTS_USER || 'investments@e2e.financetrackerpro.com';
@@ -1108,6 +1182,21 @@ async function main() {
       type: 'OTHER' as const,
       color: '#64748B',
       icon: 'more-horizontal',
+    },
+    // System-only income categories (SALARY / BONUS) — never creatable from the UI.
+    {
+      id: 'ce2esalary00000000000000000',
+      name: 'Sueldo',
+      type: 'SALARY' as const,
+      color: '#0EA5E9',
+      icon: 'banknote',
+    },
+    {
+      id: 'ce2ebonus000000000000000000',
+      name: 'Prima/Bono',
+      type: 'BONUS' as const,
+      color: '#8B5CF6',
+      icon: 'gift',
     },
   ];
 

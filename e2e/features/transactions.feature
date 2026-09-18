@@ -154,6 +154,34 @@ Feature: Gestión de Transacciones
     And la transacción debe aparecer en la tabla
 
   # ============================================================================
+  # CREATE - INCOME PREFILL FROM THE SALARY CONFIGURATION
+  # ============================================================================
+
+  # El usuario del dashboard está sembrado con un sueldo quincenal de $5.000.000
+  # COP; el usuario de transacciones NO tiene sueldo configurado. La precarga
+  # solo aplica al tipo Ingreso y todos los campos permanecen editables.
+
+  @transactions @create @income @prefill
+  Scenario: Ingreso precarga el sueldo configurado (monto, descripción y categoría)
+    Given que el usuario con sueldo configurado ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Ingreso" como tipo
+    Then la descripción debe precargarse con "Sueldo"
+    And el valor debe precargarse con 500000000 centavos
+    And la categoría "Sueldo" debe estar seleccionada
+
+  @transactions @create @income @prefill
+  Scenario: Ingreso sin sueldo configurado no precarga nada
+    Given que el usuario de transacciones ha iniciado sesión
+    And navega a la página de transacciones
+    Given que el modal de transacción está abierto
+    When selecciona "Ingreso" como tipo
+    Then la descripción no debe precargarse
+    And el valor no debe precargarse
+    And la categoría "Sueldo" no debe estar seleccionada
+
+  # ============================================================================
   # MOBILE
   # ============================================================================
 
@@ -316,7 +344,9 @@ Feature: Gestión de Transacciones
     And navega a la página de transacciones
     When hace clic en "Gestionar categorías"
     Then debe ver el diálogo de categorías
-    And debe ver 9 categorías predeterminadas sin botones de editar o eliminar
+    # 11 categorías del sistema: las 9 originales + "Sueldo" (SALARY) y
+    # "Prima/Bono" (BONUS), añadidas por el módulo de proyección/sueldo.
+    And debe ver 11 categorías predeterminadas sin botones de editar o eliminar
     When añade la categoría "Categoría E2E" con tipo "Otros"
     Then debe ver la categoría "Categoría E2E" en la lista de categorías
     When cierra el diálogo de categorías

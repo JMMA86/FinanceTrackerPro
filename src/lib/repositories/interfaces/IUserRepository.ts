@@ -18,7 +18,6 @@ export interface IUserRepository {
     email: string;
     name: string;
     passwordHash?: string;
-    baseSalaryCents?: number;
     baseCurrency?: Currency;
     language?: Language;
     theme?: Theme;

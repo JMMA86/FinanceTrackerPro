@@ -115,8 +115,57 @@ function makeMetrics(overrides: Partial<DashboardMetrics> = {}): DashboardMetric
     variableExpenses: { byCurrency: [] },
     savingsGoals: [],
     alerts: [],
+    projection: makeEmptyProjection(),
   };
   return { ...base, ...overrides };
+}
+
+/**
+ * Zeroed end-of-period projection. Only the shape matters here (the projection
+ * UI is rendered by its own component tests); this keeps the orchestrator fixture
+ * assignable to `DashboardMetrics`.
+ */
+function makeEmptyProjection(): DashboardMetrics['projection'] {
+  const emptyPeriod = (period: 'month' | 'year'): DashboardMetrics['projection']['month'] => ({
+    period,
+    asOf: new Date('2026-01-01'),
+    periodStart: new Date('2026-01-01'),
+    periodEnd: new Date('2026-01-31'),
+    currentCashCents: 0,
+    investmentValueCents: 0,
+    remainingIncomeCents: 0,
+    remainingFixedCents: 0,
+    remainingLoanPaymentsCents: 0,
+    remainingLoanPrincipalCents: 0,
+    remainingLoanInterestCents: 0,
+    remainingLoanReceivableCents: 0,
+    remainingLoanReceivablePrincipalCents: 0,
+    remainingLoanReceivableInterestCents: 0,
+    remainingVariableBudgetCents: 0,
+    remainingSavingsTargetCents: 0,
+    projectedEndCents: 0,
+    remainingToSpendCents: 0,
+    projectedSurplusCents: 0,
+    overBudget: false,
+    salaryReceivedCents: 0,
+    salaryPendingCents: 0,
+    salaryStatus: 'NOT_CONFIGURED',
+    nextSalaryDate: null,
+    nextSalaryAmountCents: null,
+    salaryOccurrences: [],
+    breakdown: [],
+  });
+
+  return {
+    configured: false,
+    targetConfigured: false,
+    currency: 'COP',
+    month: emptyPeriod('month'),
+    year: emptyPeriod('year'),
+    exchangeRatesUsed: {},
+    unconverted: false,
+    unconvertedByCurrency: {},
+  };
 }
 
 function renderDashboard(metrics: DashboardMetrics = makeMetrics()) {

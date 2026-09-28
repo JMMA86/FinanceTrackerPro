@@ -418,7 +418,12 @@ describe('ReverseInvestmentTradeDialog', () => {
       />
     );
 
-    fireEvent.click(await screen.findByText('reverseTradeCta'));
+    expect(await screen.findByText('reverseTradeCta')).toBeInTheDocument();
+    // Let the mount effect's requestAnimationFrame settle before interacting so
+    // its state reset cannot race the async submit result.
+    await flushRaf();
+
+    fireEvent.click(screen.getByText('reverseTradeCta'));
 
     await waitFor(() => {
       expect(mockReverseInvestmentTrade).toHaveBeenCalledWith(
@@ -448,10 +453,13 @@ describe('ReverseInvestmentTradeDialog', () => {
       />
     );
 
-    fireEvent.click(await screen.findByText('reverseTradeCta'));
+    expect(await screen.findByText('reverseTradeCta')).toBeInTheDocument();
+    // Let the mount effect's requestAnimationFrame settle before interacting so
+    // its state reset cannot race the async submit result.
+    await flushRaf();
 
-    await waitFor(() => {
-      expect(screen.getByText('errors.investmentLedgerIncomplete')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByText('reverseTradeCta'));
+
+    expect(await screen.findByText('errors.investmentLedgerIncomplete')).toBeInTheDocument();
   });
 });

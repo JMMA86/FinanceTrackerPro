@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { Decimal } from 'decimal.js';
 import { formatMoney, multiplyCents } from '@/lib/money';
 import { get } from '@/lib/i18n';
+import { formatQuantity } from './decimal-input';
 import type { InvestmentHoldingSummary } from '@/types/investments';
 
 interface PortfolioHoldingsTableProps {
@@ -64,7 +65,7 @@ function HoldingRow({
       {/* Quantity */}
       <td className="py-3 px-2 text-right">
         <span className="text-sm font-medium text-white tabular-nums whitespace-nowrap">
-          {holding.quantity.toFixed(4)}
+          {formatQuantity(holding.quantity)}
         </span>
       </td>
 

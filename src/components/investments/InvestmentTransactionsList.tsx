@@ -1,28 +1,49 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertCircle, Pencil, Undo2 } from 'lucide-react';
 import { formatMoney } from '@/lib/money';
 import { get } from '@/lib/i18n';
 import { getInvestmentTransactions } from '@/actions/investment.actions';
-
-interface Transaction {
-  id: string;
-  type: string;
-  amountCents: number;
-  currency: string;
-  description: string | null;
-  date: Date | string;
-  transferId?: string | null;
-  originalAmountCents?: number | null;
-  originalCurrency?: string | null;
-}
+import {
+  EditInvestmentTradeModal,
+  ReverseInvestmentTradeDialog,
+  type InvestmentTransactionRow,
+} from './EditInvestmentTradeModal';
 
 interface InvestmentTransactionsListProps {
   accountId: string;
   currency: string;
   dictionary: Record<string, unknown>;
   locale?: string;
+  /**
+   * Active holdings of the account, used to bound the editable quantity of a
+   * SELL trade. Optional so the list keeps working without a portfolio context.
+   */
+  holdings?: ReadonlyArray<{ symbol: string; quantity: number }>;
+}
+
+/** Transaction types whose rows expose edit/undo actions. */
+function isTradeRow(tx: InvestmentTransactionRow): boolean {
+  return tx.type === 'INVESTMENT';
+}
+
+/** Only BUY/SELL rows have the structured data required to edit/undo. */
+function isStructuredTrade(tx: InvestmentTransactionRow): boolean {
+  return tx.assetTradeType === 'BUY' || tx.assetTradeType === 'SELL';
+}
+
+/**
+ * Upper bound for editing a SELL trade's quantity: the shares still held plus
+ * the shares this trade originally sold (so editing it can never oversell).
+ */
+function getMaxEditableQuantity(
+  tx: InvestmentTransactionRow,
+  holdings: ReadonlyArray<{ symbol: string; quantity: number }> | undefined
+): number | undefined {
+  if (tx.assetTradeType !== 'SELL' || !tx.assetSymbol) return undefined;
+  const remaining = holdings?.find((h) => h.symbol === tx.assetSymbol)?.quantity ?? 0;
+  return remaining + (tx.assetQuantity ?? 0);
 }
 
 export function InvestmentTransactionsList({
@@ -30,12 +51,20 @@ export function InvestmentTransactionsList({
   currency,
   dictionary,
   locale = 'es-CO',
+  holdings,
 }: Readonly<InvestmentTransactionsListProps>) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Trade currently being edited / reversed (null = dialog closed).
+  const [editingTx, setEditingTx] = useState<InvestmentTransactionRow | null>(null);
+  const [reversingTx, setReversingTx] = useState<InvestmentTransactionRow | null>(null);
+
+  // Bumped to re-run the loader after an edit/undo (keeps the account view mounted).
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,27 +94,39 @@ export function InvestmentTransactionsList({
     return () => {
       cancelled = true;
     };
-  }, [accountId, dictionary, page]);
+    // `reloadKey` intentionally retriggers the loader after a mutation.
+  }, [accountId, dictionary, page, reloadKey]);
 
-  const getTypeIcon = (type: string, amountCents: number) => {
-    if (type === 'TRANSFER_OUT') {
+  // Refresh the ledger after an edit/undo without unmounting the account view.
+  const refresh = () => setReloadKey((k) => k + 1);
+
+  const getTypeIcon = (tx: InvestmentTransactionRow) => {
+    if (tx.assetTradeType === 'BUY') {
+      return { icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-500/15' };
+    }
+    if (tx.assetTradeType === 'SELL') {
+      return { icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/15' };
+    }
+    if (tx.type === 'TRANSFER_OUT') {
       // Withdrawal from investment → bank: negative outflow.
       return { icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-500/15' };
     }
-    if (type === 'TRANSFER_IN') {
+    if (tx.type === 'TRANSFER_IN') {
       // Deposit from bank → investment: positive inflow.
       return { icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/15' };
     }
-    if (type === 'INVESTMENT' && amountCents < 0) {
+    if (tx.type === 'INVESTMENT' && tx.amountCents < 0) {
       return { icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-500/15' };
     }
-    if (type === 'INVESTMENT' && amountCents > 0) {
+    if (tx.type === 'INVESTMENT' && tx.amountCents > 0) {
       return { icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/15' };
     }
     return { icon: ArrowDownRight, color: 'text-blue-400', bg: 'bg-blue-500/15' };
   };
 
-  const getTypeLabel = (tx: Transaction): string => {
+  const getTypeLabel = (tx: InvestmentTransactionRow): string => {
+    if (tx.assetTradeType === 'BUY') return get(dictionary, 'buyLabel');
+    if (tx.assetTradeType === 'SELL') return get(dictionary, 'sellLabel');
     if (tx.type === 'TRANSFER_IN') return get(dictionary, 'depositLabel');
     if (tx.type === 'TRANSFER_OUT') return get(dictionary, 'withdrawalLabel');
     if (tx.type === 'INVESTMENT' && tx.amountCents < 0) return get(dictionary, 'buyLabel');
@@ -126,9 +167,11 @@ export function InvestmentTransactionsList({
 
       <div className="app-shell rounded-2xl divide-y divide-white/[0.06]">
         {transactions.map((tx) => {
-          const { icon: Icon, color, bg } = getTypeIcon(tx.type, tx.amountCents);
+          const { icon: Icon, color, bg } = getTypeIcon(tx);
           const absAmountCents = Math.abs(tx.amountCents);
           const isPositive = tx.amountCents > 0;
+          const structuredTrade = isStructuredTrade(tx);
+          const showActions = isTradeRow(tx);
 
           return (
             <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
@@ -140,6 +183,17 @@ export function InvestmentTransactionsList({
                 <p className="text-sm font-medium text-white truncate">
                   {tx.description ?? getTypeLabel(tx)}
                 </p>
+
+                {structuredTrade && tx.assetSymbol && (
+                  <p className="text-xs text-slate-400 truncate tabular-nums">
+                    {tx.assetQuantity != null ? `${tx.assetQuantity} ` : ''}
+                    {tx.assetSymbol}
+                    {tx.assetPricePerShareCents != null
+                      ? ` · ${formatMoney(tx.assetPricePerShareCents, currency, locale)}`
+                      : ''}
+                  </p>
+                )}
+
                 <p className="text-xs text-slate-500">
                   {new Date(tx.date).toLocaleDateString(locale, {
                     year: 'numeric',
@@ -164,6 +218,35 @@ export function InvestmentTransactionsList({
                   </p>
                 )}
               </div>
+
+              {showActions && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    disabled={!structuredTrade}
+                    title={structuredTrade ? undefined : get(dictionary, 'legacyTradeTooltip')}
+                    aria-label={get(dictionary, 'editTradeAction')}
+                    onClick={() => {
+                      if (structuredTrade) setEditingTx(tx);
+                    }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                  >
+                    <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!structuredTrade}
+                    title={structuredTrade ? undefined : get(dictionary, 'legacyTradeTooltip')}
+                    aria-label={get(dictionary, 'reverseTradeAction')}
+                    onClick={() => {
+                      if (structuredTrade) setReversingTx(tx);
+                    }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -195,6 +278,22 @@ export function InvestmentTransactionsList({
           </button>
         </div>
       )}
+
+      {/* Edit / undo dialogs (rendered persistently so the shell can animate) */}
+      <EditInvestmentTradeModal
+        transaction={editingTx}
+        dictionary={dictionary}
+        locale={locale}
+        maxQuantity={editingTx ? getMaxEditableQuantity(editingTx, holdings) : undefined}
+        onClose={() => setEditingTx(null)}
+        onSuccess={refresh}
+      />
+      <ReverseInvestmentTradeDialog
+        transaction={reversingTx}
+        dictionary={dictionary}
+        onClose={() => setReversingTx(null)}
+        onSuccess={refresh}
+      />
     </div>
   );
 }

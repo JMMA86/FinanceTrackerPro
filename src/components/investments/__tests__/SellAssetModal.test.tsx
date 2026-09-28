@@ -84,7 +84,8 @@ describe('SellAssetModal', () => {
     await waitFor(() => {
       expect(screen.getByText('sellAsset')).toBeInTheDocument();
       expect(screen.getByText('AAPL')).toBeInTheDocument();
-      expect(screen.getByText('10.0000 shares · Avg $140.00 USD')).toBeInTheDocument();
+      // Quantity is rendered via formatQuantity (trailing zeros trimmed).
+      expect(screen.getByText('10 shares · Avg $140.00 USD')).toBeInTheDocument();
     });
   });
 
@@ -95,8 +96,23 @@ describe('SellAssetModal', () => {
     expect(await screen.findByLabelText('pricePerShare')).toBeInTheDocument();
     await flushRaf();
     await waitFor(() => {
-      // jsdom reports number inputs as numeric values
-      expect(screen.getByLabelText('pricePerShare')).toHaveValue(150);
+      // Price is a FormattedNumericInput (localized text, es-CO "150,00").
+      expect(screen.getByLabelText('pricePerShare')).toHaveValue('150,00');
+    });
+  });
+
+  it('should accept a comma decimal quantity', async () => {
+    useUIStore.getState().openModal('sell-asset');
+    render(<SellAssetModal holding={holding} currency="USD" dictionary={dictionary} />);
+
+    const qty = await screen.findByLabelText('quantity');
+    await flushRaf();
+    fireEvent.change(qty, { target: { value: '2,5' } });
+
+    // Total proceeds: 2.5 * 15000 = 37500 cents → "$375.00 USD"
+    await waitFor(() => {
+      expect(qty).toHaveValue('2,5');
+      expect(screen.getByText('$375.00 USD')).toBeInTheDocument();
     });
   });
 
@@ -137,7 +153,7 @@ describe('SellAssetModal', () => {
 
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
     await flushRaf();
-    await waitFor(() => expect(screen.getByLabelText('pricePerShare')).toHaveValue(150));
+    await waitFor(() => expect(screen.getByLabelText('pricePerShare')).toHaveValue('150,00'));
 
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
     fireEvent.click(screen.getByText('confirmSell'));
@@ -174,7 +190,7 @@ describe('SellAssetModal', () => {
     });
   });
 
-  it('should show generic sell error', async () => {
+  it('should map VALIDATION_ERROR to the invalid quantity error', async () => {
     useUIStore.getState().openModal('sell-asset');
     mockSellAsset.mockResolvedValue({ success: false, code: 'VALIDATION_ERROR', error: 'no' });
 
@@ -186,8 +202,77 @@ describe('SellAssetModal', () => {
     fireEvent.click(screen.getByText('confirmSell'));
 
     await waitFor(() => {
+      expect(screen.getByText('errors.invalidQuantity')).toBeInTheDocument();
+    });
+  });
+
+  it('should show generic sell error for an unknown error code', async () => {
+    useUIStore.getState().openModal('sell-asset');
+    mockSellAsset.mockResolvedValue({ success: false, code: 'SOMETHING_ELSE', error: 'no' });
+
+    render(<SellAssetModal holding={holding} currency="USD" dictionary={dictionary} />);
+
+    expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
+    await flushRaf();
+    fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
+    fireEvent.click(screen.getByText('confirmSell'));
+
+    await waitFor(() => {
       expect(screen.getByText('errors.sellFailed')).toBeInTheDocument();
     });
+  });
+
+  it('should map the remaining sell error codes to their localized messages', async () => {
+    const cases: Array<[string, string]> = [
+      ['INSUFFICIENT_QUANTITY', 'errors.insufficientQuantity'],
+      ['PRICE_UNAVAILABLE', 'errors.priceUnavailable'],
+      ['RATE_LIMITED', 'errors.rateLimited'],
+      ['CURRENCY_MISMATCH', 'errors.currencyMismatch'],
+      ['INVESTMENT_LEDGER_INCOMPLETE', 'errors.investmentLedgerIncomplete'],
+      ['INVALID_FORMAT', 'errors.invalidQuantity'],
+    ];
+
+    for (const [code, message] of cases) {
+      useUIStore.getState().openModal('sell-asset');
+      mockSellAsset.mockResolvedValueOnce({ success: false, code, error: 'x' });
+      const { unmount } = render(
+        <SellAssetModal holding={holding} currency="USD" dictionary={dictionary} />
+      );
+      await flushRaf();
+      fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
+      fireEvent.click(screen.getByText('confirmSell'));
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('should confirm a server PRICE_MISMATCH and retry with the same idempotency key', async () => {
+    useUIStore.getState().openModal('sell-asset');
+    mockSellAsset
+      .mockResolvedValueOnce({ success: false, code: 'PRICE_MISMATCH' })
+      .mockResolvedValueOnce({ success: true });
+
+    render(<SellAssetModal holding={holding} currency="USD" dictionary={dictionary} />);
+
+    expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
+    await flushRaf();
+    fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
+    fireEvent.click(screen.getByText('confirmSell'));
+
+    await waitFor(() => {
+      expect(screen.getByText('priceOverrideConfirmTitle')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('priceOverrideConfirmCta'));
+
+    await waitFor(() => expect(mockSellAsset).toHaveBeenCalledTimes(2));
+    const first = mockSellAsset.mock.calls[0][0] as { idempotencyKey: string };
+    const second = mockSellAsset.mock.calls[1][0] as {
+      idempotencyKey: string;
+      allowPriceOverride: boolean;
+    };
+    expect(second.idempotencyKey).toBe(first.idempotencyKey);
+    expect(second.allowPriceOverride).toBe(true);
   });
 
   it('should show unexpected error when sellAsset throws', async () => {

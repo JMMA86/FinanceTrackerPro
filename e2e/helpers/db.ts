@@ -325,3 +325,53 @@ export async function getVariableExpenseMonthStatByEmail(
     totalCents,
   };
 }
+
+/** Snapshot of a seeded structured investment trade used by E2E assertions. */
+export interface InvestmentTradeSnapshot {
+  id: string;
+  isActive: boolean;
+  assetSymbol: string | null;
+  assetTradeType: string | null;
+  /** Decimal quantity as a canonical string (e.g. "2.243695838"), or null. */
+  assetQuantity: string | null;
+  assetPricePerShareCents: number | null;
+  amountCents: number;
+}
+
+/**
+ * Reads a seeded investment trade by its deterministic `idempotencyKey` for the
+ * given user email. Used by the investments-trades feature to assert the real
+ * persisted state after an edit (quantity / price) or an undo (`isActive`),
+ * independently of what the UI renders.
+ *
+ * The connection uses the SAME DATABASE_URL loaded from .env.e2e (?schema=...),
+ * so it NEVER touches the development database.
+ */
+export async function getInvestmentTradeByKey(
+  email: string,
+  idempotencyKey: string
+): Promise<InvestmentTradeSnapshot> {
+  const db = getPrisma();
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error(`getInvestmentTradeByKey: user ${email} not found`);
+  }
+
+  const trade = await db.transaction.findFirst({
+    where: { userId: user.id, idempotencyKey },
+  });
+  if (!trade) {
+    throw new Error(`getInvestmentTradeByKey: trade "${idempotencyKey}" not found for ${email}`);
+  }
+
+  return {
+    id: trade.id,
+    isActive: trade.isActive,
+    assetSymbol: trade.assetSymbol,
+    assetTradeType: trade.assetTradeType,
+    assetQuantity: trade.assetQuantity == null ? null : trade.assetQuantity.toString(),
+    assetPricePerShareCents:
+      trade.assetPricePerShareCents == null ? null : Number(trade.assetPricePerShareCents),
+    amountCents: Number(trade.amountCents),
+  };
+}

@@ -92,7 +92,7 @@ Feature: Gastos Fijos — Fixed Expenses
     And guarda la cantidad de próximos pagos como "month"
     And selecciona el horizonte de próximos pagos "Próximo trimestre"
     And guarda la cantidad de próximos pagos como "quarter"
-    Then la cantidad de próximos pagos de "month" debe ser mayor que la de "week"
+    Then la cantidad de próximos pagos de "month" debe ser mayor o igual que la de "week"
     And la cantidad de próximos pagos de "quarter" debe ser mayor que la de "month"
 
   # ============================================================================

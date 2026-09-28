@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { Decimal } from 'decimal.js';
 import { MAX_SAFE_CENTS } from '@/lib/validations/finance';
 
 /**
@@ -28,19 +29,61 @@ const CUIDSchema = z.string().regex(/^c[a-z0-9]{20,}$/, 'Must be a valid CUID');
 const InvestmentCurrencySchema = z.enum(['USD', 'EUR']);
 
 /**
- * Positive decimal string for quantities (supports fractional shares)
- * Max 8 decimal places — aligned with Prisma's Decimal(20, 8) column
+ * Positive decimal quantity (supports fractional shares).
+ *
+ * Accepts `,` or `.` as the decimal separator (the `,` is normalized to `.`)
+ * and up to 12 decimal places — aligned with the `Decimal(24, 12)` Prisma
+ * columns. More than one separator is rejected. Positiveness/finiteness is
+ * validated with Decimal.js (never native float parsing).
  */
-const DecimalQuantitySchema = z
-  .string()
-  .regex(/^\d+(\.\d{1,8})?$/, 'Must be a valid positive decimal number (max 8 decimals)')
-  .refine(
-    (val) => {
-      const num = Number.parseFloat(val);
-      return num > 0 && Number.isFinite(num);
-    },
-    { message: 'Quantity must be positive and finite' }
-  );
+const QUANTITY_REGEX = /^\d+(\.\d{1,12})?$/;
+const QUANTITY_MESSAGE = 'Must be a valid positive decimal number (max 12 decimals)';
+
+function normalizeQuantitySeparator(value: string): string {
+  const trimmed = value.trim();
+  const separatorCount = (trimmed.match(/[.,]/g) ?? []).length;
+  // More than one separator (e.g. "1,234.5" or "1,2,3") is never a valid
+  // quantity: leave it untouched so the regex below rejects it.
+  if (separatorCount > 1) return trimmed;
+  return trimmed.includes(',') ? trimmed.replace(',', '.') : trimmed;
+}
+
+const DecimalQuantitySchema = z.preprocess(
+  (value) => (typeof value === 'string' ? normalizeQuantitySeparator(value) : value),
+  z
+    .string()
+    .regex(QUANTITY_REGEX, QUANTITY_MESSAGE)
+    .refine(
+      (val) => {
+        // `new Decimal(...)` throws a DecimalError on malformed input; guard it
+        // so an invalid quantity is always surfaced as a Zod validation issue
+        // (VALIDATION_ERROR) instead of leaking a raw DecimalError.
+        try {
+          const num = new Decimal(val);
+          return num.isFinite() && num.greaterThan(0);
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Quantity must be positive and finite' }
+    )
+);
+
+/**
+ * Trade date: coerces to a Date and rejects future dates (a trade can be
+ * registered on a past date — historical backfill — but never in the future).
+ *
+ * `null` is normalized to `NaN` before coercion: `new Date(null)` would
+ * otherwise silently resolve to the 1970 epoch.
+ */
+const TradeDateSchema = z
+  .preprocess((value) => (value === null ? Number.NaN : value), z.coerce.date())
+  .refine((date) => !Number.isNaN(date.getTime()), {
+    message: 'Trade date must be a valid date',
+  })
+  .refine((date) => date.getTime() <= Date.now(), {
+    message: 'Trade date cannot be in the future',
+  });
 
 /**
  * Create investment account schema
@@ -112,6 +155,10 @@ export const BuyAssetSchema = z.object({
     .min(1, 'Price must be at least 1 cent')
     .max(MAX_SAFE_CENTS, 'Price exceeds maximum safe value'),
   description: z.string().max(500).optional(),
+  /** Trade date (defaults to now). Historical tickets are allowed. */
+  date: TradeDateSchema.optional(),
+  /** Explicit user confirmation to accept a price outside the ±2% tolerance. */
+  allowPriceOverride: z.boolean().optional().default(false),
 });
 
 /**
@@ -127,6 +174,46 @@ export const SellAssetSchema = z.object({
     .min(1, 'Price must be at least 1 cent')
     .max(MAX_SAFE_CENTS, 'Price exceeds maximum safe value'),
   description: z.string().max(500).optional(),
+  /** Trade date (defaults to now). Historical tickets are allowed. */
+  date: TradeDateSchema.optional(),
+  /** Explicit user confirmation to accept a price outside the ±2% tolerance. */
+  allowPriceOverride: z.boolean().optional().default(false),
+});
+
+/**
+ * Update an existing investment trade (BUY/SELL). Every field is optional; the
+ * service recomputes `amountCents` and the holding from the resulting ledger.
+ *
+ * NOTE: `idempotencyKey` is kept for client contract only. Effective
+ * idempotency for this action is STATE-based (editing/reversing an already
+ * terminal trade is a no-op), not key-based.
+ */
+export const UpdateInvestmentTradeSchema = z.object({
+  idempotencyKey: UUIDv4Schema,
+  transactionId: CUIDSchema,
+  quantity: DecimalQuantitySchema.optional(),
+  pricePerShareCents: z
+    .number()
+    .int('Price must be an integer')
+    .min(1, 'Price must be at least 1 cent')
+    .max(MAX_SAFE_CENTS, 'Price exceeds maximum safe value')
+    .optional(),
+  date: TradeDateSchema.optional(),
+  description: z.string().max(500).optional(),
+  /** Explicit user confirmation to accept a price outside the ±2% tolerance. */
+  allowPriceOverride: z.boolean().optional().default(false),
+});
+
+/**
+ * Reverse (undo) an investment trade. Always available — no time window.
+ *
+ * NOTE: `idempotencyKey` is kept for client contract only. Effective
+ * idempotency is STATE-based (reversing an already reversed trade returns
+ * `wasIdempotent: true`), not key-based.
+ */
+export const ReverseInvestmentTradeSchema = z.object({
+  idempotencyKey: UUIDv4Schema,
+  transactionId: CUIDSchema,
 });
 
 /**
@@ -175,6 +262,8 @@ export type DepositToInvestmentInput = z.infer<typeof DepositToInvestmentSchema>
 export type WithdrawFromInvestmentInput = z.infer<typeof WithdrawFromInvestmentSchema>;
 export type BuyAssetInput = z.infer<typeof BuyAssetSchema>;
 export type SellAssetInput = z.infer<typeof SellAssetSchema>;
+export type UpdateInvestmentTradeInput = z.infer<typeof UpdateInvestmentTradeSchema>;
+export type ReverseInvestmentTradeInput = z.infer<typeof ReverseInvestmentTradeSchema>;
 export type UpdateAssetPriceInput = z.infer<typeof UpdateAssetPriceSchema>;
 export type GetInvestmentTransactionsInput = z.infer<typeof GetInvestmentTransactionsSchema>;
 export type GetStockPriceInput = z.infer<typeof GetStockPriceSchema>;

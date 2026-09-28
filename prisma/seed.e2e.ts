@@ -225,6 +225,174 @@ async function main() {
   );
   console.log('✓ Investments visual user seeded (no accounts)');
 
+  // ============================================================================
+  // Investments TRADES E2E user (investments-trades.feature)
+  // Dedicated to the STRUCTURED trade rows (edit, undo, decimal quantity).
+  //
+  // Isolated from investments-accounts.feature (which creates/deposits/buys via
+  // the UI and depends on the live quote) so these deterministic scenarios never
+  // race with it in a parallel worker.
+  //
+  // Account (USD): "Portafolio Trade E2E" (INVESTMENT)
+  //   - TRANSFER_IN funding $10,000.00 (1,000,000 cents) — opening liquidity.
+  //     Typed TRANSFER_IN (not INVESTMENT) so it is NOT treated as a legacy
+  //     unstructured INVESTMENT row by the INVESTMENT_LEDGER_INCOMPLETE guard.
+  //   - BUY AAPL 5 @ $200.00 → -100,000 cents (structured; description null so
+  //     the activity row renders the localized "Compra" label).
+  //   - BUY MSFT 3 @ $300.00 →  -90,000 cents (structured; reserved for the
+  //     undo scenario, which soft-deletes it).
+  //   balanceCents = 1,000,000 − 100,000 − 90,000 = 810,000 (Rule 13: ledger ===
+  //   cache). Holdings: AAPL (5 @ 20000) and MSFT (3 @ 30000), both active.
+  //
+  // NO scenario depends on the server-side quote: when the edited price differs
+  // >2% from the live market price the edit modal asks for confirmation and the
+  // E2E accepts it with "Registrar con mi precio".
+  // ============================================================================
+  const invTradesUserEmail =
+    process.env.E2E_INVESTMENTS_TRADES_USER || 'investments-trades@e2e.financetrackerpro.com';
+  const invTradesUser = await upsertUserAndGet(invTradesUserEmail, 'Investments Trades E2E User');
+
+  const invTradesAccount = await prisma.account.upsert({
+    where: { idempotencyKey: 'e2e-inv-trades-account' },
+    create: {
+      idempotencyKey: 'e2e-inv-trades-account',
+      userId: invTradesUser.id,
+      name: 'Portafolio Trade E2E',
+      type: 'INVESTMENT',
+      currency: 'USD',
+      // 1,000,000 funding − 100,000 AAPL buy − 90,000 MSFT buy (ledger-backed).
+      balanceCents: 810000,
+      createdBy: invTradesUser.id,
+      lastModifiedBy: invTradesUser.id,
+      isActive: true,
+    },
+    update: {},
+  });
+
+  // Opening liquidity. A deterministic idempotency key keeps manual re-seeds a
+  // no-op; the account balance above matches the signed ledger sum.
+  await prisma.transaction.upsert({
+    where: { idempotencyKey: 'e2e-inv-trades-funding' },
+    update: {
+      amountCents: 1000000,
+      currency: 'USD',
+      type: 'TRANSFER_IN',
+      description: 'Fondeo portafolio de prueba',
+      isActive: true,
+      deletedAt: null,
+      lastModifiedBy: invTradesUser.id,
+    },
+    create: {
+      idempotencyKey: 'e2e-inv-trades-funding',
+      userId: invTradesUser.id,
+      accountId: invTradesAccount.id,
+      type: 'TRANSFER_IN',
+      amountCents: 1000000,
+      currency: 'USD',
+      description: 'Fondeo portafolio de prueba',
+      date: new Date('2026-01-01T12:00:00.000Z'),
+      createdBy: invTradesUser.id,
+      lastModifiedBy: invTradesUser.id,
+      isActive: true,
+    },
+  });
+
+  // Structured BUY trades. `description: null` makes the activity list render the
+  // localized type label ("Compra") instead of a custom description.
+  const invTradesBuys: Array<{
+    idempotencyKey: string;
+    symbol: string;
+    name: string;
+    quantity: string;
+    pricePerShareCents: number;
+    date: Date;
+  }> = [
+    {
+      idempotencyKey: 'e2e-inv-trades-buy-aapl',
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      quantity: '5',
+      pricePerShareCents: 20000,
+      date: new Date('2026-02-10T14:00:00.000Z'),
+    },
+    {
+      idempotencyKey: 'e2e-inv-trades-buy-msft',
+      symbol: 'MSFT',
+      name: 'Microsoft Corporation',
+      quantity: '3',
+      pricePerShareCents: 30000,
+      date: new Date('2026-02-05T14:00:00.000Z'),
+    },
+  ];
+
+  for (const buy of invTradesBuys) {
+    // magnitudeCents = quantity × price; BUY is an outflow (negative).
+    const magnitudeCents = Math.round(Number(buy.quantity) * buy.pricePerShareCents);
+    await prisma.transaction.upsert({
+      where: { idempotencyKey: buy.idempotencyKey },
+      update: {
+        amountCents: -magnitudeCents,
+        currency: 'USD',
+        type: 'INVESTMENT',
+        assetSymbol: buy.symbol,
+        assetQuantity: buy.quantity,
+        assetPricePerShareCents: buy.pricePerShareCents,
+        assetTradeType: 'BUY',
+        description: null,
+        isActive: true,
+        deletedAt: null,
+        lastModifiedBy: invTradesUser.id,
+      },
+      create: {
+        idempotencyKey: buy.idempotencyKey,
+        userId: invTradesUser.id,
+        accountId: invTradesAccount.id,
+        type: 'INVESTMENT',
+        amountCents: -magnitudeCents,
+        currency: 'USD',
+        assetSymbol: buy.symbol,
+        assetQuantity: buy.quantity,
+        assetPricePerShareCents: buy.pricePerShareCents,
+        assetTradeType: 'BUY',
+        description: null,
+        date: buy.date,
+        createdBy: invTradesUser.id,
+        lastModifiedBy: invTradesUser.id,
+        isActive: true,
+      },
+    });
+
+    // Holding cache mirroring the ledger replay (Rule 13). currentPriceCents is
+    // a deterministic seed price (never refreshed by the E2E scenarios).
+    await prisma.investmentAssetHolding.upsert({
+      where: {
+        accountId_symbol: { accountId: invTradesAccount.id, symbol: buy.symbol },
+      },
+      update: {
+        quantity: buy.quantity,
+        avgCostCents: buy.pricePerShareCents,
+        currentPriceCents: buy.pricePerShareCents,
+        isActive: true,
+        deletedAt: null,
+        lastModifiedBy: invTradesUser.id,
+      },
+      create: {
+        accountId: invTradesAccount.id,
+        symbol: buy.symbol,
+        name: buy.name,
+        quantity: buy.quantity,
+        avgCostCents: buy.pricePerShareCents,
+        currency: 'USD',
+        currentPriceCents: buy.pricePerShareCents,
+        createdBy: invTradesUser.id,
+        lastModifiedBy: invTradesUser.id,
+        isActive: true,
+      },
+    });
+  }
+
+  console.log('✓ Investments trades user seeded with USD account and structured AAPL/MSFT buys');
+
   // Transactions E2E user with pre-seeded accounts and transactions
   const txUserEmail = process.env.E2E_TRANSACTIONS_USER || 'transactions@e2e.financetrackerpro.com';
   const txUser = await upsertUserAndGet(txUserEmail, 'Transactions E2E User');

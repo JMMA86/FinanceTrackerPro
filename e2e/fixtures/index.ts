@@ -36,6 +36,36 @@ export const INVESTMENTS_VISUAL_USER = {
   name: 'Investments Visual E2E User',
 };
 
+/**
+ * Isolated user for investments-trades.feature — structured BUY/SELL trade rows
+ * (edit, undo, decimal quantity). Seeded with a USD INVESTMENT account
+ * ("Portafolio Trade E2E") holding ledger-backed AAPL + MSFT BUY trades.
+ *
+ * Kept separate from INVESTMENTS_TEST_USER (which creates/deposits/buys through
+ * the UI and depends on the live quote) so the destructive undo/edit scenarios
+ * of this feature never race with it in a parallel worker.
+ */
+export const INVESTMENTS_TRADES_USER = {
+  email: process.env.E2E_INVESTMENTS_TRADES_USER ?? 'investments-trades@e2e.financetrackerpro.com',
+  password: process.env.E2E_TEST_PASSWORD ?? 'E2ePassword123',
+  name: 'Investments Trades E2E User',
+};
+
+/**
+ * Deterministic structured-trade fixture data seeded for
+ * {@link INVESTMENTS_TRADES_USER} (see `prisma/seed.e2e.ts`).
+ *
+ * The idempotency keys are the stable handles used by the E2E DB assertions to
+ * read the exact seeded trade row (never delete them from the seed).
+ */
+export const INVESTMENTS_TRADES_FIXTURE = {
+  accountName: 'Portafolio Trade E2E',
+  /** BUY AAPL 5 @ $200.00 — edited by the decimal-quantity scenario. */
+  aaplBuyIdempotencyKey: 'e2e-inv-trades-buy-aapl',
+  /** BUY MSFT 3 @ $300.00 — reversed by the undo scenario. */
+  msftBuyIdempotencyKey: 'e2e-inv-trades-buy-msft',
+} as const;
+
 /** Isolated user for accounts.feature — accounts tests never touch the auth or dashboard users. */
 export const ACCOUNTS_TEST_USER = {
   email: process.env.E2E_ACCOUNTS_USER ?? 'accounts@e2e.financetrackerpro.com',

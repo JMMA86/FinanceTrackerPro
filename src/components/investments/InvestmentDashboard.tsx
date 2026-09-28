@@ -415,6 +415,7 @@ export function InvestmentDashboard({
                 currency={selectedCurrency}
                 dictionary={dictionary}
                 locale={locale}
+                holdings={holdings}
               />
             </div>
           )}

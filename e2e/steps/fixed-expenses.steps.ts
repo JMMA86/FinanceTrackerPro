@@ -378,14 +378,42 @@ Then('debe ver el modal del día con los pagos programados', async ({ page }) =>
 Then(
   'la cantidad de próximos pagos de {string} debe ser mayor que la de {string}',
   async ({ page }, greaterKey: string, lesserKey: string) => {
-    const greaterRaw = await getWindowValue(page, `${UPCOMING_COUNT_KEY_PREFIX}${greaterKey}`);
-    const lesserRaw = await getWindowValue(page, `${UPCOMING_COUNT_KEY_PREFIX}${lesserKey}`);
-    if (greaterRaw === undefined || lesserRaw === undefined) {
-      throw new Error('Upcoming payments counts were not stored for comparison');
-    }
-    expect(Number(greaterRaw)).toBeGreaterThan(Number(lesserRaw));
+    const { greater, lesser } = await getStoredUpcomingCounts(page, greaterKey, lesserKey);
+    expect(greater).toBeGreaterThan(lesser);
   }
 );
+
+/**
+ * Non-decreasing horizon comparison.
+ *
+ * The upcoming-payments horizon is monotonic (7 → 30 → 90 days), but a strict
+ * increase is NOT guaranteed for the week → month pair: with the monthly seed
+ * templates (days 1 / 5 / 30-31), when "today" is in the last week of a month
+ * the 7-day window already contains the next month's day-1/day-5 occurrences,
+ * so both windows show the same count. The spread is asserted strictly between
+ * quarter and the narrower windows, where the extra 60 days always add rows.
+ */
+Then(
+  'la cantidad de próximos pagos de {string} debe ser mayor o igual que la de {string}',
+  async ({ page }, greaterKey: string, lesserKey: string) => {
+    const { greater, lesser } = await getStoredUpcomingCounts(page, greaterKey, lesserKey);
+    expect(greater).toBeGreaterThanOrEqual(lesser);
+  }
+);
+
+/** Reads the two stored horizon counts, failing loudly if they were not captured. */
+async function getStoredUpcomingCounts(
+  page: Page,
+  greaterKey: string,
+  lesserKey: string
+): Promise<{ greater: number; lesser: number }> {
+  const greaterRaw = await getWindowValue(page, `${UPCOMING_COUNT_KEY_PREFIX}${greaterKey}`);
+  const lesserRaw = await getWindowValue(page, `${UPCOMING_COUNT_KEY_PREFIX}${lesserKey}`);
+  if (greaterRaw === undefined || lesserRaw === undefined) {
+    throw new Error('Upcoming payments counts were not stored for comparison');
+  }
+  return { greater: Number(greaterRaw), lesser: Number(lesserRaw) };
+}
 
 // ============================================================================
 // THEN - Validation modal state

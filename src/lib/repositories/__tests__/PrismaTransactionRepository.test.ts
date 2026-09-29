@@ -42,6 +42,10 @@ const buildMockTransaction = (overrides: Partial<Transaction> = {}): Transaction
   createdBy: 'user-1',
   lastModifiedBy: 'user-1',
   openingBalance: false,
+  assetSymbol: null,
+  assetQuantity: null,
+  assetPricePerShareCents: null,
+  assetTradeType: null,
   ...overrides,
 });
 

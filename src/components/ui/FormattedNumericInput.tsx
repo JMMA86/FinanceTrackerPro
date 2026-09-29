@@ -8,6 +8,7 @@ interface FormattedNumericInputProps {
   locale?: string;
   id?: string;
   className?: string;
+  placeholder?: string;
   'aria-invalid'?: boolean | 'true' | 'false';
   'aria-describedby'?: string;
   'aria-label'?: string;
@@ -21,6 +22,7 @@ export function FormattedNumericInput({
   locale = 'es-CO',
   id,
   className,
+  placeholder,
   ...ariaProps
 }: Readonly<FormattedNumericInputProps>) {
   function format(v: number): string {
@@ -49,6 +51,7 @@ export function FormattedNumericInput({
       type="text"
       inputMode="numeric"
       value={format(value)}
+      placeholder={placeholder}
       onKeyDown={handleKeyDown}
       onChange={() => {}}
       className={className}

@@ -163,6 +163,10 @@ const buildMockTransaction = (
     createdBy: VALID_USER_ID,
     lastModifiedBy: VALID_USER_ID,
     openingBalance: false,
+    assetSymbol: null,
+    assetQuantity: null,
+    assetPricePerShareCents: null,
+    assetTradeType: null,
     ...rest,
   };
 };
@@ -265,10 +269,22 @@ describe('credit-card.actions.ts (unit)', () => {
     });
 
     describe('payment status edge cases', () => {
-      const today = new Date();
+      // Freeze the clock so the due-date math is deterministic and never
+      // depends on the calendar day the suite happens to run (e.g. month-end,
+      // where `today.getDate() + 10` rolls over into the next month).
+      const FIXED_TODAY = new Date('2026-09-10T12:00:00');
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(FIXED_TODAY);
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
 
       it('marks a card as DUE_SOON when the due date is today', async () => {
-        const card = buildCardAccount({ paymentDueDay: today.getDate() });
+        const card = buildCardAccount({ paymentDueDay: 10 });
         vi.mocked(prisma.account.findMany).mockResolvedValue([card] as never);
         mockGetTrueBalance.mockResolvedValue(-1000);
 
@@ -278,7 +294,7 @@ describe('credit-card.actions.ts (unit)', () => {
       });
 
       it('marks a card as ON_TRACK when the due date is more than 7 days away', async () => {
-        const card = buildCardAccount({ paymentDueDay: today.getDate() + 10 });
+        const card = buildCardAccount({ paymentDueDay: 25 });
         vi.mocked(prisma.account.findMany).mockResolvedValue([card] as never);
         mockGetTrueBalance.mockResolvedValue(-1000);
 
@@ -298,9 +314,7 @@ describe('credit-card.actions.ts (unit)', () => {
       });
 
       it('marks an overdue card when the due date has passed and there is debt', async () => {
-        // Only meaningful when today >= 4 (guaranteed for the CI date).
-        const overdueDay = Math.max(1, today.getDate() - 3);
-        const card = buildCardAccount({ paymentDueDay: overdueDay });
+        const card = buildCardAccount({ paymentDueDay: 7 });
         vi.mocked(prisma.account.findMany).mockResolvedValue([card] as never);
         mockGetTrueBalance.mockResolvedValue(-1000);
 

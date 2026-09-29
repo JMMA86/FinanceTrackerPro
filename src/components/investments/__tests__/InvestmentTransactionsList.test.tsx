@@ -12,21 +12,29 @@ import { InvestmentTransactionsList } from '../InvestmentTransactionsList';
 // ============================================================================
 
 const mockGetInvestmentTransactions = vi.fn();
+const mockUpdateInvestmentTrade = vi.fn();
+const mockReverseInvestmentTrade = vi.fn();
 
 vi.mock('@/actions/investment.actions', () => ({
   getInvestmentTransactions: (...args: unknown[]) => mockGetInvestmentTransactions(...args),
+  updateInvestmentTrade: (...args: unknown[]) => mockUpdateInvestmentTrade(...args),
+  reverseInvestmentTrade: (...args: unknown[]) => mockReverseInvestmentTrade(...args),
 }));
 
 vi.mock('@/lib/i18n', () => ({
   get: vi.fn((_d: Record<string, unknown>, key: string) => key),
 }));
 
-vi.mock('@/lib/money', () => ({
-  formatMoney: vi.fn((cents: number, currency: string) => {
-    const sign = cents < 0 ? '-' : '';
-    return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
-  }),
-}));
+vi.mock('@/lib/money', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/money')>();
+  return {
+    ...actual,
+    formatMoney: vi.fn((cents: number, currency: string) => {
+      const sign = cents < 0 ? '-' : '';
+      return `${sign}$${(Math.abs(cents) / 100).toFixed(2)} ${currency}`;
+    }),
+  };
+});
 
 describe('InvestmentTransactionsList', () => {
   const buyTx = {
@@ -58,6 +66,12 @@ describe('InvestmentTransactionsList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+    });
   });
 
   it('should show a loading spinner while fetching', () => {
@@ -263,6 +277,101 @@ describe('InvestmentTransactionsList', () => {
       expect(screen.getByText('sellLabel')).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
+  });
+
+  it('should expose enabled edit/undo actions for structured BUY/SELL rows', async () => {
+    const structuredBuy = {
+      ...buyTx,
+      id: 't-buy',
+      assetSymbol: 'AAPL',
+      assetQuantity: 5,
+      assetPricePerShareCents: 15000,
+      assetTradeType: 'BUY',
+    };
+    mockGetInvestmentTransactions.mockResolvedValue({
+      success: true,
+      data: { transactions: [structuredBuy], totalPages: 1, total: 1, page: 1, pageSize: 20 },
+    });
+
+    render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
+
+    const editBtn = await screen.findByRole('button', { name: 'editTradeAction' });
+    const reverseBtn = screen.getByRole('button', { name: 'reverseTradeAction' });
+    expect(editBtn).toBeEnabled();
+    expect(reverseBtn).toBeEnabled();
+
+    // Clicking edit opens the editor prefilled with the trade.
+    fireEvent.click(editBtn);
+    await waitFor(() => {
+      expect(screen.getByLabelText('quantity')).toHaveValue('5');
+    });
+  });
+
+  it('should disable edit/undo actions for legacy INVESTMENT rows without assetTradeType', async () => {
+    mockGetInvestmentTransactions.mockResolvedValue({
+      success: true,
+      data: { transactions: [buyTx], totalPages: 1, total: 1, page: 1, pageSize: 20 },
+    });
+
+    render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
+
+    const editBtn = await screen.findByRole('button', { name: 'editTradeAction' });
+    const reverseBtn = screen.getByRole('button', { name: 'reverseTradeAction' });
+    expect(editBtn).toBeDisabled();
+    expect(reverseBtn).toBeDisabled();
+  });
+
+  it('should not render actions for non-investment rows', async () => {
+    const transferIn = {
+      id: 't-in',
+      type: 'TRANSFER_IN',
+      amountCents: 250000,
+      currency: 'USD',
+      description: null,
+      date: new Date('2024-03-05T09:00:00'),
+    };
+    mockGetInvestmentTransactions.mockResolvedValue({
+      success: true,
+      data: { transactions: [transferIn], totalPages: 1, total: 1, page: 1, pageSize: 20 },
+    });
+
+    render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
+
+    expect(await screen.findByText('depositLabel')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'editTradeAction' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'reverseTradeAction' })).not.toBeInTheDocument();
+  });
+
+  it('should refresh the ledger after a successful edit', async () => {
+    const structuredBuy = {
+      ...buyTx,
+      id: 't-buy',
+      assetSymbol: 'AAPL',
+      assetQuantity: 5,
+      assetPricePerShareCents: 15000,
+      assetTradeType: 'BUY',
+    };
+    mockGetInvestmentTransactions.mockResolvedValue({
+      success: true,
+      data: { transactions: [structuredBuy], totalPages: 1, total: 1, page: 1, pageSize: 20 },
+    });
+    mockUpdateInvestmentTrade.mockResolvedValue({ success: true });
+
+    render(<InvestmentTransactionsList accountId="acc-1" currency="USD" dictionary={dictionary} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'editTradeAction' }));
+    await waitFor(() => expect(screen.getByLabelText('quantity')).toHaveValue('5'));
+
+    fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '6' } });
+    fireEvent.click(screen.getByText('saveChanges'));
+
+    await waitFor(() => {
+      expect(mockUpdateInvestmentTrade).toHaveBeenCalled();
+    });
+    // reloadKey bump triggers a second GET for the same page.
+    await waitFor(() => {
+      expect(mockGetInvestmentTransactions.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it('should render the transaction date', async () => {

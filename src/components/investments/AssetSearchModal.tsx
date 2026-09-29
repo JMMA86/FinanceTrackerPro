@@ -1,31 +1,26 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Search, Loader2, TrendingUp, Plus, AlertCircle } from 'lucide-react';
-import { Decimal } from 'decimal.js';
+import { useEffect, useRef, useState } from 'react';
+import { X, Search, Loader2, TrendingUp, Plus, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
-import { getStockPrice, buyAsset, searchStocksAction } from '@/actions/investment.actions';
+import { buyAsset } from '@/actions/investment.actions';
 import { get } from '@/lib/i18n';
-import { formatMoney, multiplyCents } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
+import { toLocalDateTimeInput } from '@/lib/utils/date-utils';
+import { FormattedNumericInput } from '@/components/ui/FormattedNumericInput';
+import { useAssetSearch, type PricedStock } from './useAssetSearch';
+import { deriveTradeAmounts, type PriceAnchor } from './trade-amounts';
+import { parseQuantity, sanitizeQuantityInput, toDecimalString } from './decimal-input';
 import type { InvestmentAccountSummary } from './InvestmentAccountCard';
+
+/** Market price tolerance used to decide whether an override confirmation is needed. */
+const PRICE_TOLERANCE = 0.02;
 
 interface AssetSearchModalProps {
   account: InvestmentAccountSummary | null;
   dictionary: Record<string, unknown>;
   locale?: string;
 }
-
-interface StockMatch {
-  symbol: string;
-  name: string;
-}
-
-interface PricedStock extends StockMatch {
-  priceCents: number;
-  currency: string;
-}
-
-type BuyMode = 'quantity' | 'amount';
 
 /** Map a buy asset server error code to a localized message. */
 function getBuyError(code: string | undefined, dictionary: Record<string, unknown>): string {
@@ -40,8 +35,123 @@ function getBuyError(code: string | undefined, dictionary: Record<string, unknow
       return get(dictionary, 'errors.priceUnavailable');
     case 'RATE_LIMITED':
       return get(dictionary, 'errors.rateLimited');
+    case 'INSUFFICIENT_QUANTITY':
+      return get(dictionary, 'errors.insufficientQuantity');
+    case 'CURRENCY_MISMATCH':
+      return get(dictionary, 'errors.currencyMismatch');
+    case 'INVESTMENT_LEDGER_INCOMPLETE':
+      return get(dictionary, 'errors.investmentLedgerIncomplete');
+    case 'VALIDATION_ERROR':
+    case 'INVALID_FORMAT':
+      return get(dictionary, 'errors.invalidQuantity');
     default:
       return get(dictionary, 'errors.buyFailed');
+  }
+}
+
+/** Notifies via the UI store (matches `useUIStore.addNotification`). */
+type Notify = (type: 'success' | 'error' | 'warning' | 'info', message: string) => void;
+
+/**
+ * Client-side ±2% advisory against the quote shown to the user. The definitive
+ * check happens server-side with a fresh quote (PRICE_MISMATCH), so this only
+ * decides whether to pre-fill `allowPriceOverride`.
+ */
+function computePriceDiffers(pricedStock: PricedStock | null, pricePerShareCents: number): boolean {
+  if (!pricedStock || pricedStock.priceCents <= 0 || pricePerShareCents <= 0) return false;
+  return (
+    Math.abs(pricePerShareCents - pricedStock.priceCents) / pricedStock.priceCents > PRICE_TOLERANCE
+  );
+}
+
+/** Everything a buy attempt needs, mirrored from the modal's state and setters. */
+interface BuyFlowContext {
+  account: InvestmentAccountSummary;
+  pricedStock: PricedStock;
+  quantity: string;
+  pricePerShareCents: number;
+  dateValue: string;
+  insufficientFunds: boolean;
+  priceDiffers: boolean;
+  dictionary: Record<string, unknown>;
+  idempotencyKeyRef: { current: string | null };
+  setBuying: (value: boolean) => void;
+  setSubmitError: (value: string | null) => void;
+  setPendingPriceOverride: (value: boolean) => void;
+  closeModal: () => void;
+  addNotification: Notify;
+}
+
+/**
+ * Executes a single buy attempt.
+ *
+ * Extracted from the component so the latter's cognitive complexity stays below
+ * the SonarQube threshold (S3776). Owns input validation, the stable
+ * idempotency key reused by the override retry, the ±2% `allowPriceOverride`
+ * flag and the server-driven PRICE_MISMATCH confirmation.
+ */
+async function runBuyAttempt(ctx: BuyFlowContext, forceOverride: boolean): Promise<void> {
+  ctx.setBuying(true);
+  ctx.setSubmitError(null);
+
+  const qty = toDecimalString(ctx.quantity);
+  if (!qty || parseQuantity(ctx.quantity) <= 0) {
+    ctx.setSubmitError(get(ctx.dictionary, 'quantityPositive'));
+    ctx.setBuying(false);
+    return;
+  }
+
+  if (ctx.pricePerShareCents < 1) {
+    ctx.setSubmitError(get(ctx.dictionary, 'pricePositive'));
+    ctx.setBuying(false);
+    return;
+  }
+
+  if (ctx.insufficientFunds) {
+    ctx.setSubmitError(get(ctx.dictionary, 'errors.insufficientFunds'));
+    ctx.setBuying(false);
+    return;
+  }
+
+  // Stable idempotency key per purchase attempt: reused by the override retry
+  // (never regenerated mid-attempt); only cleared after a confirmed success.
+  if (!ctx.idempotencyKeyRef.current) {
+    ctx.idempotencyKeyRef.current = crypto.randomUUID();
+  }
+  const allowPriceOverride = forceOverride || ctx.priceDiffers;
+
+  try {
+    const res = await buyAsset({
+      idempotencyKey: ctx.idempotencyKeyRef.current,
+      accountId: ctx.account.id,
+      symbol: ctx.pricedStock.symbol,
+      name: ctx.pricedStock.name,
+      quantity: qty,
+      pricePerShareCents: ctx.pricePerShareCents,
+      date: ctx.dateValue ? new Date(ctx.dateValue) : undefined,
+      allowPriceOverride,
+    });
+
+    if (res.success) {
+      ctx.idempotencyKeyRef.current = null;
+      ctx.addNotification(
+        'success',
+        get(ctx.dictionary, 'boughtAsset')
+          .replace('{qty}', qty)
+          .replace('{symbol}', ctx.pricedStock.symbol)
+      );
+      ctx.closeModal();
+    } else if (res.code === 'PRICE_MISMATCH' && !allowPriceOverride) {
+      // The live quote drifted after we priced the stock: confirm and retry
+      // with the SAME idempotency key.
+      ctx.setPendingPriceOverride(true);
+    } else {
+      ctx.setSubmitError(getBuyError(res.code, ctx.dictionary));
+    }
+  } catch {
+    ctx.setSubmitError(get(ctx.dictionary, 'errors.buyFailed'));
+  } finally {
+    ctx.setBuying(false);
   }
 }
 
@@ -62,23 +172,47 @@ export function AssetSearchModal({
   const [isVisible, setIsVisible] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Two-phase search: symbols first, then price on selection
-  const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [matches, setMatches] = useState<StockMatch[]>([]);
-  const [selectedStock, setSelectedStock] = useState<StockMatch | null>(null);
-  const [fetchingPrice, setFetchingPrice] = useState(false);
-  const [pricedStock, setPricedStock] = useState<PricedStock | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-
   // Buy form state
-  const [buyMode, setBuyMode] = useState<BuyMode>('quantity');
   const [quantity, setQuantity] = useState('');
-  // Amount to invest in the account currency (major units, e.g. USD dollars).
-  const [amountToInvest, setAmountToInvest] = useState('');
   const [pricePerShareCents, setPricePerShareCents] = useState(0);
+  const [baseCostCents, setBaseCostCents] = useState(0);
+  // Which of price / base cost the user edited last (drives the derivation).
+  const [lastEdited, setLastEdited] = useState<PriceAnchor>('price');
+  const [dateValue, setDateValue] = useState(() => toLocalDateTimeInput(new Date()));
+  const [pendingPriceOverride, setPendingPriceOverride] = useState(false);
   const [buying, setBuying] = useState(false);
+
+  const qtyNum = parseQuantity(quantity);
+
+  // Price per share and base cost are coupled; the last edited field is the
+  // anchor and the other is derived (Rule 1: Decimal.js, never native floats).
+  // Reused to seed the form from the picked quote (anchor: price).
+  function handlePriceChange(cents: number) {
+    setLastEdited('price');
+    const next = deriveTradeAmounts('price', { pricePerShareCents: cents, baseCostCents }, qtyNum);
+    setPricePerShareCents(next.pricePerShareCents);
+    setBaseCostCents(next.baseCostCents);
+  }
+
+  // Two-phase search (symbols first, then price on selection) — owned by a
+  // dedicated hook. The picked price seeds the buy form.
+  const {
+    query,
+    searching,
+    matches,
+    selectedStock,
+    fetchingPrice,
+    pricedStock,
+    searchError,
+    handleQueryChange,
+    handlePickStock,
+    resetSearch,
+  } = useAssetSearch(dictionary, handlePriceChange);
+
+  // Stable idempotency key per purchase attempt. It is generated once and
+  // reused by the price-override retry (never regenerated mid-attempt); only
+  // cleared after a confirmed success.
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -100,21 +234,20 @@ export function AssetSearchModal({
   useEffect(() => {
     if (!isOpen) return;
     const id = requestAnimationFrame(() => {
-      setQuery('');
-      setMatches([]);
-      setSelectedStock(null);
-      setPricedStock(null);
-      setSearchError(null);
+      resetSearch();
       setSubmitError(null);
       setQuantity('');
-      setAmountToInvest('');
-      setBuyMode('quantity');
       setPricePerShareCents(0);
+      setBaseCostCents(0);
+      setLastEdited('price');
+      setDateValue(toLocalDateTimeInput(new Date()));
+      setPendingPriceOverride(false);
+      idempotencyKeyRef.current = null;
       setBuying(false);
       setIsVisible(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [isOpen]);
+  }, [isOpen, resetSearch]);
 
   const handleClose = () => {
     const dialog = dialogRef.current;
@@ -136,154 +269,56 @@ export function AssetSearchModal({
     previousFocusRef.current = null;
   };
 
-  // Phase 1: search symbols via autocomplete
-  const doSearch = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) {
-        setMatches([]);
-        setSearchError(null);
-        return;
-      }
+  // The purchase total IS the base cost; funds are checked against it.
+  const insufficientFunds = !!account && baseCostCents > account.balanceCents;
 
-      setSearching(true);
-      setSearchError(null);
-      setMatches([]);
-      setSelectedStock(null);
-      setPricedStock(null);
+  const priceDiffers = computePriceDiffers(pricedStock, pricePerShareCents);
 
-      try {
-        const res = await searchStocksAction({ symbol: trimmed });
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setMatches(res.data as StockMatch[]);
-        } else {
-          setSearchError(get(dictionary, 'stockNotFound'));
-        }
-      } catch {
-        setSearchError(get(dictionary, 'stockNotFound'));
-      } finally {
-        setSearching(false);
-      }
-    },
-    [dictionary]
-  );
+  const submitErrorId = submitError ? 'buy-submit-error' : undefined;
 
-  function handleQueryChange(value: string) {
-    setQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(value), 300);
+  // The quantity input is described by its decimals hint plus the error, if any.
+  const buyQtyDescribedBy = submitError ? 'buy-qty-hint buy-submit-error' : 'buy-qty-hint';
+
+  function handleBaseCostChange(cents: number) {
+    setLastEdited('base');
+    const next = deriveTradeAmounts('base', { pricePerShareCents, baseCostCents: cents }, qtyNum);
+    setPricePerShareCents(next.pricePerShareCents);
+    setBaseCostCents(next.baseCostCents);
   }
 
-  // Phase 2: fetch price when user picks a symbol
-  async function handlePickStock(stock: StockMatch) {
-    setSelectedStock(stock);
-    setPricedStock(null);
-    setFetchingPrice(true);
-    setSearchError(null);
-    setMatches([]); // close dropdown
-
-    try {
-      const res = await getStockPrice({ symbol: stock.symbol });
-      if (res.success && res.data) {
-        const data = res.data as {
-          symbol: string;
-          price: number;
-          priceCents: number;
-          currency: string;
-        };
-        const priced: PricedStock = {
-          symbol: data.symbol,
-          name: stock.name,
-          priceCents: data.priceCents,
-          currency: data.currency ?? 'USD',
-        };
-        setPricedStock(priced);
-        setPricePerShareCents(data.priceCents);
-      } else {
-        // Reset the selection so the search UI (and the error) is visible again.
-        setSelectedStock(null);
-        setSearchError(get(dictionary, 'priceFailed'));
-      }
-    } catch {
-      setSelectedStock(null);
-      setSearchError(get(dictionary, 'priceFailed'));
-    } finally {
-      setFetchingPrice(false);
-    }
+  function handleQuantityChange(value: string) {
+    const sanitized = sanitizeQuantityInput(value);
+    setQuantity(sanitized);
+    const next = deriveTradeAmounts(
+      lastEdited,
+      { pricePerShareCents, baseCostCents },
+      parseQuantity(sanitized)
+    );
+    setPricePerShareCents(next.pricePerShareCents);
+    setBaseCostCents(next.baseCostCents);
   }
 
-  // Quantity derived from the amount input (Rule 1: Decimal.js with Banker's rounding).
-  // amount is in major currency units (e.g. $150), so ×100 gives cents before
-  // dividing by the per-share price in cents → fractional shares with 4 decimals.
-  const computedQuantity =
-    buyMode === 'amount' && amountToInvest && pricePerShareCents > 0
-      ? new Decimal(amountToInvest)
-          .times(100)
-          .dividedBy(pricePerShareCents)
-          .toDecimalPlaces(4, Decimal.ROUND_HALF_EVEN)
-          .toString()
-      : quantity;
-
-  const qtyNum = Number.parseFloat(computedQuantity) || 0;
-  const totalCostCents =
-    qtyNum > 0 && pricePerShareCents > 0 ? multiplyCents(pricePerShareCents, qtyNum) : 0;
-
-  // Amount mode: the user-entered amount in cents (major units × 100).
-  const amountCents =
-    buyMode === 'amount' && amountToInvest
-      ? new Decimal(amountToInvest)
-          .times(100)
-          .toDecimalPlaces(0, Decimal.ROUND_HALF_EVEN)
-          .toNumber()
-      : 0;
-
-  const insufficientFunds =
-    !!account && (totalCostCents > account.balanceCents || amountCents > account.balanceCents);
-
-  async function handleBuy() {
+  async function handleBuy(forceOverride = false) {
     if (!account || !pricedStock) return;
-    setBuying(true);
-    setSubmitError(null);
-
-    const qty = computedQuantity.trim();
-    if (!qty || Number.parseFloat(qty) <= 0) {
-      setSubmitError(get(dictionary, 'errors.buyFailed'));
-      setBuying(false);
-      return;
-    }
-
-    if (insufficientFunds) {
-      setSubmitError(get(dictionary, 'errors.insufficientFunds'));
-      setBuying(false);
-      return;
-    }
-
-    try {
-      const res = await buyAsset({
-        idempotencyKey: crypto.randomUUID(),
-        accountId: account.id,
-        symbol: pricedStock.symbol,
-        name: pricedStock.name,
-        quantity: qty,
+    await runBuyAttempt(
+      {
+        account,
+        pricedStock,
+        quantity,
         pricePerShareCents,
-      });
-
-      if (res.success) {
-        addNotification(
-          'success',
-          get(dictionary, 'boughtAsset')
-            .replace('{qty}', qty)
-            .replace('{symbol}', pricedStock.symbol)
-        );
-        closeModal();
-      } else {
-        setSubmitError(getBuyError(res.code, dictionary));
-      }
-    } catch {
-      setSubmitError(get(dictionary, 'errors.buyFailed'));
-    } finally {
-      setBuying(false);
-    }
+        dateValue,
+        insufficientFunds,
+        priceDiffers,
+        dictionary,
+        idempotencyKeyRef,
+        setBuying,
+        setSubmitError,
+        setPendingPriceOverride,
+        closeModal,
+        addNotification,
+      },
+      forceOverride
+    );
   }
 
   const inputCls =
@@ -346,6 +381,7 @@ export function AssetSearchModal({
           {/* Error alert */}
           {submitError && (
             <div
+              id="buy-submit-error"
               role="alert"
               className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400"
             >
@@ -464,96 +500,79 @@ export function AssetSearchModal({
                 </p>
               </div>
 
-              {/* Buy mode toggle */}
-              <fieldset className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10 min-w-0">
-                <button
-                  type="button"
-                  aria-pressed={buyMode === 'quantity'}
-                  onClick={() => setBuyMode('quantity')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    buyMode === 'quantity'
-                      ? 'bg-violet-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {get(dictionary, 'byQuantity')}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={buyMode === 'amount'}
-                  onClick={() => setBuyMode('amount')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    buyMode === 'amount'
-                      ? 'bg-violet-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {get(dictionary, 'byAmount')}
-                </button>
-              </fieldset>
-
-              {/* Buy form */}
+              {/* Buy form: quantity, price per share and base cost (total) */}
               <div className="grid grid-cols-2 gap-3">
-                {buyMode === 'quantity' ? (
-                  <div>
-                    <label htmlFor="buy-qty" className={labelCls}>
-                      {get(dictionary, 'quantity')}
-                    </label>
-                    <input
-                      id="buy-qty"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.0001"
-                      min="0"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      placeholder="0.0000"
-                      className={`${inputCls} font-mono tabular-nums`}
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label htmlFor="buy-amount" className={labelCls}>
-                      {get(dictionary, 'amountToInvest')}
-                    </label>
-                    <input
-                      id="buy-amount"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      value={amountToInvest}
-                      onChange={(e) => setAmountToInvest(e.target.value)}
-                      placeholder="0.00"
-                      className={`${inputCls} font-mono tabular-nums`}
-                    />
-                  </div>
-                )}
+                <div>
+                  <label htmlFor="buy-qty" className={labelCls}>
+                    {get(dictionary, 'quantity')}
+                  </label>
+                  <input
+                    id="buy-qty"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={quantity}
+                    onChange={(e) => handleQuantityChange(e.target.value)}
+                    placeholder="0.0000"
+                    aria-invalid={!!submitError}
+                    aria-describedby={buyQtyDescribedBy}
+                    className={`${inputCls} font-mono tabular-nums`}
+                  />
+                  <p id="buy-qty-hint" className="mt-1 text-xs text-slate-500">
+                    {get(dictionary, 'maxDecimals')}
+                  </p>
+                </div>
                 <div>
                   <label htmlFor="buy-price" className={labelCls}>
                     {get(dictionary, 'pricePerShare')}
                   </label>
-                  <input
+                  <FormattedNumericInput
                     id="buy-price"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={(pricePerShareCents / 100).toFixed(2)}
-                    onChange={(e) =>
-                      setPricePerShareCents(Math.round(Number.parseFloat(e.target.value) * 100))
-                    }
+                    value={pricePerShareCents}
+                    onChange={handlePriceChange}
+                    locale={locale}
+                    placeholder={get(dictionary, 'pricePerSharePlaceholder')}
+                    aria-invalid={!!submitError}
+                    aria-describedby={submitErrorId}
                     className={`${inputCls} font-mono tabular-nums`}
                   />
                 </div>
               </div>
 
-              {/* Approx shares derived from amount */}
-              {buyMode === 'amount' && computedQuantity && qtyNum > 0 && (
-                <p className="text-xs text-slate-400">
-                  {get(dictionary, 'approxShares').replace('{quantity}', computedQuantity)}
-                </p>
-              )}
+              {/* Base cost (purchase total). Editing it derives the price per share. */}
+              <div>
+                <label htmlFor="buy-base-cost" className={labelCls}>
+                  {get(dictionary, 'baseCost')}
+                </label>
+                <FormattedNumericInput
+                  id="buy-base-cost"
+                  value={baseCostCents}
+                  onChange={handleBaseCostChange}
+                  locale={locale}
+                  placeholder={get(dictionary, 'pricePerSharePlaceholder')}
+                  aria-invalid={!!submitError}
+                  aria-describedby={submitErrorId}
+                  className={`${inputCls} font-mono tabular-nums`}
+                />
+                <p className="mt-1 text-xs text-slate-500">{get(dictionary, 'baseCostHint')}</p>
+              </div>
+
+              {/* Trade date (historical tickets are allowed; future is rejected) */}
+              <div>
+                <label htmlFor="buy-date" className={labelCls}>
+                  {get(dictionary, 'tradeDate')}
+                </label>
+                <input
+                  id="buy-date"
+                  type="datetime-local"
+                  value={dateValue}
+                  max={toLocalDateTimeInput(new Date())}
+                  onChange={(e) => setDateValue(e.target.value)}
+                  aria-invalid={!!submitError}
+                  aria-describedby={submitErrorId}
+                  className={inputCls}
+                />
+              </div>
 
               {/* Insufficient funds inline warning */}
               {insufficientFunds && (
@@ -565,21 +584,71 @@ export function AssetSearchModal({
                 </div>
               )}
 
-              {/* Total cost */}
-              {totalCostCents > 0 && !insufficientFunds && (
-                <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <span className="text-xs text-violet-300">{get(dictionary, 'totalCost')}</span>
-                  <span className="text-base font-bold text-white tabular-nums">
-                    {formatMoney(totalCostCents, account?.currency ?? 'USD', locale)}
-                  </span>
+              {/* Non-blocking ±2% advisory (native <output> = implicit role="status") */}
+              {priceDiffers && !pendingPriceOverride && (
+                <output className="bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3 flex items-start gap-2.5">
+                  <AlertTriangle
+                    className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
+                  <p className="text-xs text-amber-300">
+                    {get(dictionary, 'priceOverrideWarning')}
+                  </p>
+                </output>
+              )}
+
+              {/* Server price-mismatch confirmation (retry reuses idempotency key) */}
+              {pendingPriceOverride && (
+                <div
+                  role="alertdialog"
+                  aria-labelledby="buy-price-override-title"
+                  className="bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3 space-y-3"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle
+                      className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p
+                        id="buy-price-override-title"
+                        className="text-sm font-semibold text-amber-200"
+                      >
+                        {get(dictionary, 'priceOverrideConfirmTitle')}
+                      </p>
+                      <p className="text-xs text-amber-300/80 mt-0.5">
+                        {get(dictionary, 'priceOverrideConfirmBody')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPendingPriceOverride(false)}
+                      className="flex-1 py-2 rounded-lg border border-white/10 text-xs font-semibold text-slate-300 hover:bg-white/5 transition-colors"
+                    >
+                      {get(dictionary, 'cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={() => {
+                        setPendingPriceOverride(false);
+                        void handleBuy(true);
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition-colors"
+                    >
+                      {get(dictionary, 'priceOverrideConfirmCta')}
+                    </button>
+                  </div>
                 </div>
               )}
 
               {/* Buy button */}
               <button
                 type="button"
-                onClick={handleBuy}
-                disabled={buying || !computedQuantity || qtyNum <= 0 || insufficientFunds}
+                onClick={() => void handleBuy()}
+                disabled={buying || !quantity || qtyNum <= 0 || insufficientFunds}
                 className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors inline-flex items-center justify-center gap-2"
               >
                 {buying ? (

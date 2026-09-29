@@ -18,6 +18,7 @@ import {
   markApiAttemptSuccess,
 } from '@/services/rate-limit.service';
 import {
+  AppError,
   NotFoundError,
   UnauthorizedError,
   InsufficientFundsError,
@@ -37,6 +38,23 @@ import {
   UpdateTransactionSchema,
 } from './transaction.schema';
 import type { Prisma, ApiAction, TransactionType, Currency } from '@prisma/client';
+
+/**
+ * Decision #5: INVESTMENT transactions are managed exclusively from the
+ * investments module, whose edit/reverse actions recompute the
+ * `InvestmentAssetHolding` ledger. The generic transaction editor/deleter only
+ * touches the account balance, so it would silently desynchronize the
+ * portfolio. Reject INVESTMENT rows here.
+ */
+function assertNotInvestmentManagedElsewhere(type: TransactionType): void {
+  if (type === 'INVESTMENT') {
+    throw new AppError(
+      'Investment trades must be edited from the investments module',
+      409,
+      'INVESTMENT_MANAGED_ELSEWHERE'
+    );
+  }
+}
 
 /**
  * Verify funds (Rule 13) for a transaction with a negative amount. CREDIT_CARD
@@ -342,6 +360,7 @@ async function deleteTransactionInternal(input: unknown) {
         userId: true,
         accountId: true,
         amountCents: true,
+        type: true,
         isActive: true,
       },
     });
@@ -349,6 +368,9 @@ async function deleteTransactionInternal(input: unknown) {
     if (!transaction?.isActive) throw new NotFoundError('Transaction', transactionId);
     if (transaction.userId !== session.userId)
       throw new UnauthorizedError('Transaction does not belong to user');
+
+    // Investment trades must be reversed from the investments module.
+    assertNotInvestmentManagedElsewhere(transaction.type);
 
     // M2: a transaction that funds an active savings contribution is the
     // source of truth for the goal cache. Deleting it cascades atomically:
@@ -710,6 +732,9 @@ async function updateTransactionInternal(input: unknown) {
     if (transaction.userId !== session.userId) {
       throw new UnauthorizedError('Transaction does not belong to user');
     }
+
+    // Investment trades must be edited from the investments module.
+    assertNotInvestmentManagedElsewhere(transaction.type);
 
     // M2: a transaction that funds an active savings contribution is the source
     // of truth for the goal cache. Editing its amount/date would desynchronize

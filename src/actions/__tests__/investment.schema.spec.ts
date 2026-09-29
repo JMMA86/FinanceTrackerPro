@@ -8,6 +8,8 @@ import {
   DepositToInvestmentSchema,
   BuyAssetSchema,
   SellAssetSchema,
+  UpdateInvestmentTradeSchema,
+  ReverseInvestmentTradeSchema,
   UpdateAssetPriceSchema,
   GetInvestmentTransactionsSchema,
   GetStockPriceSchema,
@@ -293,6 +295,52 @@ describe('BuyAssetSchema', () => {
     ).toThrow('Must be a valid positive decimal number');
   });
 
+  it('should accept a comma-separated decimal quantity', () => {
+    const result = BuyAssetSchema.parse({ ...validInput, quantity: '2,243695838' });
+    expect(result.quantity).toBe('2.243695838');
+  });
+
+  it('should accept a dot-separated decimal quantity', () => {
+    const result = BuyAssetSchema.parse({ ...validInput, quantity: '2.243695838' });
+    expect(result.quantity).toBe('2.243695838');
+  });
+
+  it('should accept up to 12 decimal places', () => {
+    const result = BuyAssetSchema.parse({ ...validInput, quantity: '0.123456789012' });
+    expect(result.quantity).toBe('0.123456789012');
+  });
+
+  it('should reject 13 decimal places', () => {
+    expect(() => BuyAssetSchema.parse({ ...validInput, quantity: '0.1234567890123' })).toThrow(
+      'Must be a valid positive decimal number'
+    );
+  });
+
+  it('should reject multiple separators', () => {
+    expect(() => BuyAssetSchema.parse({ ...validInput, quantity: '1,234.5' })).toThrow();
+    expect(() => BuyAssetSchema.parse({ ...validInput, quantity: '1,2,3' })).toThrow();
+  });
+
+  it('should accept a historical date and default allowPriceOverride to false', () => {
+    const result = BuyAssetSchema.parse({
+      ...validInput,
+      date: '2024-03-01T10:00:00.000Z',
+    });
+    expect(result.date).toBeInstanceOf(Date);
+    expect(result.allowPriceOverride).toBe(false);
+  });
+
+  it('should reject a future trade date', () => {
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    expect(() => BuyAssetSchema.parse({ ...validInput, date: future })).toThrow(
+      'Trade date cannot be in the future'
+    );
+  });
+
+  it('should reject a null trade date', () => {
+    expect(() => BuyAssetSchema.parse({ ...validInput, date: null })).toThrow();
+  });
+
   it('should reject empty symbol', () => {
     expect(() =>
       BuyAssetSchema.parse({
@@ -475,6 +523,85 @@ describe('SellAssetSchema', () => {
         ...validInput,
         description: 'x'.repeat(501),
       })
+    ).toThrow();
+  });
+});
+
+// ============================================================================
+// UpdateInvestmentTradeSchema
+// ============================================================================
+describe('UpdateInvestmentTradeSchema', () => {
+  const validInput = {
+    idempotencyKey: VALID_UUID,
+    transactionId: VALID_CUID,
+    quantity: '2.5',
+    pricePerShareCents: 19500,
+    description: 'Edit trade',
+  };
+
+  it('should accept a fully specified edit', () => {
+    const result = UpdateInvestmentTradeSchema.parse(validInput);
+    expect(result.transactionId).toBe(VALID_CUID);
+    expect(result.quantity).toBe('2.5');
+    expect(result.pricePerShareCents).toBe(19500);
+  });
+
+  it('should accept an empty edit (all fields optional)', () => {
+    const result = UpdateInvestmentTradeSchema.parse({
+      idempotencyKey: VALID_UUID,
+      transactionId: VALID_CUID,
+    });
+    expect(result.quantity).toBeUndefined();
+    expect(result.pricePerShareCents).toBeUndefined();
+    expect(result.date).toBeUndefined();
+    expect(result.allowPriceOverride).toBe(false);
+  });
+
+  it('should normalize a comma quantity', () => {
+    const result = UpdateInvestmentTradeSchema.parse({ ...validInput, quantity: '2,5' });
+    expect(result.quantity).toBe('2.5');
+  });
+
+  it('should reject an invalid transactionId CUID', () => {
+    expect(() =>
+      UpdateInvestmentTradeSchema.parse({ ...validInput, transactionId: 'bad' })
+    ).toThrow();
+  });
+
+  it('should reject a zero quantity', () => {
+    expect(() => UpdateInvestmentTradeSchema.parse({ ...validInput, quantity: '0' })).toThrow();
+  });
+
+  it('should reject a future date', () => {
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    expect(() => UpdateInvestmentTradeSchema.parse({ ...validInput, date: future })).toThrow();
+  });
+});
+
+// ============================================================================
+// ReverseInvestmentTradeSchema
+// ============================================================================
+describe('ReverseInvestmentTradeSchema', () => {
+  const validInput = {
+    idempotencyKey: VALID_UUID,
+    transactionId: VALID_CUID,
+  };
+
+  it('should accept a valid reverse request', () => {
+    const result = ReverseInvestmentTradeSchema.parse(validInput);
+    expect(result.idempotencyKey).toBe(VALID_UUID);
+    expect(result.transactionId).toBe(VALID_CUID);
+  });
+
+  it('should reject an invalid idempotencyKey', () => {
+    expect(() =>
+      ReverseInvestmentTradeSchema.parse({ ...validInput, idempotencyKey: 'nope' })
+    ).toThrow();
+  });
+
+  it('should reject an invalid transactionId', () => {
+    expect(() =>
+      ReverseInvestmentTradeSchema.parse({ ...validInput, transactionId: 'nope' })
     ).toThrow();
   });
 });

@@ -138,6 +138,10 @@ const buildMockTransaction = (overrides: MockTransactionOverrides = {}): Transac
     createdBy: VALID_USER_ID,
     lastModifiedBy: VALID_USER_ID,
     openingBalance: false,
+    assetSymbol: null,
+    assetQuantity: null,
+    assetPricePerShareCents: null,
+    assetTradeType: null,
     ...rest,
   };
 };

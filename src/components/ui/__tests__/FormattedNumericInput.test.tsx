@@ -110,4 +110,16 @@ describe('FormattedNumericInput', () => {
 
     expect(screen.getByLabelText('Monto')).toBeInTheDocument();
   });
+
+  it('should render the placeholder when provided (retrocompatible optional prop)', () => {
+    render(<FormattedNumericInput value={0} onChange={() => {}} placeholder="Precio por acción" />);
+
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Precio por acción');
+  });
+
+  it('should not set a placeholder when omitted', () => {
+    render(<FormattedNumericInput value={0} onChange={() => {}} />);
+
+    expect(screen.getByRole('textbox')).not.toHaveAttribute('placeholder');
+  });
 });

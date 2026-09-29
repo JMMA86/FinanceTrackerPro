@@ -19,7 +19,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { Decimal } from 'decimal.js';
-import { Prisma, type ApiAction } from '@prisma/client';
+import { Prisma, type ApiAction, type Currency, type InvestmentAssetHolding } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { safeAction } from '@/lib/utils/action-wrapper';
@@ -35,6 +35,10 @@ import {
 } from '@/lib/money';
 import { serializeTransaction } from '@/lib/serialize';
 import { getTrueBalanceFromTx } from '@/services/reconciliation.service';
+import {
+  recomputeHoldingFromLedger,
+  syncHoldingFromTrade,
+} from '@/services/investment-ledger.service';
 import { getClientInfo } from '@/lib/utils/client-info';
 import {
   checkApiRateLimit,
@@ -50,6 +54,7 @@ import {
   InactiveAccountError,
   CurrencyMismatchError,
   RateLimitError,
+  ValidationError,
 } from '@/lib/errors/api-errors';
 import { getStockQuote, searchStocks, type StockQuote } from '@/services/stock-price.service';
 import { getExchangeRate } from '@/services/exchange-rate.service';
@@ -60,9 +65,12 @@ import {
   WithdrawFromInvestmentSchema,
   BuyAssetSchema,
   SellAssetSchema,
+  UpdateInvestmentTradeSchema,
+  ReverseInvestmentTradeSchema,
   GetInvestmentTransactionsSchema,
   GetStockPriceSchema,
   GetExchangeRateSchema,
+  type UpdateInvestmentTradeInput,
 } from './investment.schema';
 import type { InvestmentAccountDTO } from '@/types/investments';
 
@@ -70,6 +78,289 @@ const BANK_ACCOUNT_TYPES = ['CHECKING', 'CASH', 'SAVINGS', 'POCKET'] as const;
 
 // Market price validation tolerance (Rule: never trust client prices blindly)
 const PRICE_TOLERANCE = 0.02; // ±2%
+
+/**
+ * Build a JSON-safe holding DTO for Server Action responses (Decimal/BigInt
+ * fields would otherwise crash serialization). Mirrors the shape returned by
+ * `getInvestmentAccounts`.
+ */
+function serializeHolding(holding: InvestmentAssetHolding | null) {
+  if (!holding) return null;
+  return {
+    id: holding.id,
+    symbol: holding.symbol,
+    name: holding.name,
+    quantity: Number(holding.quantity),
+    avgCostCents: bigintToNumber(holding.avgCostCents),
+    currentPriceCents: bigintToNumber(holding.currentPriceCents),
+    currency: holding.currency,
+    originalCostCents:
+      holding.originalCostCents == null ? null : bigintToNumber(holding.originalCostCents),
+    exchangeRate: holding.exchangeRate == null ? null : Number(holding.exchangeRate),
+    lastPriceUpdate: holding.lastPriceUpdate,
+    isActive: holding.isActive,
+    createdAt: holding.createdAt,
+  };
+}
+
+/**
+ * C1 defensive guard: the ledger replay only sees rows with complete `asset*`
+ * data. If the account still has legacy INVESTMENT rows without structured
+ * data, replaying would silently drop them and corrupt the holding. Refuse the
+ * mutation until the backfill has run (`prisma/repair-investment-trades.ts`).
+ */
+async function assertLedgerFullyStructured(
+  tx: Prisma.TransactionClient,
+  accountId: string
+): Promise<void> {
+  const incomplete = await tx.transaction.count({
+    where: {
+      accountId,
+      isActive: true,
+      type: 'INVESTMENT',
+      OR: [
+        { assetSymbol: null },
+        { assetQuantity: null },
+        { assetPricePerShareCents: null },
+        { assetTradeType: null },
+      ],
+    },
+  });
+  if (incomplete > 0) {
+    throw new AppError(
+      'This account has investment history without structured trade data. Run the investment trade backfill before editing trades.',
+      409,
+      'INVESTMENT_LEDGER_INCOMPLETE'
+    );
+  }
+}
+
+// ============================================================================
+// Shared trade-edit helpers (extracted to keep S3776 cognitive complexity low)
+// ============================================================================
+
+interface EditableTradeInfo {
+  symbol: string;
+  tradeType: 'BUY' | 'SELL';
+}
+
+/**
+ * Validate a loaded INVESTMENT trade row (ownership, type, trade direction and
+ * asset symbol) and return its normalized identity.
+ */
+function assertEditableTrade(
+  trade: {
+    userId: string;
+    type: string;
+    assetSymbol: string | null;
+    assetTradeType: string | null;
+  },
+  userId: string
+): EditableTradeInfo {
+  if (trade.userId !== userId) {
+    throw new UnauthorizedError('Transaction does not belong to user');
+  }
+  if (trade.type !== 'INVESTMENT') {
+    throw new ValidationError('Transaction is not an investment trade');
+  }
+  if (trade.assetTradeType !== 'BUY' && trade.assetTradeType !== 'SELL') {
+    throw new ValidationError('Transaction is not a BUY/SELL investment trade');
+  }
+  if (!trade.assetSymbol) {
+    throw new ValidationError('Investment trade is missing its asset symbol');
+  }
+  return { symbol: trade.assetSymbol, tradeType: trade.assetTradeType };
+}
+
+/**
+ * Re-read and validate the investment account (existence, ownership, active,
+ * INVESTMENT type) under the current transaction client.
+ */
+async function assertInvestmentAccount(
+  tx: Prisma.TransactionClient,
+  accountId: string,
+  userId: string
+): Promise<{ id: string; currency: Currency }> {
+  const account = await tx.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, userId: true, type: true, currency: true, isActive: true },
+  });
+  if (!account) throw new NotFoundError('Account', accountId);
+  if (!account.isActive) throw new InactiveAccountError(account.id);
+  if (account.userId !== userId) {
+    throw new UnauthorizedError('Account does not belong to user');
+  }
+  if (account.type !== 'INVESTMENT') {
+    throw new UnauthorizedError('Account must be an investment account');
+  }
+  return { id: account.id, currency: account.currency };
+}
+
+/**
+ * Validate the submitted execution price against the live market reference
+ * (±2% tolerance), unless the user explicitly overrode it. The quote is fetched
+ * OUTSIDE the DB transaction so no HTTP call holds a transaction open.
+ */
+async function assertTradePriceWithinTolerance(
+  trade: { accountId: string; symbol: string; tradeType: 'BUY' | 'SELL' },
+  pricePerShareCents: number | undefined,
+  allowPriceOverride: boolean
+): Promise<void> {
+  if (pricePerShareCents === undefined) return;
+
+  let referencePriceCents: number | null = null;
+  try {
+    const quote = await getStockQuote(trade.symbol);
+    if (quote.priceCents > 0) referencePriceCents = quote.priceCents;
+  } catch {
+    // Fall back below (SELL only).
+  }
+
+  if (referencePriceCents == null && trade.tradeType === 'SELL') {
+    const holding = await prisma.investmentAssetHolding.findUnique({
+      where: { accountId_symbol: { accountId: trade.accountId, symbol: trade.symbol } },
+      select: { currentPriceCents: true },
+    });
+    if (holding && Number(holding.currentPriceCents) > 0) {
+      referencePriceCents = Number(holding.currentPriceCents);
+    }
+  }
+
+  if (referencePriceCents == null || referencePriceCents <= 0) {
+    throw new AppError(
+      'Unable to verify current market price. Please try again.',
+      503,
+      'PRICE_UNAVAILABLE'
+    );
+  }
+
+  const priceDiff = Math.abs(pricePerShareCents - referencePriceCents) / referencePriceCents;
+  if (priceDiff > PRICE_TOLERANCE) {
+    if (!allowPriceOverride) {
+      throw new AppError(
+        'Price has moved significantly. Please refresh and try again.',
+        409,
+        'PRICE_MISMATCH'
+      );
+    }
+    log.warn(
+      {
+        action: 'investment.trade.update.price_override',
+        symbol: trade.symbol,
+        submitted: pricePerShareCents,
+        reference: referencePriceCents,
+        priceDiff,
+      },
+      'Price override accepted'
+    );
+  }
+}
+
+interface ResolvedTradeUpdate {
+  newQty: Decimal;
+  newPrice: number;
+  newDate: Date;
+  resolvedDescription: string;
+  newTotalSigned: number;
+  oldAmountCents: number;
+}
+
+/**
+ * Resolve the edited field values (quantity, price, date, description and the
+ * signed amount) from the persisted trade and the validated input (Rules 1/2).
+ */
+function resolveTradeUpdate(
+  transaction: {
+    amountCents: bigint;
+    assetQuantity: Decimal | null;
+    assetPricePerShareCents: bigint | null;
+    date: Date;
+    description: string | null;
+  },
+  trade: EditableTradeInfo,
+  validated: UpdateInvestmentTradeInput
+): ResolvedTradeUpdate {
+  if (transaction.assetQuantity == null || transaction.assetPricePerShareCents == null) {
+    throw new ValidationError('Investment trade is missing structured asset data');
+  }
+
+  const oldAmountCents = Number(transaction.amountCents);
+  const newQty =
+    validated.quantity !== undefined
+      ? new Decimal(validated.quantity)
+      : new Decimal(transaction.assetQuantity.toString());
+  const newPrice = validated.pricePerShareCents ?? Number(transaction.assetPricePerShareCents);
+  const newDate = validated.date ?? transaction.date;
+
+  // Rule 1/2: integer cents, Decimal.js with Banker's rounding
+  const magnitudeCents = decimalToCents(newQty.times(newPrice).dividedBy(100));
+  const newTotalSigned = trade.tradeType === 'BUY' ? -magnitudeCents : magnitudeCents;
+
+  // M1: never regenerate an existing description; only synthesize the default
+  // template when there is no description at all.
+  const descriptionPrefix = trade.tradeType === 'BUY' ? 'Buy' : 'Sell';
+  const resolvedDescription =
+    validated.description ??
+    transaction.description ??
+    `${descriptionPrefix} ${newQty.toString()} ${trade.symbol} @ ${centsToDecimal(newPrice).toString()}`;
+
+  return { newQty, newPrice, newDate, resolvedDescription, newTotalSigned, oldAmountCents };
+}
+
+/**
+ * Replay the holding from the resulting ledger and reconcile the account's
+ * cached balance from the source of truth (Rules 11/13).
+ */
+async function syncHoldingAndReconcileTradeBalance(
+  tx: Prisma.TransactionClient,
+  params: {
+    account: { id: string; currency: Currency };
+    symbol: string;
+    tradeType: 'BUY' | 'SELL';
+    oldAmountCents: number;
+    newTotalSigned: number;
+    actorId: string;
+  }
+): Promise<InvestmentAssetHolding | null> {
+  const replay = await recomputeHoldingFromLedger(tx, params.account.id, params.symbol);
+  const holding = await syncHoldingFromTrade(tx, {
+    accountId: params.account.id,
+    symbol: params.symbol,
+    name: params.symbol,
+    currency: params.account.currency,
+    replay,
+    actorId: params.actorId,
+  });
+
+  const trueBalance = await getTrueBalanceFromTx(tx, params.account.id);
+  const increasesBuyOutflow =
+    params.tradeType === 'BUY' && params.newTotalSigned < params.oldAmountCents;
+  if (trueBalance < 0 && increasesBuyOutflow) {
+    throw new InsufficientFundsError(Math.abs(params.newTotalSigned), trueBalance);
+  }
+  if (trueBalance < 0) {
+    log.warn(
+      {
+        action: 'investment.trade.update.negative_balance',
+        accountId: params.account.id,
+        tradeType: params.tradeType,
+        trueBalance,
+      },
+      'Investment trade update leaves a negative cash balance; reconciliation will correct it'
+    );
+  }
+
+  await tx.account.update({
+    where: { id: params.account.id },
+    data: {
+      balanceCents: trueBalance,
+      lastReconciled: new Date(),
+      lastModifiedBy: params.actorId,
+    },
+  });
+
+  return holding;
+}
 
 // ============================================================================
 // a) getInvestmentAccounts — List user's investment accounts with holdings
@@ -614,10 +905,22 @@ async function buyAssetInternal(input: unknown) {
   }
   const priceDiff = Math.abs(validated.pricePerShareCents - quote.priceCents) / quote.priceCents;
   if (priceDiff > PRICE_TOLERANCE) {
-    throw new AppError(
-      'Price has moved significantly. Please refresh and try again.',
-      409,
-      'PRICE_MISMATCH'
+    if (!validated.allowPriceOverride) {
+      throw new AppError(
+        'Price has moved significantly. Please refresh and try again.',
+        409,
+        'PRICE_MISMATCH'
+      );
+    }
+    log.warn(
+      {
+        action: 'investment.buy.price_override',
+        symbol: validated.symbol,
+        submitted: validated.pricePerShareCents,
+        quote: quote.priceCents,
+        priceDiff,
+      },
+      'Price override accepted'
     );
   }
 
@@ -677,7 +980,12 @@ async function buyAssetInternal(input: unknown) {
           description:
             validated.description ||
             `Buy ${validated.quantity} ${validated.symbol} @ ${centsToDecimal(validated.pricePerShareCents).toString()}`,
-          date: new Date(),
+          date: validated.date ?? new Date(),
+          // Structured trade traceability (Rule 11) — replay source of truth
+          assetSymbol: validated.symbol,
+          assetQuantity: quantityDecimal,
+          assetPricePerShareCents: validated.pricePerShareCents,
+          assetTradeType: 'BUY',
           ipAddress,
           userAgent,
           createdBy: session.userId,
@@ -727,7 +1035,9 @@ async function buyAssetInternal(input: unknown) {
           data: {
             quantity: totalQty,
             avgCostCents: newAvgCostCents,
-            currentPriceCents: validated.pricePerShareCents,
+            // Market price (quote) — NOT the execution price (avgCostCents uses
+            // the execution price). Keeps portfolio valuation honest.
+            currentPriceCents: quote.priceCents,
             lastPriceUpdate: new Date(),
             // Reactivate soft-deleted holdings on re-buy (C1)
             ...(targetHolding.isActive ? {} : { isActive: true, deletedAt: null }),
@@ -743,7 +1053,8 @@ async function buyAssetInternal(input: unknown) {
             quantity: new Decimal(validated.quantity),
             avgCostCents: validated.pricePerShareCents,
             currency: account.currency,
-            currentPriceCents: validated.pricePerShareCents,
+            // Market price (quote) — the execution price only feeds avgCostCents.
+            currentPriceCents: quote.priceCents,
             lastPriceUpdate: new Date(),
             createdBy: session.userId,
             lastModifiedBy: session.userId,
@@ -858,9 +1169,16 @@ async function sellAssetInternal(input: unknown) {
   // Market price validation (C3): prefer the live quote, fall back to the
   // last known price on the holding when the quote service is unavailable.
   let referencePriceCents = Number(preHolding.currentPriceCents);
+  // Market price actually observed from the quote (null when unavailable). Used
+  // to refresh the holding's cached market price without ever writing the
+  // execution price.
+  let marketPriceCents: number | null = null;
   try {
     const quote = await getStockQuote(preHolding.symbol);
-    referencePriceCents = quote.priceCents;
+    if (quote.priceCents > 0) {
+      referencePriceCents = quote.priceCents;
+      marketPriceCents = quote.priceCents;
+    }
   } catch {
     // Fall back to the last known price captured above
   }
@@ -874,10 +1192,22 @@ async function sellAssetInternal(input: unknown) {
   const priceDiff =
     Math.abs(validated.pricePerShareCents - referencePriceCents) / referencePriceCents;
   if (priceDiff > PRICE_TOLERANCE) {
-    throw new AppError(
-      'Price has moved significantly. Please refresh and try again.',
-      409,
-      'PRICE_MISMATCH'
+    if (!validated.allowPriceOverride) {
+      throw new AppError(
+        'Price has moved significantly. Please refresh and try again.',
+        409,
+        'PRICE_MISMATCH'
+      );
+    }
+    log.warn(
+      {
+        action: 'investment.sell.price_override',
+        symbol: preHolding.symbol,
+        submitted: validated.pricePerShareCents,
+        reference: referencePriceCents,
+        priceDiff,
+      },
+      'Price override accepted'
     );
   }
 
@@ -945,7 +1275,12 @@ async function sellAssetInternal(input: unknown) {
           description:
             validated.description ||
             `Sell ${validated.quantity} ${holding.symbol} @ ${centsToDecimal(validated.pricePerShareCents).toString()}`,
-          date: new Date(),
+          date: validated.date ?? new Date(),
+          // Structured trade traceability (Rule 11) — replay source of truth
+          assetSymbol: holding.symbol,
+          assetQuantity: sellQty,
+          assetPricePerShareCents: validated.pricePerShareCents,
+          assetTradeType: 'SELL',
           ipAddress,
           userAgent,
           createdBy: session.userId,
@@ -971,8 +1306,11 @@ async function sellAssetInternal(input: unknown) {
           where: { id: validated.holdingId },
           data: {
             quantity: remainingQty,
-            currentPriceCents: validated.pricePerShareCents,
-            lastPriceUpdate: new Date(),
+            // Refresh market price ONLY from the live quote. Never write the
+            // execution price as the market price (M4).
+            ...(marketPriceCents != null
+              ? { currentPriceCents: marketPriceCents, lastPriceUpdate: new Date() }
+              : {}),
             lastModifiedBy: session.userId,
           },
         });
@@ -1038,6 +1376,352 @@ async function sellAssetInternal(input: unknown) {
 }
 
 export const sellAsset = safeAction(sellAssetInternal);
+
+// ============================================================================
+// e2) updateInvestmentTrade — Edit any field of an existing BUY/SELL trade
+// ============================================================================
+
+/**
+ * Edit an existing investment trade (BUY/SELL): description, date, quantity
+ * and/or execution price. The trade amount, the account balance cache and the
+ * `InvestmentAssetHolding` are all recomputed atomically from the resulting
+ * ledger (Rules 1, 3, 5, 6, 11, 12, 13).
+ *
+ * Price validation respects the same ±2% tolerance as buy/sell, escapeable with
+ * `allowPriceOverride`.
+ */
+async function updateInvestmentTradeInternal(input: unknown) {
+  const session = await getSession();
+  if (!session?.userId) throw new UnauthorizedError();
+
+  const validated = UpdateInvestmentTradeSchema.parse(input);
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(session.userId, 'INVESTMENT_TRADE_UPDATE' as ApiAction);
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'investment.trade.update.rate_limited', userId: session.userId, ipAddress },
+      'Investment trade update rate limited'
+    );
+    throw new RateLimitError();
+  }
+
+  // Load the trade OUTSIDE the DB transaction so the quote HTTP fetch never
+  // holds a transaction open.
+  const preTx = await prisma.transaction.findUnique({
+    where: { id: validated.transactionId },
+    select: {
+      id: true,
+      userId: true,
+      accountId: true,
+      type: true,
+      assetSymbol: true,
+      assetTradeType: true,
+      isActive: true,
+    },
+  });
+
+  if (!preTx?.isActive) throw new NotFoundError('Transaction', validated.transactionId);
+  const preTrade = assertEditableTrade(preTx, session.userId);
+
+  // Market price validation (±2%, Rule: never trust client prices blindly)
+  await assertTradePriceWithinTolerance(
+    { accountId: preTx.accountId, symbol: preTrade.symbol, tradeType: preTrade.tradeType },
+    validated.pricePerShareCents,
+    validated.allowPriceOverride
+  );
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Lock the investment account (TOCTOU-safe)
+    const lockedRows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Account" WHERE id = ${preTx.accountId} FOR UPDATE
+    `;
+    if (lockedRows.length === 0) throw new NotFoundError('Account', preTx.accountId);
+
+    // 2. Load the trade under the lock
+    const transaction = await tx.transaction.findUnique({
+      where: { id: validated.transactionId },
+      select: {
+        id: true,
+        userId: true,
+        accountId: true,
+        type: true,
+        amountCents: true,
+        currency: true,
+        assetSymbol: true,
+        assetQuantity: true,
+        assetPricePerShareCents: true,
+        assetTradeType: true,
+        date: true,
+        description: true,
+        isActive: true,
+      },
+    });
+
+    if (!transaction?.isActive) throw new NotFoundError('Transaction', validated.transactionId);
+    const trade = assertEditableTrade(transaction, session.userId);
+
+    // 3. Resolve the new field values (validates structured asset data first)
+    const resolved = resolveTradeUpdate(transaction, trade, validated);
+
+    // 4. Re-read and validate the account under the lock
+    const account = await assertInvestmentAccount(tx, transaction.accountId, session.userId);
+
+    // C1: refuse to replay a ledger that still contains unstructured legacy
+    // trades — a partial replay would destroy the legacy holding.
+    await assertLedgerFullyStructured(tx, account.id);
+
+    const updated = await tx.transaction.update({
+      where: { id: validated.transactionId },
+      data: {
+        amountCents: resolved.newTotalSigned,
+        date: resolved.newDate,
+        description: resolved.resolvedDescription,
+        assetQuantity: resolved.newQty,
+        assetPricePerShareCents: resolved.newPrice,
+        lastModifiedBy: session.userId,
+        ipAddress,
+        userAgent,
+      },
+    });
+
+    // 5. Replay the holding and reconcile the cached balance (Rules 11/13)
+    const holding = await syncHoldingAndReconcileTradeBalance(tx, {
+      account,
+      symbol: trade.symbol,
+      tradeType: trade.tradeType,
+      oldAmountCents: resolved.oldAmountCents,
+      newTotalSigned: resolved.newTotalSigned,
+      actorId: session.userId,
+    });
+
+    return { transaction: serializeTransaction(updated), holding: serializeHolding(holding) };
+  });
+
+  // Record successful API attempt (best-effort)
+  try {
+    const attemptId = await recordApiAttempt({
+      userId: session.userId,
+      action: 'INVESTMENT_TRADE_UPDATE' as ApiAction,
+      ipAddress,
+    });
+    await markApiAttemptSuccess(attemptId);
+  } catch (err) {
+    log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+  }
+
+  log.info(
+    {
+      action: 'investment.trade.update',
+      transactionId: validated.transactionId,
+      userId: session.userId,
+      ipAddress,
+    },
+    'Investment trade updated'
+  );
+
+  revalidatePath('/[lang]/investments', 'page');
+  revalidatePath('/[lang]/transactions', 'page');
+  revalidatePath('/[lang]/dashboard', 'page');
+
+  return result;
+}
+
+export const updateInvestmentTrade = safeAction(updateInvestmentTradeInternal);
+
+// ============================================================================
+// e3) reverseInvestmentTrade — Undo a BUY/SELL trade (always available)
+// ============================================================================
+
+/**
+ * Reverse (undo) an investment trade. The trade is soft-deleted (Rule 6), the
+ * holding is rebuilt from the ledger and the account balance cache is reverted
+ * atomically. Idempotent: reversing an already-reversed trade is a no-op that
+ * reports `wasIdempotent: true`.
+ */
+async function reverseInvestmentTradeInternal(input: unknown) {
+  const session = await getSession();
+  if (!session?.userId) throw new UnauthorizedError();
+
+  const validated = ReverseInvestmentTradeSchema.parse(input);
+  const { ipAddress, userAgent } = await getClientInfo();
+
+  // Rate limiting (Rule 10)
+  const rateLimit = await checkApiRateLimit(
+    session.userId,
+    'INVESTMENT_TRADE_REVERSE' as ApiAction
+  );
+  if (!rateLimit.allowed) {
+    log.warn(
+      { action: 'investment.trade.reverse.rate_limited', userId: session.userId, ipAddress },
+      'Investment trade reversal rate limited'
+    );
+    throw new RateLimitError();
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Load the trade
+    const transaction = await tx.transaction.findUnique({
+      where: { id: validated.transactionId },
+      select: {
+        id: true,
+        userId: true,
+        accountId: true,
+        type: true,
+        amountCents: true,
+        currency: true,
+        assetSymbol: true,
+        assetQuantity: true,
+        assetPricePerShareCents: true,
+        assetTradeType: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!transaction) throw new NotFoundError('Transaction', validated.transactionId);
+    if (transaction.userId !== session.userId) {
+      throw new UnauthorizedError('Transaction does not belong to user');
+    }
+
+    // Idempotency (Rule 12): already reversed → success no-op.
+    if (!transaction.isActive) {
+      log.info(
+        { action: 'investment.trade.reverse.idempotent', transactionId: transaction.id },
+        'Investment trade already reversed'
+      );
+      return { reversed: true, wasIdempotent: true as const };
+    }
+
+    if (transaction.type !== 'INVESTMENT') {
+      throw new ValidationError('Transaction is not an investment trade');
+    }
+    if (transaction.assetTradeType !== 'BUY' && transaction.assetTradeType !== 'SELL') {
+      throw new ValidationError('Transaction is not a BUY/SELL investment trade');
+    }
+    if (!transaction.assetSymbol) {
+      throw new ValidationError('Investment trade is missing its asset symbol');
+    }
+
+    // 2. Lock the account (TOCTOU-safe)
+    const lockedRows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Account" WHERE id = ${transaction.accountId} FOR UPDATE
+    `;
+    if (lockedRows.length === 0) throw new NotFoundError('Account', transaction.accountId);
+
+    const account = await tx.account.findUnique({
+      where: { id: transaction.accountId },
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        currency: true,
+        balanceCents: true,
+        isActive: true,
+      },
+    });
+
+    if (!account) throw new NotFoundError('Account', transaction.accountId);
+    if (!account.isActive) throw new InactiveAccountError(account.id);
+    if (account.userId !== session.userId) {
+      throw new UnauthorizedError('Account does not belong to user');
+    }
+    if (account.type !== 'INVESTMENT') {
+      throw new UnauthorizedError('Account must be an investment account');
+    }
+
+    // C1: refuse to replay a ledger that still contains unstructured legacy
+    // trades — a partial replay would destroy the legacy holding.
+    await assertLedgerFullyStructured(tx, account.id);
+
+    // 3. Soft-delete the trade (Rule 6) with extended audit (Rule 14)
+    await tx.transaction.update({
+      where: { id: validated.transactionId },
+      data: {
+        isActive: false,
+        deletedAt: new Date(),
+        lastModifiedBy: session.userId,
+        ipAddress,
+        userAgent,
+      },
+    });
+
+    // 4. Recompute the holding excluding the reversed trade (Rule 11/13)
+    const replay = await recomputeHoldingFromLedger(
+      tx,
+      transaction.accountId,
+      transaction.assetSymbol
+    );
+    await syncHoldingFromTrade(tx, {
+      accountId: transaction.accountId,
+      symbol: transaction.assetSymbol,
+      name: transaction.assetSymbol,
+      currency: account.currency,
+      replay,
+      actorId: session.userId,
+    });
+
+    // 5. Reconcile the cached balance from the ledger (Rule 13). M3: undoing a
+    //    SELL may leave the cash balance negative — never block the undo;
+    //    reconciliation will correct it.
+    const trueBalance = await getTrueBalanceFromTx(tx, account.id);
+    if (trueBalance < 0) {
+      log.warn(
+        {
+          action: 'investment.trade.reverse.negative_balance',
+          accountId: account.id,
+          tradeType: transaction.assetTradeType,
+          trueBalance,
+        },
+        'Reversing this trade leaves a negative cash balance; reconciliation will correct it'
+      );
+    }
+
+    await tx.account.update({
+      where: { id: account.id },
+      data: {
+        balanceCents: trueBalance,
+        lastReconciled: new Date(),
+        lastModifiedBy: session.userId,
+      },
+    });
+
+    return { reversed: true, wasIdempotent: false as const };
+  });
+
+  if (!result.wasIdempotent) {
+    // Record successful API attempt (best-effort)
+    try {
+      const attemptId = await recordApiAttempt({
+        userId: session.userId,
+        action: 'INVESTMENT_TRADE_REVERSE' as ApiAction,
+        ipAddress,
+      });
+      await markApiAttemptSuccess(attemptId);
+    } catch (err) {
+      log.error({ err, userId: session.userId }, 'Failed to record API attempt');
+    }
+
+    log.info(
+      {
+        action: 'investment.trade.reverse',
+        transactionId: validated.transactionId,
+        userId: session.userId,
+        ipAddress,
+      },
+      'Investment trade reversed'
+    );
+
+    revalidatePath('/[lang]/investments', 'page');
+    revalidatePath('/[lang]/transactions', 'page');
+    revalidatePath('/[lang]/dashboard', 'page');
+  }
+
+  return { reversed: result.reversed, wasIdempotent: result.wasIdempotent };
+}
+
+export const reverseInvestmentTrade = safeAction(reverseInvestmentTradeInternal);
 
 // ============================================================================
 // f) getStockPrice — Fetch current price for a symbol

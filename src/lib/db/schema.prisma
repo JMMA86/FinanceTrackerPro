@@ -216,6 +216,8 @@ enum ApiAction {
   INVESTMENT_DEPOSIT
   INVESTMENT_BUY
   INVESTMENT_SELL
+  INVESTMENT_TRADE_UPDATE
+  INVESTMENT_TRADE_REVERSE
   SAVINGS_CONTRIBUTE
   CREDIT_CARD_PAYMENT
   FIXED_EXPENSE_PAY
@@ -420,6 +422,15 @@ model Transaction {
   // Opening balance flag — marks the initial balance transaction created on account creation
   openingBalance      Boolean           @default(false)
 
+  // Structured investment trade traceability (Rule 11). These scalar fields make
+  // the transaction history the replayable source of truth for reconstructing an
+  // InvestmentAssetHolding (see investment-ledger.service.ts). Only set on
+  // `type: INVESTMENT` trades with `assetTradeType` BUY | SELL.
+  assetSymbol             String?
+  assetQuantity           Decimal?                  @db.Decimal(24, 12)
+  assetPricePerShareCents BigInt?
+  assetTradeType          InvestmentTransactionType? // BUY | SELL
+
   // Extended audit (Rule 14)
   ipAddress           String?
   userAgent           String?
@@ -443,6 +454,7 @@ model Transaction {
   @@index([userId, type, date]) // Variable expenses: EXPENSE aggregation by user/month
   @@index([variableExpenseId])
   @@index([loanInstallmentId]) // Loan installment payment/receipt lookups
+  @@index([accountId, assetSymbol]) // Investment ledger replay per symbol
 }
 
 // ============================================================================
@@ -825,7 +837,7 @@ model InvestmentAssetHolding {
   // Asset identification (Rule 11 — trazabilidad)
   symbol              String      // e.g., "AAPL", "TSLA", "MSFT"
   name                String      // e.g., "Apple Inc."
-  quantity            Decimal     @db.Decimal(20, 8) // Número de acciones (permite fraccionales)
+  quantity            Decimal     @db.Decimal(24, 12) // Número de acciones (permite fraccionales)
   avgCostCents        BigInt      // Costo promedio de compra en centavos
   currency            Currency    // Moneda del activo (USD, EUR)
   currentPriceCents   BigInt      @default(0) // Último precio de mercado en centavos

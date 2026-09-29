@@ -65,7 +65,16 @@ vi.mock('@/components/investments/SellAssetModal', () => ({
   ),
 }));
 vi.mock('@/components/investments/InvestmentTransactionsList', () => ({
-  InvestmentTransactionsList: () => <div data-testid="transactions-list" />,
+  InvestmentTransactionsList: ({
+    holdings,
+  }: {
+    holdings?: ReadonlyArray<{ symbol: string; quantity: number }>;
+  }) => (
+    <div
+      data-testid="transactions-list"
+      data-holdings={(holdings ?? []).map((h) => `${h.symbol}:${h.quantity}`).join(',')}
+    />
+  ),
 }));
 
 describe('InvestmentDashboard', () => {
@@ -217,6 +226,19 @@ describe('InvestmentDashboard', () => {
     // AssetSearchModal receives the selected account
     const assetSearch = screen.getByTestId('asset-search-modal');
     expect(assetSearch).toHaveAttribute('data-account', 'acc-1');
+  });
+
+  it('should pass the selected account holdings to the transactions list', async () => {
+    render(<InvestmentDashboard accounts={[singleAccount]} dictionary={dictionary} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Tech Stocks' }));
+
+    await waitFor(() => {
+      // Holdings are forwarded so the list can bound editable SELL quantities.
+      expect(screen.getByTestId('transactions-list')).toHaveAttribute(
+        'data-holdings',
+        'AAPL:2,TSLA:5'
+      );
+    });
   });
 
   it('should open buy-asset modal when buy button is clicked', async () => {

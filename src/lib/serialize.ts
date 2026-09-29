@@ -9,12 +9,18 @@
 /**
  * Convert Prisma monetary BIGINT fields back to JS numbers so the object is
  * safe to serialize back to the client (JSON.stringify throws on bigint).
+ *
+ * Investment trade fields (`assetQuantity` Decimal, `assetPricePerShareCents`
+ * BigInt) are optional so existing callers passing non-investment transactions
+ * keep working; they are normalized to plain numbers (or null) when present.
  */
 export function serializeTransaction<
   T extends {
     amountCents: bigint;
     originalAmountCents: bigint | null;
     exchangeRate?: unknown;
+    assetQuantity?: unknown;
+    assetPricePerShareCents?: bigint | null;
   },
 >(tx: T) {
   return {
@@ -22,6 +28,9 @@ export function serializeTransaction<
     amountCents: Number(tx.amountCents),
     originalAmountCents: tx.originalAmountCents == null ? null : Number(tx.originalAmountCents),
     exchangeRate: toPlainNumberOrNull(tx.exchangeRate),
+    assetQuantity: toPlainNumberOrNull(tx.assetQuantity),
+    assetPricePerShareCents:
+      tx.assetPricePerShareCents == null ? null : Number(tx.assetPricePerShareCents),
   };
 }
 

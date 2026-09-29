@@ -93,18 +93,22 @@ describe('PortfolioHoldingsTable', () => {
     expect(screen.getByText('Tesla Inc.')).toBeInTheDocument();
   });
 
-  it('should display quantities with 4 decimal places', () => {
+  it('should display quantities with formatQuantity (trailing zeros trimmed, up to 12 decimals)', () => {
+    const fractionalHoldings = [
+      { ...mockHoldings[0], quantity: 2.243695838 },
+      { ...mockHoldings[1], quantity: 5 },
+    ];
     render(
       <PortfolioHoldingsTable
-        holdings={mockHoldings}
+        holdings={fractionalHoldings}
         currency="USD"
         dictionary={defaultDictionary}
         onSell={mockOnSell}
       />
     );
 
-    expect(screen.getByText('10.0000')).toBeInTheDocument();
-    expect(screen.getByText('5.0000')).toBeInTheDocument();
+    expect(screen.getByText('2.243695838')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
   it('should display green text for positive gain/loss (AAPL)', () => {

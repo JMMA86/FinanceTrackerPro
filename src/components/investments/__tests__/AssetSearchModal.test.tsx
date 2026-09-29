@@ -189,9 +189,11 @@ describe('AssetSearchModal', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText('quantity')).toBeInTheDocument();
-      // jsdom reports number inputs as numeric values
-      expect(screen.getByLabelText('pricePerShare')).toHaveValue(150);
+      // Price is a FormattedNumericInput (localized text, es-CO "150,00").
+      expect(screen.getByLabelText('pricePerShare')).toHaveValue('150,00');
       expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
+      // The new layout exposes the base cost (purchase total) as well.
+      expect(screen.getByLabelText('baseCost')).toBeInTheDocument();
     });
   });
 
@@ -219,7 +221,7 @@ describe('AssetSearchModal', () => {
     expect(screen.queryByLabelText('quantity')).not.toBeInTheDocument();
   });
 
-  it('should toggle between "Por cantidad" and "Por monto" buy modes', async () => {
+  it('should render the single buy layout (quantity + price + base cost) without the removed amount mode', async () => {
     useUIStore.getState().openModal('buy-asset');
     mockSearchStocksAction.mockResolvedValue({
       success: true,
@@ -236,23 +238,105 @@ describe('AssetSearchModal', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
     fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
 
-    // Default mode is quantity
+    // The three coupled fields of the new layout are all present.
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
-    expect(screen.getByText('byQuantity')).toBeInTheDocument();
-    expect(screen.getByText('byAmount')).toBeInTheDocument();
+    expect(screen.getByLabelText('pricePerShare')).toBeInTheDocument();
+    expect(screen.getByLabelText('baseCost')).toBeInTheDocument();
+    // The trade date field is part of the layout too.
+    expect(screen.getByLabelText('tradeDate')).toBeInTheDocument();
+    // The old "Por monto" toggle / amount input no longer exists.
+    expect(screen.queryByText('byAmount')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('amountToInvest')).not.toBeInTheDocument();
+  });
 
-    // Switch to amount mode → amount input appears, quantity disappears
-    fireEvent.click(screen.getByText('byAmount'));
-    await waitFor(() => {
-      expect(screen.getByLabelText('amountToInvest')).toBeInTheDocument();
-      expect(screen.queryByLabelText('quantity')).not.toBeInTheDocument();
+  it('should accept a comma decimal quantity and derive the base cost', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
     });
 
-    // Approximate shares label is derived from the entered amount
-    fireEvent.change(screen.getByLabelText('amountToInvest'), { target: { value: '300' } });
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    const qty = await screen.findByLabelText('quantity');
+    fireEvent.change(qty, { target: { value: '2,5' } });
+
+    // 2.5 shares * 15000 cents = 37500 cents → "375,00"
     await waitFor(() => {
-      // 300 USD / $150.00 = 2 shares
-      expect(screen.getByText('approxShares')).toBeInTheDocument();
+      expect(qty).toHaveValue('2,5');
+      expect(screen.getByLabelText('baseCost')).toHaveValue('375,00');
+    });
+  });
+
+  it('should recalculate the price when the base cost is edited (precio = costo ÷ acciones)', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    // Quantity 2 seeds base cost = 2 * 150,00 = 300,00.
+    fireEvent.change(await screen.findByLabelText('quantity'), { target: { value: '2' } });
+    const baseCost = screen.getByLabelText('baseCost');
+    await waitFor(() => expect(baseCost).toHaveValue('300,00'));
+
+    // Clear 30000 → 0 (5 backspaces) and type 40000 cents ($400.00).
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(baseCost, { key: 'Backspace' });
+    for (const key of ['4', '0', '0', '0', '0']) fireEvent.keyDown(baseCost, { key });
+
+    // price = 40000 / 2 = 20000 cents → "200,00"
+    await waitFor(() => {
+      expect(baseCost).toHaveValue('400,00');
+      expect(screen.getByLabelText('pricePerShare')).toHaveValue('200,00');
+    });
+  });
+
+  it('should recalculate the base cost when the price is edited', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    fireEvent.change(await screen.findByLabelText('quantity'), { target: { value: '2' } });
+    const price = screen.getByLabelText('pricePerShare');
+
+    // Clear 15000 → 0 (5 backspaces) and type 20000 cents ($200.00).
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(price, { key: 'Backspace' });
+    for (const key of ['2', '0', '0', '0', '0']) fireEvent.keyDown(price, { key });
+
+    // base cost = 200,00 * 2 = 400,00
+    await waitFor(() => {
+      expect(price).toHaveValue('200,00');
+      expect(screen.getByLabelText('baseCost')).toHaveValue('400,00');
     });
   });
 
@@ -286,7 +370,7 @@ describe('AssetSearchModal', () => {
     expect(buyButton).toBeDisabled();
   });
 
-  it('should show total cost once quantity and price are present', async () => {
+  it('should set the base cost (purchase total) once quantity and price are present', async () => {
     useUIStore.getState().openModal('buy-asset');
     mockSearchStocksAction.mockResolvedValue({
       success: true,
@@ -309,10 +393,11 @@ describe('AssetSearchModal', () => {
     expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
 
+    // 2 shares * 15000 cents = 30000 cents → formatted "300,00". The base cost
+    // IS the purchase total (the standalone "totalCost" panel was removed).
     await waitFor(() => {
-      expect(screen.getByText('totalCost')).toBeInTheDocument();
-      // 2 shares * 15000 cents = 30000 cents
-      expect(screen.getByText('$300.00 USD')).toBeInTheDocument();
+      expect(screen.queryByText('totalCost')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('baseCost')).toHaveValue('300,00');
     });
   });
 
@@ -361,6 +446,132 @@ describe('AssetSearchModal', () => {
     });
   });
 
+  it('should map every buy error code to its localized message', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    const cases: Array<[string, string]> = [
+      ['INSUFFICIENT_FUNDS', 'errors.insufficientFunds'],
+      ['PRICE_UNAVAILABLE', 'errors.priceUnavailable'],
+      ['RATE_LIMITED', 'errors.rateLimited'],
+      ['INSUFFICIENT_QUANTITY', 'errors.insufficientQuantity'],
+      ['CURRENCY_MISMATCH', 'errors.currencyMismatch'],
+      ['INVESTMENT_LEDGER_INCOMPLETE', 'errors.investmentLedgerIncomplete'],
+      ['INVALID_FORMAT', 'errors.invalidQuantity'],
+    ];
+
+    for (const [code, message] of cases) {
+      mockBuyAsset.mockResolvedValueOnce({ success: false, code, error: 'x' });
+      const { unmount } = render(<AssetSearchModal account={account} dictionary={dictionary} />);
+      expect(await screen.findByRole('combobox')).toBeInTheDocument();
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+      fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+      fireEvent.change(await screen.findByLabelText('quantity'), { target: { value: '2' } });
+      fireEvent.click(screen.getByText('confirmBuy'));
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      unmount();
+      useUIStore.getState().openModal('buy-asset');
+    }
+  });
+
+  it('should reject buying a non-positive quantity without calling the action', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    // The buy button is disabled while the quantity is empty.
+    const buyButton = (await screen.findByText('confirmBuy')).closest('button')!;
+    expect(buyButton).toBeDisabled();
+    expect(mockBuyAsset).not.toHaveBeenCalled();
+  });
+
+  it('should confirm a server PRICE_MISMATCH and retry with the same idempotency key', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+    mockBuyAsset
+      .mockResolvedValueOnce({ success: false, code: 'PRICE_MISMATCH' })
+      .mockResolvedValueOnce({ success: true });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+    fireEvent.change(await screen.findByLabelText('quantity'), { target: { value: '2' } });
+    fireEvent.click(screen.getByText('confirmBuy'));
+
+    await waitFor(() => {
+      expect(screen.getByText('priceOverrideConfirmTitle')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('priceOverrideConfirmCta'));
+
+    await waitFor(() => expect(mockBuyAsset).toHaveBeenCalledTimes(2));
+    // The override retry reuses the SAME idempotency key as the first attempt.
+    const first = mockBuyAsset.mock.calls[0][0] as { idempotencyKey: string };
+    const second = mockBuyAsset.mock.calls[1][0] as {
+      idempotencyKey: string;
+      allowPriceOverride: boolean;
+    };
+    expect(second.idempotencyKey).toBe(first.idempotencyKey);
+    expect(second.allowPriceOverride).toBe(true);
+  });
+
+  it('should show a non-blocking advisory when the price differs more than ±2%', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    fireEvent.click(await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 }));
+
+    // Edit the base cost so price = base/qty drifts > 2% from the quote.
+    fireEvent.change(await screen.findByLabelText('quantity'), { target: { value: '1' } });
+    const baseCost = screen.getByLabelText('baseCost');
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(baseCost, { key: 'Backspace' });
+    for (const key of ['2', '0', '0', '0', '0']) fireEvent.keyDown(baseCost, { key });
+
+    await waitFor(() => {
+      expect(baseCost).toHaveValue('200,00');
+      expect(screen.getByText('priceOverrideWarning')).toBeInTheDocument();
+    });
+  });
+
   it('should show session invalid error when buyAsset reports SESSION_INVALID', async () => {
     useUIStore.getState().openModal('buy-asset');
     mockSearchStocksAction.mockResolvedValue({
@@ -390,7 +601,7 @@ describe('AssetSearchModal', () => {
     });
   });
 
-  it('should show generic buy error when buyAsset fails', async () => {
+  it('should map VALIDATION_ERROR to the invalid quantity error', async () => {
     useUIStore.getState().openModal('buy-asset');
     mockSearchStocksAction.mockResolvedValue({
       success: true,
@@ -401,6 +612,35 @@ describe('AssetSearchModal', () => {
       data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
     });
     mockBuyAsset.mockResolvedValue({ success: false, code: 'VALIDATION_ERROR', error: 'no' });
+
+    render(<AssetSearchModal account={account} dictionary={dictionary} />);
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AAPL' } });
+    expect(
+      await screen.findByRole('button', { name: /AAPL/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /AAPL/i }));
+    expect(await screen.findByLabelText('quantity')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('quantity'), { target: { value: '2' } });
+    fireEvent.click(screen.getByText('confirmBuy'));
+
+    await waitFor(() => {
+      expect(screen.getByText('errors.invalidQuantity')).toBeInTheDocument();
+    });
+  });
+
+  it('should show generic buy error when buyAsset returns an unknown error code', async () => {
+    useUIStore.getState().openModal('buy-asset');
+    mockSearchStocksAction.mockResolvedValue({
+      success: true,
+      data: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+    });
+    mockGetStockPrice.mockResolvedValue({
+      success: true,
+      data: { symbol: 'AAPL', price: 150, priceCents: 15000, currency: 'USD' },
+    });
+    mockBuyAsset.mockResolvedValue({ success: false, code: 'SOMETHING_ELSE', error: 'no' });
 
     render(<AssetSearchModal account={account} dictionary={dictionary} />);
 
